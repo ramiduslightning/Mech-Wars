@@ -1,0 +1,3375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>MECH WARS</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap');
+        * { margin: 0; padding: 0; box-sizing: border-box; user-select: none; -webkit-user-select: none; touch-action: none; }
+        body { background: #0a0a0a; overflow: hidden; font-family: 'Share Tech Mono', monospace; }
+        #gameContainer { position: relative; width: 100vw; height: 100vh; background: #000; }
+        /* Default cursor before the game starts (helps clicking DEPLOY reliably) */
+        #gameCanvas { display: block; width: 100%; height: 100%; cursor: default; }
+
+        /* During gameplay we keep a normal crosshair cursor. */
+        body.inGame #gameCanvas { cursor: crosshair; }
+        
+        /* Bullseye removed - gun rotation shows aiming */
+        #bullseye { display: none; }
+        
+        #hud { position: absolute; top: 0; left: 0; right: 0; padding: 15px 20px; display: flex; justify-content: space-between; align-items: flex-start; pointer-events: none; z-index: 10; }
+        .hud-panel { background: rgba(0, 10, 20, 0.85); border: 2px solid #00ffcc; padding: 12px 18px; box-shadow: 0 0 25px rgba(0, 255, 204, 0.4), inset 0 0 40px rgba(0, 255, 204, 0.1); clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 12px 100%, 0 calc(100% - 12px)); }
+        .hud-label { font-family: 'Orbitron', sans-serif; font-size: 10px; color: #00ffcc; letter-spacing: 3px; margin-bottom: 5px; text-shadow: 0 0 10px #00ffcc; }
+        .hud-value { font-family: 'Orbitron', sans-serif; font-size: 28px; font-weight: 900; color: #fff; text-shadow: 0 0 15px #00ffcc, 0 0 30px #00ffcc; }
+        #healthBar { width: 180px; height: 14px; background: linear-gradient(180deg, #1a1a1a, #0a0a0a); border: 2px solid #00ffcc; margin-top: 5px; overflow: hidden; }
+        #healthFill { height: 100%; background: linear-gradient(90deg, #ff0000, #ff6600, #00ff66); transition: width 0.3s; }
+        #flyMeter { width: 120px; height: 10px; background: #1a1a1a; border: 2px solid #ffcc00; margin-top: 8px; overflow: hidden; }
+        #flyFill { height: 100%; width: 0%; background: linear-gradient(90deg, #ffcc00, #ff6600, #ff3300); transition: width 0.2s; }
+        #mobileControls { display: flex; position: absolute; bottom: 20px; left: 0; right: 0; padding: 0 20px; justify-content: space-between; align-items: flex-end; z-index: 20; }
+        .mobile-btn { width: 90px; height: 90px; border-radius: 50%; border: 4px solid; font-family: 'Orbitron', sans-serif; font-weight: 700; font-size: 11px; display: flex; align-items: center; justify-content: center; text-align: center; cursor: pointer; }
+/* removed */         #moveBtn { background: rgba(0, 255, 204, 0.25); border-color: #00ffcc; color: #00ffcc; }
+/* removed */         #fireBtn { background: rgba(255, 51, 51, 0.25); border-color: #ff3333; color: #ff3333; }
+        #flyBtn { width: 70px; height: 70px; font-size: 10px; background: rgba(255, 204, 0, 0.25); border-color: #ffcc00; color: #ffcc00; position: absolute; bottom: 120px; right: 20px; }
+        #shieldBtn { width: 70px; height: 70px; font-size: 10px; background: rgba(120, 180, 255, 0.22); border-color: #66aaff; color: #66aaff; position: absolute; bottom: 200px; right: 20px; }
+        .mobile-btn:active, .mobile-btn.active { transform: scale(0.92); filter: brightness(1.6); }
+        #startScreen, #gameOverScreen { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: radial-gradient(ellipse at center, rgba(10,20,40,0.95) 0%, rgba(0,0,0,0.98) 100%); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 100; }
+        #gameOverScreen { display: none; }
+        .title { font-family: 'Orbitron', sans-serif; font-size: clamp(40px, 12vw, 90px); font-weight: 900; color: #00ffcc; text-shadow: 0 0 40px #00ffcc, 0 0 80px #00aaff, 0 0 120px #0066ff; letter-spacing: 12px; margin-bottom: 5px; animation: titlePulse 2s infinite; }
+        .title span { color: #ff4444; text-shadow: 0 0 40px #ff4444, 0 0 80px #ff0000; }
+        @keyframes titlePulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.85; } }
+        .subtitle { font-family: 'Share Tech Mono', monospace; font-size: clamp(12px, 2.5vw, 18px); color: #888; letter-spacing: 4px; margin-bottom: 40px; }
+        .instructions { font-family: 'Share Tech Mono', monospace; font-size: 14px; color: #aaa; text-align: center; line-height: 2.2; margin-bottom: 40px; }
+        .instructions span { color: #00ffcc; text-shadow: 0 0 10px #00ffcc; }
+        .instructions .warn { color: #ff6600; }
+        .start-btn { font-family: 'Orbitron', sans-serif; font-size: 20px; font-weight: 700; padding: 18px 60px; background: transparent; border: 3px solid #00ffcc; color: #00ffcc; cursor: pointer; letter-spacing: 5px; transition: all 0.3s; }
+        .start-btn:hover { background: #00ffcc; color: #0a0a0a; box-shadow: 0 0 40px #00ffcc; }
+        #finalScore { font-family: 'Orbitron', sans-serif; font-size: 56px; color: #ffcc00; margin: 20px 0; text-shadow: 0 0 30px #ffcc00; }
+        #easterEggHint { position: absolute; bottom: 100px; left: 50%; transform: translateX(-50%); font-family: 'Orbitron', sans-serif; font-size: 14px; color: #ffcc00; opacity: 0; transition: opacity 0.5s; text-shadow: 0 0 20px #ffcc00; z-index: 25; }
+        #easterEggHint.show { opacity: 1; animation: hintBlink 0.8s infinite; }
+        @keyframes hintBlink { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+        #soundToggle { position: absolute; top: 20px; right: 20px; font-family: 'Orbitron', sans-serif; font-size: 12px; padding: 8px 15px; background: rgba(0,0,0,0.5); border: 2px solid #00ffcc; color: #00ffcc; cursor: pointer; z-index: 50; }
+        #waveAnnounce { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-family: 'Orbitron', sans-serif; font-size: clamp(24px, 6vw, 48px); color: #ff6600; text-shadow: 0 0 30px #ff6600, 0 0 60px #ff3300; opacity: 0; pointer-events: none; z-index: 30; letter-spacing: 4px; }
+        @media (max-width: 600px) { .hud-value { font-size: 20px; } #healthBar { width: 120px; } }
+    
+/* ===== D-Pad Controls (desktop + mobile) ===== */
+.dpad{
+  width: 220px; height: 220px; border-radius: 26px;
+  background: linear-gradient(180deg, rgba(28,36,70,.62), rgba(10,12,22,.38));
+  border: 1px solid rgba(160,190,255,.22);
+  box-shadow: 0 14px 40px rgba(0,0,0,.35);
+  backdrop-filter: blur(6px);
+  display: grid;
+  grid-template-columns: 70px 70px 70px;
+  grid-template-rows: 70px 70px 70px;
+  padding: 10px;
+  user-select: none; -webkit-user-select: none;
+  touch-action: none;
+}
+.dpad-btn{
+  display:flex; align-items:center; justify-content:center;
+  border-radius:18px;
+  border:1px solid rgba(180,210,255,.22);
+  background: radial-gradient(circle at 30% 30%, rgba(200,230,255,.18), rgba(40,60,120,.18), rgba(0,0,0,.14));
+  color:#eaf1ff;
+  font-weight: 900;
+  letter-spacing:.5px;
+  box-shadow: inset 0 0 18px rgba(120,170,255,.12);
+  cursor: pointer;
+}
+.dpad-btn:active{ transform: translateY(1px); }
+.dpad-btn.on{ outline:2px solid rgba(120,255,170,.55); box-shadow:0 0 18px rgba(120,255,170,.18), inset 0 0 18px rgba(120,170,255,.12); }
+.dpad-btn.up{ grid-column:2; grid-row:1; }
+.dpad-btn.left{ grid-column:1; grid-row:2; }
+.dpad-btn.fire{ grid-column:2; grid-row:2; font-size: 14px; }
+.dpad-btn.right{ grid-column:3; grid-row:2; }
+.dpad-btn.down{ grid-column:2; grid-row:3; }
+.abilityStack{ display:flex; flex-direction:column; gap:10px; align-items:stretch; }
+.mobile-btn.ability.hidden{ display:none !important; }
+
+</style>
+</head>
+<body>
+    <div id="gameContainer">
+        <canvas id="gameCanvas"></canvas>
+        <!-- Red bullseye cursor - just circle, no plus sign -->
+        <div id="bullseye"></div>
+        <button id="soundToggle">🔊 SOUND ON</button>
+        <div id="hud">
+            <div class="hud-panel"><div class="hud-label">SCORE</div><div class="hud-value" id="scoreDisplay">0</div></div>
+            <div class="hud-panel"><div class="hud-label">KILLS</div><div class="hud-value" id="killsDisplay">0</div></div>
+            <div class="hud-panel"><div class="hud-label">SUIT INTEGRITY</div><div id="healthBar"><div id="healthFill" style="width: 100%"></div></div><div class="hud-label" style="margin-top: 10px">◆ JETPACK FUEL ◆</div><div id="flyMeter"><div id="flyFill"></div></div></div>
+        </div>
+        <div id="mobileControls">
+
+  <div id="dpad" class="dpad">
+    <div class="dpad-btn up" id="btnUp">▲</div>
+    <div class="dpad-btn left" id="btnLeft">◀</div>
+    <div class="dpad-btn fire" id="btnFire">FIRE</div>
+    <div class="dpad-btn right" id="btnRight">▶</div>
+    <div class="dpad-btn down" id="btnDown">▼</div>
+  </div>
+  <div class="abilityStack">
+    <div id="flyBtn" class="mobile-btn ability hidden">✈<br>FLY</div>
+    <div id="shieldBtn" class="mobile-btn ability hidden">🛡<br>SHIELD</div>
+    <div id="pauseBtn" class="mobile-btn" style="background: rgba(0, 255, 204, 0.2); border-color: #00ffcc; color: #00ffcc; text-shadow: 0 0 15px #00ffcc; box-shadow: 0 0 20px rgba(0, 255, 204, 0.4);">⏸<br>PAUSE</div>
+  </div>
+</div>
+        <div id="easterEggHint">⚡ CHARGE READY — SPACE: FLY • SHIFT: SHIELD ⚡</div>
+        <div id="waveAnnounce"></div>
+        <div id="startScreen">
+            <div class="title">MECH <span>WARS</span></div>
+            <div class="subtitle">ALIEN PLANET • ROBOT UPRISING</div>
+            <div class="instructions">
+                <span>[MOUSE]</span> — Aim gun (gun follows cursor)<br>
+                <span>[CLICK / F]</span> — Shoot<br>
+                <span>[D-PAD / WASD]</span> — Move<br>
+                <span>[SPACE]</span> — Jetpack &nbsp; <span>[SHIFT]</span> — Shield<br>
+                <span>[ESC / PAUSE]</span> — Pause game
+            </div>
+            <button class="start-btn" id="startBtn">▶ DEPLOY</button>
+        </div>
+        <div id="gameOverScreen">
+            <div class="title" style="font-size: clamp(30px, 8vw, 60px);">SUIT <span>DESTROYED</span></div>
+            <div class="subtitle">◆ EXTRACTION FAILED ◆</div>
+            <div id="finalScore">0</div>
+            <div class="instructions">TARGETS ELIMINATED</div>
+            <button class="start-btn" id="restartBtn">↻ REDEPLOY</button>
+        </div>
+    </div>
+    
+    <div id="pauseOverlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.65); z-index:50; align-items:center; justify-content:center; flex-direction:column; font-family:system-ui, -apple-system, Segoe UI, Roboto, Arial; color:#d7fff1; text-align:center;">
+        <div style="font-size:40px; font-weight:800; letter-spacing:2px;">PAUSED</div>
+        <div style="margin-top:10px; font-size:14px; opacity:0.85;">Press <b>P</b>/<b>Esc</b> or tap <b>PAUSE</b> to resume</div>
+    </div>
+<script>
+const AudioSystem = {
+    ctx: null, enabled: true,
+    init() { try { this.ctx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) {} },
+    resume() { if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume(); },
+    
+    playRocketLaunch() {
+        if (!this.enabled || !this.ctx) return;
+        // Firework spinning whistle sound
+        const t = this.ctx.currentTime;
+        
+        // Main spinning whistle
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        const lfo = this.ctx.createOscillator();
+        const lfoGain = this.ctx.createGain();
+        
+        lfo.connect(lfoGain);
+        lfoGain.connect(osc.frequency);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(800, t);
+        osc.frequency.exponentialRampToValueAtTime(2000, t + 0.15);
+        osc.frequency.exponentialRampToValueAtTime(400, t + 0.4);
+        
+        lfo.type = 'sine';
+        lfo.frequency.setValueAtTime(30, t);
+        lfo.frequency.linearRampToValueAtTime(80, t + 0.3);
+        lfoGain.gain.setValueAtTime(200, t);
+        lfoGain.gain.linearRampToValueAtTime(400, t + 0.2);
+        
+        gain.gain.setValueAtTime(0.2, t);
+        gain.gain.exponentialRampToValueAtTime(0.01, t + 0.4);
+        
+        osc.start(t);
+        lfo.start(t);
+        osc.stop(t + 0.4);
+        lfo.stop(t + 0.4);
+        
+        // Crackle/spark layer
+        const bufferSize = this.ctx.sampleRate * 0.3;
+        const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+            data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / bufferSize, 1.5) * (Math.random() > 0.7 ? 1 : 0.2);
+        }
+        const noise = this.ctx.createBufferSource();
+        const noiseGain = this.ctx.createGain();
+        const noiseFilter = this.ctx.createBiquadFilter();
+        noise.buffer = buffer;
+        noise.connect(noiseFilter);
+        noiseFilter.connect(noiseGain);
+        noiseGain.connect(this.ctx.destination);
+        noiseFilter.type = 'highpass';
+        noiseFilter.frequency.setValueAtTime(2000, t);
+        noiseGain.gain.setValueAtTime(0.15, t);
+        noiseGain.gain.exponentialRampToValueAtTime(0.01, t + 0.3);
+        noise.start(t);
+    },
+    
+    playExplosion(big = false) {
+        if (!this.enabled || !this.ctx) return;
+        const t = this.ctx.currentTime;
+        const duration = big ? 0.8 : 0.4, volume = big ? 0.5 : 0.3;
+        const bufferSize = this.ctx.sampleRate * duration, buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate), data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / bufferSize, 2);
+        const noise = this.ctx.createBufferSource(), noiseGain = this.ctx.createGain(), filter = this.ctx.createBiquadFilter();
+        noise.buffer = buffer; noise.connect(filter); filter.connect(noiseGain); noiseGain.connect(this.ctx.destination);
+        filter.type = 'lowpass'; filter.frequency.setValueAtTime(big ? 800 : 1200, t); filter.frequency.exponentialRampToValueAtTime(100, t + duration);
+        noiseGain.gain.setValueAtTime(volume, t); noiseGain.gain.exponentialRampToValueAtTime(0.01, t + duration);
+        noise.start(t);
+        const osc = this.ctx.createOscillator(), oscGain = this.ctx.createGain();
+        osc.connect(oscGain); oscGain.connect(this.ctx.destination);
+        osc.type = 'sine'; osc.frequency.setValueAtTime(big ? 60 : 100, t); osc.frequency.exponentialRampToValueAtTime(20, t + duration * 0.5);
+        oscGain.gain.setValueAtTime(volume * 0.8, t); oscGain.gain.exponentialRampToValueAtTime(0.01, t + duration * 0.5);
+        osc.start(t); osc.stop(t + duration * 0.5);
+    },
+    
+    playRoar() {
+        if (!this.enabled || !this.ctx) return;
+        const t = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator(), osc2 = this.ctx.createOscillator(), gain = this.ctx.createGain(), filter = this.ctx.createBiquadFilter();
+        osc.connect(filter); osc2.connect(filter); filter.connect(gain); gain.connect(this.ctx.destination);
+        osc.type = 'sawtooth'; osc2.type = 'triangle';
+        osc.frequency.setValueAtTime(120, t); osc.frequency.exponentialRampToValueAtTime(60, t + 0.6);
+        osc2.frequency.setValueAtTime(90, t); osc2.frequency.exponentialRampToValueAtTime(40, t + 0.6);
+        filter.type = 'lowpass'; filter.frequency.setValueAtTime(400, t); filter.frequency.exponentialRampToValueAtTime(150, t + 0.5);
+        gain.gain.setValueAtTime(0.4, t); gain.gain.linearRampToValueAtTime(0.5, t + 0.1); gain.gain.exponentialRampToValueAtTime(0.01, t + 0.7);
+        osc.start(t); osc2.start(t); osc.stop(t + 0.7); osc2.stop(t + 0.7);
+    },
+    
+    playTRexRoar() {
+        if (!this.enabled || !this.ctx) return;
+        const t = this.ctx.currentTime;
+        // Deeper, more menacing roar for T-Rex
+        const osc = this.ctx.createOscillator(), osc2 = this.ctx.createOscillator(), osc3 = this.ctx.createOscillator();
+        const gain = this.ctx.createGain(), filter = this.ctx.createBiquadFilter();
+        osc.connect(filter); osc2.connect(filter); osc3.connect(filter); filter.connect(gain); gain.connect(this.ctx.destination);
+        osc.type = 'sawtooth'; osc2.type = 'triangle'; osc3.type = 'square';
+        osc.frequency.setValueAtTime(80, t); osc.frequency.exponentialRampToValueAtTime(35, t + 0.9);
+        osc2.frequency.setValueAtTime(60, t); osc2.frequency.exponentialRampToValueAtTime(25, t + 0.9);
+        osc3.frequency.setValueAtTime(45, t); osc3.frequency.exponentialRampToValueAtTime(20, t + 0.8);
+        filter.type = 'lowpass'; filter.frequency.setValueAtTime(300, t); filter.frequency.exponentialRampToValueAtTime(80, t + 0.7);
+        gain.gain.setValueAtTime(0.5, t); gain.gain.linearRampToValueAtTime(0.6, t + 0.15); gain.gain.exponentialRampToValueAtTime(0.01, t + 0.9);
+        osc.start(t); osc2.start(t); osc3.start(t); osc.stop(t + 0.9); osc2.stop(t + 0.9); osc3.stop(t + 0.9);
+    },
+    
+    playHit() {
+        if (!this.enabled || !this.ctx) return;
+        const t = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator(), gain = this.ctx.createGain();
+        osc.connect(gain); gain.connect(this.ctx.destination);
+        osc.type = 'square'; osc.frequency.setValueAtTime(300, t); osc.frequency.exponentialRampToValueAtTime(100, t + 0.1);
+        gain.gain.setValueAtTime(0.2, t); gain.gain.exponentialRampToValueAtTime(0.01, t + 0.1);
+        osc.start(t); osc.stop(t + 0.1);
+    },
+    
+    playJetpack() {
+        if (!this.enabled || !this.ctx) return;
+        const t = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator(), osc2 = this.ctx.createOscillator(), gain = this.ctx.createGain();
+        osc.connect(gain); osc2.connect(gain); gain.connect(this.ctx.destination);
+        osc.type = 'sawtooth'; osc2.type = 'square';
+        osc.frequency.setValueAtTime(80, t); osc.frequency.linearRampToValueAtTime(250, t + 0.4);
+        osc2.frequency.setValueAtTime(120, t); osc2.frequency.linearRampToValueAtTime(350, t + 0.4);
+        gain.gain.setValueAtTime(0.15, t); gain.gain.linearRampToValueAtTime(0.25, t + 0.2); gain.gain.exponentialRampToValueAtTime(0.01, t + 0.8);
+        osc.start(t); osc2.start(t); osc.stop(t + 0.8); osc2.stop(t + 0.8);
+    },
+    
+    playDamage() {
+        if (!this.enabled || !this.ctx) return;
+        const t = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator(), gain = this.ctx.createGain();
+        osc.connect(gain); gain.connect(this.ctx.destination);
+        osc.type = 'sawtooth'; osc.frequency.setValueAtTime(200, t); osc.frequency.exponentialRampToValueAtTime(50, t + 0.2);
+        gain.gain.setValueAtTime(0.3, t); gain.gain.exponentialRampToValueAtTime(0.01, t + 0.2);
+        osc.start(t); osc.stop(t + 0.2);
+    }
+};
+
+const canvas = document.getElementById('gameCanvas'), ctx = canvas.getContext('2d');
+
+// Fatal error overlay (prevents silent blank screen if a runtime error occurs)
+let fatalError = null;
+
+
+// Side-scroller camera
+let camX = 0;
+let autoScroll = 0; // (disabled) camera is player-follow for exploration // world px per ms (tweak)
+let gameRunning = false, score = 0, kills = 0, flyCharge = 0, wave = 1;
+// Encounter-based spawning: enemies appear as you explore forward (no camping spawns)
+let nextEncounterX = 650; // world x threshold to trigger the next group
+
+const FLY_CHARGE_MAX = 100, FLY_DURATION = 15000;
+const SHIELD_DURATION = 15000, SHIELD_HITS = 4;
+const LASER_TELEGRAPH_MS = 450;
+const IFRAME_MS = 800;
+
+function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+resize(); 
+window.addEventListener('blur', () => { isMoving = false; isFiring = false; mobileMoveHeld = false; lastFireTime = -1e9; dpadState.up = false; dpadState.down = false; dpadState.left = false; dpadState.right = false; syncDpadVisuals && syncDpadVisuals(); });
+document.addEventListener('visibilitychange', () => { if (document.hidden) { isMoving = false; isFiring = false; mobileMoveHeld = false; lastFireTime = -1e9; dpadState.up = false; dpadState.down = false; dpadState.left = false; dpadState.right = false; } });
+window.addEventListener('resize', resize);
+
+const player = { x: 0, y: 0, targetX: 0, targetY: 0, width: 50, height: 80, health: 100, maxHealth: 100, speed: 5.5, isFlying: false, flyEndTime: 0, legAngle: 0, legDir: 1, isMoving: false, facingRight: true, screenShake: 0, armAngle: 0, invulnUntil: 0, shieldUntil: 0, shieldHits: 0 };
+let rockets = [], enemies = [], enemyLasers = [], particles = [], sparks = [], smokeTrails = [], debris = [], spawnTimer = 0, spawnInterval = 2500, difficulty = 1;
+// Pointer position (for reference) + separate aim reticle position (click-to-place)
+let mouseX = 400, mouseY = 400;
+let aimX = 400, aimY = 400;
+let isMoving = false, isFiring = false, lastFireTime = -1e9;
+let paused = false;
+let mobileMoveHeld = false;
+let lmbDownTime = 0, lmbDownX = 0, lmbDownY = 0;
+const fireRate = 320;
+
+// Unified fire helper (keyboard F + D-pad FIRE). Fires immediately when forced,
+// otherwise respects fireRate in the main update loop.
+function fireOneRocket(force=false) {
+    if (!gameRunning || paused) return;
+    const now = Date.now();
+    if (!force && (now - lastFireTime) <= fireRate) return;
+
+    // SIMPLE: Fire from player toward aim point
+    const gunX = player.x + (player.facingRight ? 40 : -40);
+    const gunY = player.y - player.height * 0.35;
+
+    // Aim reticle is stored in screen coords; convert X to world coords via camX.
+    const targetX = (Number.isFinite(aimX) ? aimX : mouseX) + camX;
+    const targetY = (Number.isFinite(aimY) ? aimY : mouseY);
+
+    fireRocket(gunX, gunY, targetX, targetY);
+    lastFireTime = now;
+}
+
+
+function initPlayer() { 
+    player.x = camX + canvas.width * 0.25; 
+    player.y = canvas.height - 160; 
+    player.targetX = player.x; 
+    player.targetY = player.y; 
+    player.health = player.maxHealth; 
+    player.isFlying = false; 
+    player.screenShake = 0; 
+    nextEncounterX = player.x + 650;
+    // Initialize aim reticle in front of player
+    mouseX = canvas.width * 0.65;
+    mouseY = canvas.height - 180;
+    aimX = mouseX;
+    aimY = mouseY;
+    // Update bullseye element position
+    const bullseyeEl = document.getElementById('bullseye');
+    if (bullseyeEl) {
+        bullseyeEl.style.left = aimX + 'px';
+        bullseyeEl.style.top = aimY + 'px';
+    }
+}
+
+
+function drawLaserScope(x, y) {
+    // Neon green laser scope reticle (matches player glow)
+    const c = '#7CFF4A';
+    ctx.save();
+    ctx.strokeStyle = c;
+    ctx.lineWidth = 2;
+    ctx.shadowColor = c;
+    ctx.shadowBlur = 18;
+
+    const r = 16;
+    const gap = 6;
+
+    // outer ring
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // inner dot
+    ctx.fillStyle = c;
+    ctx.globalAlpha = 0.85;
+    ctx.beginPath();
+    ctx.arc(x, y, 2.2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+
+    // ticks
+    ctx.beginPath();
+    ctx.moveTo(x - r - 8, y); ctx.lineTo(x - gap, y);
+    ctx.moveTo(x + gap, y); ctx.lineTo(x + r + 8, y);
+    ctx.moveTo(x, y - r - 8); ctx.lineTo(x, y - gap);
+    ctx.moveTo(x, y + gap); ctx.lineTo(x, y + r + 8);
+    ctx.stroke();
+
+    // subtle scan shimmer
+    ctx.globalAlpha = 0.22;
+    ctx.beginPath();
+    ctx.arc(x, y, r + 7, 0, Math.PI * 2);
+    ctx.stroke();
+
+    ctx.restore();
+}
+
+
+
+function drawMoveArrowHint() {
+    // Screen-space guidance arrow (after clearing the local area)
+    const t = Date.now() * 0.006;
+    const pulse = 0.55 + Math.sin(t) * 0.25;
+    const x = canvas.width - 90 + Math.sin(t) * 8;
+    const y = canvas.height * 0.52;
+
+    ctx.save();
+    ctx.globalAlpha = pulse;
+    ctx.shadowColor = 'rgba(80, 255, 140, 0.98)';
+    ctx.shadowBlur = 18;
+
+    // Arrow body
+    ctx.strokeStyle = 'rgba(80,255,140,0.92)';
+    ctx.lineWidth = 6;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(x - 40, y);
+    ctx.lineTo(x + 26, y);
+    ctx.stroke();
+
+    // Arrow head
+    ctx.beginPath();
+    ctx.moveTo(x + 26, y);
+    ctx.lineTo(x + 6, y - 16);
+    ctx.moveTo(x + 26, y);
+    ctx.lineTo(x + 6, y + 16);
+    ctx.stroke();
+
+    // Text
+    ctx.shadowBlur = 0;
+    ctx.globalAlpha = Math.min(1, pulse + 0.15);
+    ctx.fillStyle = 'rgba(120,255,170,0.95)';
+    ctx.font = 'bold 16px Orbitron, sans-serif';
+    ctx.fillText('MOVE →', x - 60, y - 26);
+
+    ctx.restore();
+}
+
+
+function drawAimLine() {
+    // Removed - bullseye is the only aiming indicator
+    // Gun rotation shows where player is aiming
+}
+
+
+// Power Armor Soldier
+
+// Heavy Combat Mech (inspired by chunky 80s/90s practical sci‑fi, without copying any one design)
+function drawPlayer(x, y, width, height, legAngle, isFlying, facingRight, armAngle) {
+    ctx.save();
+    ctx.translate(x, y);
+    if (!facingRight) ctx.scale(-1, 1);
+
+    // Player silhouette: more humanoid (armored suit), less bulky mech
+    const s = 0.98;
+    ctx.scale(s, s);
+
+    const steelDark = '#0b111a';
+    const steelMid  = '#223246';
+    const steelLite = '#4e6a86';
+    const trim      = '#7CFF4A'; // suit accent (neon green)
+    // Bold center glow to match the game's neon vibe (stronger)
+    ctx.shadowColor = 'rgba(124, 255, 74, 0.95)';
+    ctx.shadowBlur = 28;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 0;
+    const visorGold = '#ffcc40';
+    const warn      = '#ffcc00';
+
+    // Hover shadow
+    if (!isFlying) {
+        ctx.fillStyle = 'rgba(0,0,0,0.45)';
+        ctx.beginPath();
+        ctx.ellipse(0, height * 0.55, width * 0.65, 12, 0, 0, Math.PI * 2);
+        ctx.fill();
+    } else {
+        // Jet wash glow
+        ctx.save();
+        ctx.globalAlpha = 0.35;
+        const g = ctx.createRadialGradient(0, height*0.55, 0, 0, height*0.55, 110);
+        g.addColorStop(0, 'rgba(0,255,204,0.18)');
+        g.addColorStop(0.4, 'rgba(0,170,255,0.12)');
+        g.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(0, height*0.55, 110, 0, Math.PI*2);
+        ctx.fill();
+        ctx.restore();
+    }
+
+    // ===== Legs (hydraulic, chunky) =====
+    const hipY = height * 0.05;
+    const legSpan = width * 0.19;
+    const upperH = height * 0.33; // longer legs
+    const lowerH = height * 0.35; // longer legs
+
+    function steelGrad(x0,x1) {
+        const g = ctx.createLinearGradient(x0,0,x1,0);
+        g.addColorStop(0, steelDark);
+        g.addColorStop(0.35, steelMid);
+        g.addColorStop(0.7, steelLite);
+        g.addColorStop(1, steelDark);
+        return g;
+    }
+
+    for (let side = -1; side <= 1; side += 2) {
+        ctx.save();
+        ctx.translate(side * legSpan, hipY);
+        ctx.rotate(legAngle * side * 0.35);
+
+        // Upper leg block
+        ctx.fillStyle = steelGrad(-18, 18);
+        ctx.beginPath();
+        ctx.roundRect(-14, -6, 28, upperH, 6);
+        ctx.fill();
+
+        // Pistons
+        ctx.strokeStyle = 'rgba(200,220,255,0.22)';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(-10, 8);
+        ctx.lineTo(-16, upperH - 10);
+        ctx.moveTo(10, 8);
+        ctx.lineTo(16, upperH - 10);
+        ctx.stroke();
+
+        // Knee joint
+        ctx.fillStyle = steelLite;
+        ctx.beginPath();
+        ctx.arc(0, upperH + 2, 10, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.save();
+        ctx.shadowColor = trim; ctx.shadowBlur = 14;
+        ctx.fillStyle = 'rgba(0,255,204,0.75)';
+        ctx.beginPath();
+        ctx.arc(0, upperH + 2, 4, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+
+        // Lower leg
+        ctx.fillStyle = steelGrad(-16, 16);
+        ctx.beginPath();
+        ctx.roundRect(-12, upperH, 24, lowerH, 6);
+        ctx.fill();
+
+        // Shin plate
+        ctx.fillStyle = 'rgba(255,255,255,0.06)';
+        ctx.beginPath();
+        ctx.roundRect(-10, upperH + 10, 20, lowerH - 18, 6);
+        ctx.fill();
+
+        // Foot
+        ctx.fillStyle = steelDark;
+        ctx.beginPath();
+        ctx.roundRect(-18, upperH + lowerH - 2, 36, 12, 6);
+        ctx.fill();
+        ctx.fillStyle = 'rgba(0,0,0,0.35)';
+        ctx.beginPath();
+        ctx.roundRect(-20, upperH + lowerH + 2, 40, 8, 6);
+        ctx.fill();
+
+        ctx.restore();
+    }
+
+    // ===== Torso (chunky mech chest + reactor) =====
+    const torsoW = width * 0.62;
+    const torsoH = height * 0.40;
+    const torsoY = -height * 0.34;
+
+    // Backpack / thruster stack
+    ctx.fillStyle = steelGrad(-22, 22);
+    ctx.beginPath();
+    ctx.roundRect(-22, torsoY + 10, 44, torsoH + 28, 10);
+    ctx.fill();
+    ctx.fillStyle = steelDark;
+    ctx.beginPath();
+    ctx.roundRect(-18, torsoY + torsoH + 22, 14, 14, 5);
+    ctx.roundRect(4, torsoY + torsoH + 22, 14, 14, 5);
+    ctx.fill();
+
+    if (isFlying) {
+        for (let i=0;i<2;i++){
+            const fx = (i===0?-11:11);
+            const flameH = 38 + Math.random()*22;
+            const grad = ctx.createLinearGradient(fx, torsoY + torsoH + 36, fx, torsoY + torsoH + 36 + flameH);
+            grad.addColorStop(0, 'rgba(255,255,255,0.95)');
+            grad.addColorStop(0.2, 'rgba(0,255,204,0.75)');
+            grad.addColorStop(0.6, 'rgba(0,140,255,0.35)');
+            grad.addColorStop(1, 'rgba(0,0,0,0)');
+            ctx.fillStyle = grad;
+            ctx.beginPath();
+            ctx.moveTo(fx - 10, torsoY + torsoH + 36);
+            ctx.quadraticCurveTo(fx - 6, torsoY + torsoH + 36 + flameH*0.6, fx, torsoY + torsoH + 36 + flameH);
+            ctx.quadraticCurveTo(fx + 6, torsoY + torsoH + 36 + flameH*0.6, fx + 10, torsoY + torsoH + 36);
+            ctx.closePath();
+            ctx.fill();
+        }
+    }
+
+    // Main chest block
+    const chestGrad = ctx.createLinearGradient(-torsoW/2, torsoY, torsoW/2, torsoY);
+    chestGrad.addColorStop(0, steelDark);
+    chestGrad.addColorStop(0.35, steelMid);
+    chestGrad.addColorStop(0.7, steelLite);
+    chestGrad.addColorStop(1, steelDark);
+    ctx.fillStyle = chestGrad;
+    ctx.beginPath();
+    ctx.roundRect(-torsoW/2, torsoY, torsoW, torsoH, 14);
+    ctx.fill();
+
+    // Chest plating panels
+    ctx.fillStyle = 'rgba(255,255,255,0.05)';
+    ctx.beginPath();
+    ctx.roundRect(-torsoW*0.42, torsoY + 10, torsoW*0.36, torsoH*0.70, 12);
+    ctx.roundRect(torsoW*0.06, torsoY + 10, torsoW*0.36, torsoH*0.70, 12);
+    ctx.fill();
+
+    // Reactor core
+    ctx.save();
+    ctx.shadowColor = trim; ctx.shadowBlur = 26;
+    const core = ctx.createRadialGradient(0, torsoY + torsoH*0.55, 0, 0, torsoY + torsoH*0.55, 36);
+    core.addColorStop(0, 'rgba(0,255,204,0.85)');
+    core.addColorStop(0.4, 'rgba(0,170,255,0.35)');
+    core.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = core;
+    ctx.beginPath();
+    ctx.arc(0, torsoY + torsoH*0.55, 36, 0, Math.PI*2);
+    ctx.fill();
+    ctx.restore();
+
+    ctx.fillStyle = 'rgba(10,16,24,0.9)';
+    ctx.beginPath();
+    ctx.arc(0, torsoY + torsoH*0.55, 16, 0, Math.PI*2);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(0,255,204,0.75)';
+    ctx.beginPath();
+    ctx.arc(0, torsoY + torsoH*0.55, 6, 0, Math.PI*2);
+    ctx.fill();
+
+    // ===== Head / sensor block =====
+    const headY = torsoY - 18;
+    ctx.fillStyle = steelGrad(-18,18);
+    ctx.beginPath();
+    ctx.roundRect(-18, headY, 36, 26, 8);
+    ctx.fill();
+
+    // Visor slit
+    ctx.save();
+    ctx.shadowColor = 'rgba(255, 204, 64, 0.95)'; ctx.shadowBlur = 20;
+    ctx.fillStyle = 'rgba(255, 204, 64, 0.70)';
+    ctx.beginPath();
+    ctx.roundRect(-12, headY + 8, 24, 6, 6);
+    ctx.fill();
+    ctx.restore();
+
+    // ===== Arms / Weapons =====
+    // Right arm: cannon shroud that tracks the cursor (armAngle)
+    const shoulderY = torsoY + 18;
+    const shoulderX = torsoW/2 - 10;
+
+    // Shoulder joint
+    ctx.fillStyle = steelLite;
+    ctx.beginPath();
+    ctx.arc(shoulderX, shoulderY, 10, 0, Math.PI*2);
+    ctx.fill();
+
+    // Cannon arm
+    ctx.save();
+    ctx.translate(shoulderX, shoulderY);
+    const aim = Math.max(-1.2, Math.min(1.2, armAngle));
+    ctx.rotate(aim);
+
+    // Upper arm
+    ctx.fillStyle = steelGrad(-10, 18);
+    ctx.beginPath();
+    ctx.roundRect(0, -7, 28, 14, 7);
+    ctx.fill();
+
+    // Forearm shroud + twin barrels
+    ctx.fillStyle = steelGrad(0, 56);
+    ctx.beginPath();
+    ctx.roundRect(18, -10, 48, 20, 8);
+    ctx.fill();
+
+    // Barrel pair
+    ctx.fillStyle = '#0a0f18';
+    ctx.beginPath();
+    ctx.roundRect(60, -7, 34, 6, 3);
+    ctx.roundRect(60, 1, 34, 6, 3);
+    ctx.fill();
+
+    // Muzzle glow
+    ctx.save();
+    ctx.shadowColor = 'rgba(255,140,80,0.9)';
+    ctx.shadowBlur = 18;
+    ctx.fillStyle = 'rgba(255,180,120,0.7)';
+    ctx.beginPath();
+    ctx.arc(96, -4, 3, 0, Math.PI*2);
+    ctx.arc(96, 4, 3, 0, Math.PI*2);
+    ctx.fill();
+    ctx.restore();
+
+    // Ammo cable
+    ctx.strokeStyle = 'rgba(140,170,255,0.22)';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(18, 7);
+    ctx.quadraticCurveTo(10, 18, -12, 22);
+    ctx.stroke();
+
+    ctx.restore();
+
+    // Left shoulder: missile pod (visual only — rockets still fire from armX/armY logic)
+    const podX = -torsoW/2 + 12;
+    const podY = torsoY + 10;
+    ctx.fillStyle = steelGrad(podX-10, podX+40);
+    ctx.beginPath();
+    ctx.roundRect(podX, podY, 48, 26, 10);
+    ctx.fill();
+    ctx.fillStyle = '#0a0f18';
+    for (let i=0;i<3;i++){
+        ctx.beginPath();
+        ctx.arc(podX + 12 + i*12, podY + 13, 5.4, 0, Math.PI*2);
+        ctx.fill();
+    }
+    ctx.save();
+    ctx.shadowColor = warn; ctx.shadowBlur = 12;
+    ctx.fillStyle = 'rgba(255,204,0,0.55)';
+    ctx.beginPath();
+    ctx.arc(podX + 44, podY + 6, 2.4, 0, Math.PI*2);
+    ctx.fill();
+    ctx.restore();
+
+    // Outline pass for crispness
+    ctx.strokeStyle = 'rgba(220,235,255,0.10)';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(-torsoW/2, torsoY, torsoW, torsoH);
+
+    // === ELECTRICITY EFFECT (more frequent arcs around the suit) ===
+    // Use time-based randomness
+    const elecTime = Date.now();
+    const elecChance = Math.sin(elecTime * 0.002) * Math.cos(elecTime * 0.001);
+    
+    if (elecChance > 0.3 && Math.random() < 0.25) { // More frequent
+        ctx.save();
+        ctx.strokeStyle = '#00ffff';
+        ctx.shadowColor = '#00ffff';
+        ctx.shadowBlur = 20;
+        ctx.lineWidth = 2;
+        ctx.globalAlpha = 0.8 + Math.random() * 0.2;
+        
+        // Draw 1-2 electric arcs
+        const numArcs = 1 + Math.floor(Math.random() * 2);
+        for (let a = 0; a < numArcs; a++) {
+            // Random start point on body
+            const startX = (Math.random() - 0.5) * width * 1.2;
+            const startY = torsoY + Math.random() * torsoH;
+            
+            ctx.beginPath();
+            ctx.moveTo(startX, startY);
+            
+            // Jagged lightning path
+            let px = startX, py = startY;
+            const segments = 3 + Math.floor(Math.random() * 3);
+            for (let i = 0; i < segments; i++) {
+                const nx = px + (Math.random() - 0.5) * 20;
+                const ny = py + (Math.random() - 0.5) * 25;
+                ctx.lineTo(nx, ny);
+                px = nx; py = ny;
+            }
+            ctx.stroke();
+            
+            // Small spark at end
+            ctx.fillStyle = '#ffffff';
+            ctx.beginPath();
+            ctx.arc(px, py, 2 + Math.random() * 2, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        ctx.restore();
+    }
+    
+    // Occasional big discharge (more frequent)
+    if (elecChance > 0.6 && Math.random() < 0.12) {
+        ctx.save();
+        ctx.strokeStyle = '#ffff00';
+        ctx.shadowColor = '#ffff00';
+        ctx.shadowBlur = 25;
+        ctx.lineWidth = 3;
+        ctx.globalAlpha = 0.9;
+        
+        // Big arc from one side to another
+        ctx.beginPath();
+        ctx.moveTo(-width * 0.6, torsoY + torsoH * 0.3);
+        let px = -width * 0.6, py = torsoY + torsoH * 0.3;
+        for (let i = 0; i < 8; i++) {
+            px += width * 0.15;
+            py += (Math.random() - 0.5) * 20;
+            ctx.lineTo(px, py);
+        }
+        ctx.stroke();
+        ctx.restore();
+    }
+
+    ctx.restore();
+}
+
+
+function drawTRex(x, y, width, height, legAngle, facingRight, health, maxHealth, isCharging) {
+    ctx.save();
+    ctx.translate(x, y);
+    if (!facingRight) ctx.scale(-1, 1);
+
+    const scale = 1.06;
+    ctx.scale(scale, scale);
+
+    // === Mech-Rex palette (back to the previous look) ===
+    const steel = '#667489';
+    const steelDark = '#222b36';
+    const steelMid = '#3e4c5e';
+    const edge = 'rgba(220,240,255,0.16)';
+    const bolt = '#0d121b';
+    const glow = isCharging ? 'rgba(255,55,55,0.95)' : 'rgba(255,190,0,0.85)';
+
+    // Shadow
+    ctx.fillStyle = 'rgba(0,0,0,0.42)';
+    ctx.beginPath();
+    ctx.ellipse(0, height * 0.35, width * 0.62, 12, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    const steelGrad = (x0, x1) => {
+        const g = ctx.createLinearGradient(x0, 0, x1, 0);
+        g.addColorStop(0, steelDark);
+        g.addColorStop(0.45, steel);
+        g.addColorStop(1, steelMid);
+        return g;
+    };
+
+    // === Segmented tail (kept) ===
+    const wag = Math.sin(legAngle * 2) * 0.18;
+    const tailBaseX = -width * 0.22, tailBaseY = -height * 0.02;
+    const segCount = 7;
+    for (let i = 0; i < segCount; i++) {
+        const t = i / (segCount - 1);
+        const segW = width * (0.22 - t * 0.14);
+        const segH = height * (0.11 - t * 0.065);
+        const bend = wag * (0.55 + t * 1.2);
+        const px = tailBaseX - width * (0.18 + i * 0.18) + Math.cos(t * 2.2) * 4;
+        const py = tailBaseY + Math.sin(t * 2.4 + wag) * (6 + i * 2);
+
+        ctx.save();
+        ctx.translate(px, py);
+        ctx.rotate(-0.12 - t * 0.28 + bend);
+
+        ctx.shadowColor = glow;
+        ctx.shadowBlur = 10;
+
+        ctx.fillStyle = steelGrad(-segW, segW);
+        ctx.beginPath();
+        ctx.roundRect(-segW * 0.5, -segH * 0.5, segW, segH, Math.max(3, segH * 0.4));
+        ctx.fill();
+
+        ctx.shadowBlur = 0;
+        ctx.strokeStyle = edge;
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.moveTo(-segW * 0.42, -segH * 0.10);
+        ctx.lineTo(segW * 0.42, -segH * 0.10);
+        ctx.stroke();
+
+        ctx.fillStyle = steelDark;
+        ctx.beginPath();
+        ctx.arc(-segW * 0.52, 0, Math.max(3, segH * 0.34), 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = bolt;
+        for (let b = 0; b < 2; b++) {
+            ctx.beginPath();
+            ctx.arc(segW * (0.15 + b * 0.22), -segH * 0.12, 1.7, 0, Math.PI * 2);
+            ctx.arc(segW * (0.15 + b * 0.22),  segH * 0.12, 1.7, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        ctx.restore();
+    }
+
+    // Tail tip spike
+    ctx.save();
+    ctx.translate(tailBaseX - width * 1.42, tailBaseY + Math.sin(wag) * 10);
+    ctx.rotate(-0.55 + wag * 0.6);
+    ctx.fillStyle = steelDark;
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(-18, 5);
+    ctx.lineTo(-16, -5);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+
+    // === Body that reads as a T-Rex (less "squished") ===
+    // Under-body haunch silhouette to give the classic rex shape
+    const haunchW = width * 0.70;
+    const haunchH = height * 0.48;
+    ctx.shadowColor = glow;
+    ctx.shadowBlur = 16;
+    ctx.fillStyle = 'rgba(10,12,16,0.28)';
+    ctx.beginPath();
+    ctx.ellipse(-width*0.06, -height*0.04, haunchW*0.55, haunchH*0.52, 0.06, 0, Math.PI*2);
+    ctx.fill();
+
+    // Main torso plate (wider + taller so it doesn't look compressed)
+    const torsoW = width * 0.72;
+    const torsoH = height * 0.48;
+    const torsoY = -height * 0.16;
+
+    ctx.fillStyle = steelGrad(-torsoW/2, torsoW/2);
+    ctx.beginPath();
+    ctx.roundRect(-torsoW/2, torsoY, torsoW, torsoH, 22);
+    ctx.fill();
+
+    // Belly plate
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = steelDark;
+    ctx.beginPath();
+    ctx.roundRect(-torsoW*0.20, torsoY + torsoH*0.18, torsoW*0.56, torsoH*0.66, 16);
+    ctx.fill();
+
+    // Rib/vent slats
+    ctx.strokeStyle = 'rgba(180,210,255,0.14)';
+    ctx.lineWidth = 2;
+    for (let i=0;i<4;i++){
+        const yy = torsoY + torsoH*(0.30 + i*0.14);
+        ctx.beginPath();
+        ctx.moveTo(-torsoW*0.10, yy);
+        ctx.lineTo(torsoW*0.30, yy);
+        ctx.stroke();
+    }
+
+    // Spine fins / heat sinks
+    ctx.fillStyle = steelMid;
+    for (let i=0;i<4;i++){
+        const sx = -torsoW*0.22 + i*torsoW*0.19;
+        ctx.beginPath();
+        ctx.roundRect(sx, torsoY - 14, 18, 18, 4);
+        ctx.fill();
+    }
+
+    // === Neck + head (kept mech) ===
+    const neckX = torsoW*0.40;
+    const neckY = torsoY + torsoH*0.22;
+
+    ctx.save();
+    ctx.translate(neckX, neckY);
+    ctx.rotate(-0.10);
+    ctx.fillStyle = steelGrad(-20, 22);
+    ctx.beginPath();
+    ctx.roundRect(-10, -14, 46, 24, 10);
+    ctx.fill();
+    ctx.restore();
+
+    // Head
+    ctx.save();
+    ctx.translate(neckX + 34, neckY - 18);
+    ctx.rotate(-0.10);
+
+    // Skull block
+    ctx.shadowColor = glow;
+    ctx.shadowBlur = 14;
+    ctx.fillStyle = steelGrad(-40, 44);
+    ctx.beginPath();
+    ctx.roundRect(-18, -18, 70, 40, 14);
+    ctx.fill();
+
+    // Eye
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = '#0a0d12';
+    ctx.beginPath();
+    ctx.ellipse(24, -2, 9, 6, 0, 0, Math.PI*2);
+    ctx.fill();
+    ctx.fillStyle = isCharging ? '#ff3333' : '#ffd24a';
+    ctx.beginPath();
+    ctx.ellipse(26, -2, 4, 3, 0, 0, Math.PI*2);
+    ctx.fill();
+
+    // Jaw
+    ctx.fillStyle = steelDark;
+    ctx.beginPath();
+    ctx.roundRect(-6, 12, 62, 16, 10);
+    ctx.fill();
+
+    // Teeth
+    ctx.fillStyle = 'rgba(235,245,255,0.75)';
+    for (let i=0;i<6;i++){
+        const tx = 6 + i*8;
+        ctx.beginPath();
+        ctx.moveTo(tx, 14);
+        ctx.lineTo(tx+3, 22);
+        ctx.lineTo(tx-2, 22);
+        ctx.closePath();
+        ctx.fill();
+    }
+
+    // Snout bolts
+    ctx.fillStyle = bolt;
+    for (let i=0;i<3;i++){
+        ctx.beginPath();
+        ctx.arc(48, -8 + i*10, 2.0, 0, Math.PI*2);
+        ctx.fill();
+    }
+
+    ctx.restore();
+
+    // === Legs (make them longer / less stubby) ===
+    const legBaseY = height * 0.14;
+    const legX = [-width*0.06, width*0.14];
+    const step = Math.sin(legAngle) * 10;
+
+    for (let i=0;i<2;i++){
+        ctx.save();
+        ctx.translate(legX[i], legBaseY);
+        ctx.rotate((i===0? -1:1) * legAngle*0.22);
+
+        // Thigh (longer)
+        ctx.fillStyle = steelGrad(-16, 18);
+        ctx.beginPath();
+        ctx.roundRect(-12, -4, 26, height*0.28, 10);
+        ctx.fill();
+
+        // Knee joint
+        ctx.fillStyle = steelDark;
+        ctx.beginPath();
+        ctx.arc(0, height*0.28, 6, 0, Math.PI*2);
+        ctx.fill();
+
+        // Calf piston (longer)
+        ctx.save();
+        ctx.translate(0, height*0.28);
+        ctx.rotate((i===0?1:-1)*legAngle*0.18);
+        ctx.fillStyle = steelMid;
+        ctx.beginPath();
+        ctx.roundRect(-9, 0, 20, height*0.28, 10);
+        ctx.fill();
+
+        // Foot (lower)
+        ctx.fillStyle = steelDark;
+        ctx.beginPath();
+        ctx.roundRect(-18, height*0.25 + step*0.02, 44, 14, 6);
+        ctx.fill();
+
+        // Claw spikes
+        ctx.fillStyle = '#0c0f14';
+        for (let c=0;c<3;c++){
+            const cx = 6 + c*11;
+            ctx.beginPath();
+            ctx.moveTo(cx, height*0.28 + step*0.02);
+            ctx.lineTo(cx+6, height*0.28 + step*0.02 + 6);
+            ctx.lineTo(cx-2, height*0.28 + step*0.02 + 6);
+            ctx.closePath();
+            ctx.fill();
+        }
+
+        ctx.restore();
+        ctx.restore();
+    }
+
+    // Subtle outline
+    ctx.strokeStyle = 'rgba(220,235,255,0.10)';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(-torsoW/2, torsoY, torsoW, torsoH);
+
+    // Health bar
+    const barW = width * 0.6;
+    const barY = -height * 0.65;
+    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    ctx.fillRect(-barW/2, barY, barW, 6);
+    ctx.fillStyle = '#ff3333';
+    ctx.fillRect(-barW/2, barY, barW * Math.max(0, health / maxHealth), 6);
+
+    ctx.restore();
+}
+
+
+function drawHumanoidBot(x, y, width, height, legAngle, facingRight, health, maxHealth) {
+    ctx.save();
+    ctx.translate(x, y);
+    if (!facingRight) ctx.scale(-1, 1);
+
+    // Ground shadow
+    ctx.globalAlpha = 0.5;
+    ctx.fillStyle = 'rgba(0,0,0,0.35)';
+    ctx.beginPath();
+    ctx.ellipse(0, height*0.52, width*0.42, 10, 0, 0, Math.PI*2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+
+    // Metallic palette
+    const steel1 = '#c9d2de';
+    const steel2 = '#3b4656';
+    const steel3 = '#0f141c';
+
+    // Legs
+    for (const sgn of [-1, 1]) {
+        const hipX = sgn * width*0.18;
+        const hipY = height*0.18;
+        const kneeX = hipX + sgn * (6 + Math.sin(legAngle)*8);
+        const kneeY = hipY + height*0.22;
+        const footX = hipX + sgn * (10 + Math.sin(legAngle)*10);
+        const footY = hipY + height*0.48;
+
+        ctx.lineCap = 'round';
+        ctx.strokeStyle = steel2;
+        ctx.lineWidth = 10;
+        ctx.beginPath();
+        ctx.moveTo(hipX, hipY);
+        ctx.lineTo(kneeX, kneeY);
+        ctx.lineTo(footX, footY);
+        ctx.stroke();
+
+        ctx.strokeStyle = 'rgba(210,230,255,0.20)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(hipX, hipY);
+        ctx.lineTo(kneeX, kneeY);
+        ctx.lineTo(footX, footY);
+        ctx.stroke();
+
+        // Foot plate
+        ctx.fillStyle = steel3;
+        ctx.beginPath();
+        ctx.roundRect(footX-14, footY-4, 28, 10, 5);
+        ctx.fill();
+    }
+
+    // Torso (humanoid silhouette: chest + abdomen + pelvis, not a single box)
+    const torsoY = -height*0.03;
+    const torsoW = width*0.56; // used for shoulders/arms spacing
+
+
+    // Pelvis
+    const pelvisW = width*0.46;
+    const pelvisH = height*0.10;
+    const pelvisY = torsoY + height*0.24;
+    const pelvisGrad = ctx.createLinearGradient(-pelvisW/2, pelvisY, pelvisW/2, pelvisY+pelvisH);
+    pelvisGrad.addColorStop(0, steel2);
+    pelvisGrad.addColorStop(0.5, steel1);
+    pelvisGrad.addColorStop(1, steel3);
+    ctx.fillStyle = pelvisGrad;
+    ctx.beginPath();
+    ctx.roundRect(-pelvisW/2, pelvisY, pelvisW, pelvisH, 8);
+    ctx.fill();
+
+    // Abdomen (narrow waist)
+    const abWTop = width*0.42;
+    const abWBot = width*0.38;
+    const abH = height*0.14;
+    const abY = torsoY + height*0.12;
+    const abGrad = ctx.createLinearGradient(-abWTop/2, abY, abWTop/2, abY+abH);
+    abGrad.addColorStop(0, steel3);
+    abGrad.addColorStop(0.45, steel2);
+    abGrad.addColorStop(1, steel3);
+    ctx.fillStyle = abGrad;
+    ctx.beginPath();
+    ctx.moveTo(-abWTop/2, abY);
+    ctx.lineTo(abWTop/2, abY);
+    ctx.lineTo(abWBot/2, abY+abH);
+    ctx.lineTo(-abWBot/2, abY+abH);
+    ctx.closePath();
+    ctx.fill();
+
+    // Chest (broader, slightly trapezoidal)
+    const chestWTop = width*0.64;
+    const chestWBot = width*0.54;
+    const chestH = height*0.22;
+    const chestY = torsoY - height*0.02;
+    const chestGrad = ctx.createLinearGradient(-chestWTop/2, chestY, chestWTop/2, chestY+chestH);
+    chestGrad.addColorStop(0, steel1);
+    chestGrad.addColorStop(0.55, steel2);
+    chestGrad.addColorStop(1, steel3);
+    ctx.fillStyle = chestGrad;
+    ctx.beginPath();
+    ctx.moveTo(-chestWTop/2, chestY+6);
+    ctx.lineTo(chestWTop/2, chestY+6);
+    ctx.lineTo(chestWBot/2, chestY+chestH);
+    ctx.lineTo(-chestWBot/2, chestY+chestH);
+    ctx.closePath();
+    ctx.fill();
+
+    // Center plate + bolts
+    ctx.fillStyle = 'rgba(10,14,20,0.65)';
+    ctx.beginPath();
+    ctx.roundRect(-chestWBot*0.16, chestY+chestH*0.28, chestWBot*0.32, chestH*0.52, 8);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.12)';
+    for (let i=0;i<5;i++){
+        ctx.beginPath();
+        ctx.arc(-chestWBot*0.12 + i*(chestWBot*0.06), chestY+chestH*0.38, 1.4, 0, Math.PI*2);
+        ctx.fill();
+    }
+    // Shoulder plates
+    for (const sgn of [-1, 1]) {
+        ctx.fillStyle = 'rgba(20,26,36,0.9)';
+        ctx.beginPath();
+        ctx.roundRect(sgn*(torsoW*0.48)-14, torsoY+6, 28, 18, 7);
+        ctx.fill();
+    }
+
+    // Arms (humanoid)
+    for (const sgn of [-1, 1]) {
+        const ax0 = sgn * (torsoW*0.5);
+        const ay0 = torsoY + 18;
+        const ax1 = sgn * (torsoW*0.78);
+        const ay1 = torsoY + 42;
+        const ax2 = sgn * (torsoW*0.65);
+        const ay2 = torsoY + 74;
+
+        ctx.strokeStyle = steel2;
+        ctx.lineWidth = 8;
+        ctx.beginPath();
+        ctx.moveTo(ax0, ay0);
+        ctx.lineTo(ax1, ay1);
+        ctx.lineTo(ax2, ay2);
+        ctx.stroke();
+
+        ctx.fillStyle = steel3;
+        ctx.beginPath();
+        ctx.roundRect(ax2-10, ay2-6, 20, 12, 4);
+        ctx.fill();
+    }
+
+    // Head
+    const headW = width*0.34;
+    const headH = height*0.22;
+    const headY = torsoY - headH + 6;
+    const headGrad = ctx.createLinearGradient(-headW/2, headY, headW/2, headY+headH);
+    headGrad.addColorStop(0, steel1);
+    headGrad.addColorStop(1, steel3);
+    ctx.fillStyle = headGrad;
+    ctx.beginPath();
+    ctx.roundRect(-headW/2, headY, headW, headH, 10);
+    ctx.fill();
+
+    // Red visor / eyes
+    ctx.globalAlpha = 0.9;
+    ctx.fillStyle = 'rgba(255,40,55,0.9)';
+    ctx.beginPath();
+    ctx.roundRect(-headW*0.30, headY + headH*0.38, headW*0.60, headH*0.22, 6);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+
+    // Health bar
+    const hbY = -height * 0.62;
+    const hbWidth = 60, hbHeight = 6;
+    ctx.fillStyle = 'rgba(0,0,0,0.4)';
+    ctx.fillRect(-hbWidth/2, hbY, hbWidth, hbHeight);
+    ctx.fillStyle = '#ff3b4a';
+    ctx.fillRect(-hbWidth/2, hbY, hbWidth * (health / maxHealth), hbHeight);
+
+    ctx.restore();
+}
+
+
+
+// SPIDER TANK - Large robotic enemy with 4 legs and RED NEON GLOW
+function drawMetallicTRex(x, y, width, height, legAngle, facingRight, health, maxHealth, isCharging, telegraphUntil) {
+    ctx.save();
+    ctx.translate(x, y);
+    if (!facingRight) ctx.scale(-1, 1);
+
+    const now = Date.now();
+    const s = width / 100;
+    
+    // Colors
+    const metalDark = '#1a1a22';
+    const metalMid = '#2a2a35';
+    const metalLight = '#3a3a48';
+    const glowRed = '#ff0000';
+    
+    // === RED NEON GLOW - like player's green glow ===
+    // This creates a persistent glow around all drawn elements
+    const glowPulse = 0.85 + Math.sin(now * 0.004) * 0.15;
+    ctx.shadowColor = `rgba(255, 50, 50, ${glowPulse})`;
+    ctx.shadowBlur = 25;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 0;
+    
+    // Leg animation
+    const legMove = Math.sin(legAngle) * 10 * s;
+    const legMove2 = Math.sin(legAngle + Math.PI) * 10 * s;
+
+    // === BACK LEGS (behind body) ===
+    // Back-left leg
+    ctx.save();
+    ctx.fillStyle = metalDark;
+    ctx.strokeStyle = metalMid;
+    ctx.lineWidth = 2;
+    
+    // Upper leg segment
+    ctx.beginPath();
+    ctx.moveTo(-30*s, -35*s);
+    ctx.lineTo(-70*s, -20*s + legMove2);
+    ctx.lineTo(-75*s, -15*s + legMove2);
+    ctx.lineTo(-35*s, -30*s);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    
+    // Lower leg segment
+    ctx.beginPath();
+    ctx.moveTo(-70*s, -18*s + legMove2);
+    ctx.lineTo(-90*s, 40*s + legMove2 * 0.5);
+    ctx.lineTo(-85*s, 45*s + legMove2 * 0.5);
+    ctx.lineTo(-65*s, -12*s + legMove2);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    
+    // Foot/claw
+    ctx.fillStyle = metalMid;
+    ctx.beginPath();
+    ctx.moveTo(-95*s, 40*s + legMove2 * 0.5);
+    ctx.lineTo(-80*s, 40*s + legMove2 * 0.5);
+    ctx.lineTo(-78*s, 55*s + legMove2 * 0.3);
+    ctx.lineTo(-97*s, 55*s + legMove2 * 0.3);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+
+    // Back-right leg
+    ctx.save();
+    ctx.fillStyle = metalDark;
+    ctx.strokeStyle = metalMid;
+    ctx.lineWidth = 2;
+    
+    ctx.beginPath();
+    ctx.moveTo(30*s, -35*s);
+    ctx.lineTo(70*s, -20*s + legMove);
+    ctx.lineTo(75*s, -15*s + legMove);
+    ctx.lineTo(35*s, -30*s);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    
+    ctx.beginPath();
+    ctx.moveTo(70*s, -18*s + legMove);
+    ctx.lineTo(90*s, 40*s + legMove * 0.5);
+    ctx.lineTo(85*s, 45*s + legMove * 0.5);
+    ctx.lineTo(65*s, -12*s + legMove);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    
+    ctx.fillStyle = metalMid;
+    ctx.beginPath();
+    ctx.moveTo(80*s, 40*s + legMove * 0.5);
+    ctx.lineTo(95*s, 40*s + legMove * 0.5);
+    ctx.lineTo(97*s, 55*s + legMove * 0.3);
+    ctx.lineTo(78*s, 55*s + legMove * 0.3);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+
+    // === MAIN BODY ===
+    ctx.save();
+    
+    // Body - angular armored shape
+    const bodyGrad = ctx.createLinearGradient(0, -80*s, 0, 0);
+    bodyGrad.addColorStop(0, metalLight);
+    bodyGrad.addColorStop(0.5, metalMid);
+    bodyGrad.addColorStop(1, metalDark);
+    ctx.fillStyle = bodyGrad;
+    
+    ctx.beginPath();
+    ctx.moveTo(-50*s, -30*s);
+    ctx.lineTo(-45*s, -70*s);
+    ctx.lineTo(-20*s, -85*s);
+    ctx.lineTo(40*s, -85*s);
+    ctx.lineTo(70*s, -65*s);
+    ctx.lineTo(80*s, -40*s);
+    ctx.lineTo(75*s, -20*s);
+    ctx.lineTo(50*s, -10*s);
+    ctx.lineTo(-30*s, -10*s);
+    ctx.lineTo(-55*s, -20*s);
+    ctx.closePath();
+    ctx.fill();
+    
+    // Armor panel lines
+    ctx.strokeStyle = '#0a0a10';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(-35*s, -75*s);
+    ctx.lineTo(-35*s, -20*s);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(20*s, -80*s);
+    ctx.lineTo(20*s, -15*s);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(55*s, -70*s);
+    ctx.lineTo(60*s, -25*s);
+    ctx.stroke();
+    
+    // Top armor ridge
+    ctx.fillStyle = metalLight;
+    ctx.beginPath();
+    ctx.moveTo(-15*s, -85*s);
+    ctx.lineTo(35*s, -85*s);
+    ctx.lineTo(30*s, -95*s);
+    ctx.lineTo(-10*s, -95*s);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = metalMid;
+    ctx.stroke();
+    
+    ctx.restore();
+
+    // === FRONT LEGS ===
+    // Front-left leg
+    ctx.save();
+    ctx.fillStyle = metalMid;
+    ctx.strokeStyle = metalLight;
+    ctx.lineWidth = 2;
+    
+    ctx.beginPath();
+    ctx.moveTo(-40*s, -25*s);
+    ctx.lineTo(-80*s, -5*s + legMove);
+    ctx.lineTo(-85*s, 0 + legMove);
+    ctx.lineTo(-45*s, -20*s);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    
+    ctx.beginPath();
+    ctx.moveTo(-80*s, -3*s + legMove);
+    ctx.lineTo(-100*s, 50*s + legMove * 0.5);
+    ctx.lineTo(-95*s, 55*s + legMove * 0.5);
+    ctx.lineTo(-75*s, 2*s + legMove);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    
+    // Front foot
+    ctx.fillStyle = metalLight;
+    ctx.beginPath();
+    ctx.moveTo(-105*s, 50*s + legMove * 0.5);
+    ctx.lineTo(-90*s, 50*s + legMove * 0.5);
+    ctx.lineTo(-88*s, 65*s + legMove * 0.3);
+    ctx.lineTo(-107*s, 65*s + legMove * 0.3);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+
+    // Front-right leg
+    ctx.save();
+    ctx.fillStyle = metalMid;
+    ctx.strokeStyle = metalLight;
+    ctx.lineWidth = 2;
+    
+    ctx.beginPath();
+    ctx.moveTo(50*s, -25*s);
+    ctx.lineTo(90*s, -5*s + legMove2);
+    ctx.lineTo(95*s, 0 + legMove2);
+    ctx.lineTo(55*s, -20*s);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    
+    ctx.beginPath();
+    ctx.moveTo(90*s, -3*s + legMove2);
+    ctx.lineTo(110*s, 50*s + legMove2 * 0.5);
+    ctx.lineTo(105*s, 55*s + legMove2 * 0.5);
+    ctx.lineTo(85*s, 2*s + legMove2);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    
+    ctx.fillStyle = metalLight;
+    ctx.beginPath();
+    ctx.moveTo(100*s, 50*s + legMove2 * 0.5);
+    ctx.lineTo(115*s, 50*s + legMove2 * 0.5);
+    ctx.lineTo(117*s, 65*s + legMove2 * 0.3);
+    ctx.lineTo(98*s, 65*s + legMove2 * 0.3);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+
+    // === WEAPON TURRET ===
+    ctx.save();
+    ctx.translate(60*s, -55*s);
+    
+    // Turret base
+    ctx.fillStyle = metalDark;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, 20*s, 12*s, 0, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Gun barrel
+    ctx.fillStyle = metalMid;
+    ctx.fillRect(10*s, -5*s, 45*s, 10*s);
+    ctx.fillStyle = metalDark;
+    ctx.fillRect(50*s, -4*s, 8*s, 8*s);
+    
+    // Barrel glow when charging
+    if (isCharging) {
+        ctx.fillStyle = glowRed;
+        ctx.shadowColor = glowRed;
+        ctx.shadowBlur = 15;
+        ctx.beginPath();
+        ctx.arc(58*s, 0, 4*s, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+    }
+    ctx.restore();
+
+    // === MAIN SENSOR / EYE ===
+    ctx.save();
+    const eyeX = 10*s;
+    const eyeY = -60*s;
+    
+    // Sensor housing
+    ctx.fillStyle = '#0a0a12';
+    ctx.beginPath();
+    ctx.ellipse(eyeX, eyeY, 18*s, 14*s, 0, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Red sensor glow
+    ctx.shadowColor = glowRed;
+    ctx.shadowBlur = isCharging ? 30 : 20;
+    
+    const sensorGrad = ctx.createRadialGradient(eyeX, eyeY, 0, eyeX, eyeY, 12*s);
+    sensorGrad.addColorStop(0, '#ffffff');
+    sensorGrad.addColorStop(0.2, '#ff6666');
+    sensorGrad.addColorStop(0.5, glowRed);
+    sensorGrad.addColorStop(1, '#660000');
+    ctx.fillStyle = sensorGrad;
+    ctx.beginPath();
+    ctx.ellipse(eyeX, eyeY, 12*s, 9*s, 0, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Scanning line effect
+    const scanPos = Math.sin(now * 0.005) * 8 * s;
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(eyeX - 10*s, eyeY + scanPos);
+    ctx.lineTo(eyeX + 10*s, eyeY + scanPos);
+    ctx.stroke();
+    
+    ctx.shadowBlur = 0;
+    ctx.restore();
+
+    // === SECONDARY SENSORS (red instead of orange) ===
+    const sensors = [[-30*s, -65*s], [45*s, -70*s], [-45*s, -45*s]];
+    sensors.forEach(([sx, sy]) => {
+        ctx.fillStyle = '#0a0a0a';
+        ctx.beginPath();
+        ctx.arc(sx, sy, 6*s, 0, Math.PI * 2);
+        ctx.fill();
+        
+        ctx.fillStyle = '#cc0000';
+        ctx.shadowColor = '#ff0000';
+        ctx.shadowBlur = 6;
+        ctx.beginPath();
+        ctx.arc(sx, sy, 3*s, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+    });
+
+    // === HEALTH BAR ===
+    // Turn off neon glow for clean health bar
+    ctx.shadowBlur = 0;
+    if (maxHealth) {
+        const hp = Math.max(0, Math.min(1, health / maxHealth));
+        const barW = 100*s;
+        const barH = 8*s;
+        const barX = x - barW/2;
+        const barY = y - 140*s;
+        
+        ctx.fillStyle = 'rgba(0,0,0,0.8)';
+        ctx.fillRect(barX - 2, barY - 2, barW + 4, barH + 4);
+        ctx.fillStyle = '#1a0a0a';
+        ctx.fillRect(barX, barY, barW, barH);
+        
+        // Red health bar
+        const hpGrad = ctx.createLinearGradient(barX, barY, barX + barW * hp, barY);
+        hpGrad.addColorStop(0, '#cc0000');
+        hpGrad.addColorStop(0.5, '#ff2200');
+        hpGrad.addColorStop(1, '#ff4400');
+        ctx.fillStyle = hpGrad;
+        ctx.shadowColor = '#ff0000';
+        ctx.shadowBlur = 8;
+        ctx.fillRect(barX, barY, barW * hp, barH);
+        ctx.shadowBlur = 0;
+        
+        ctx.strokeStyle = 'rgba(255, 50, 50, 0.5)';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(barX, barY, barW, barH);
+    }
+
+    ctx.restore();
+}
+function drawRocket(rocket) {
+    ctx.save();
+    ctx.translate(rocket.x, rocket.y);
+    // Always face direction of travel (no spinning)
+    const ang = Math.atan2(rocket.vy, rocket.vx);
+    ctx.rotate(ang);
+
+    // Thin smoke + tiny crackle behind missile (kept subtle)
+    ctx.save();
+    ctx.globalAlpha = 0.35;
+    ctx.strokeStyle = 'rgba(210,220,235,0.35)';
+    ctx.lineWidth = 2;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(-18, 0);
+    ctx.lineTo(-34, 0);
+    ctx.stroke();
+
+    ctx.globalAlpha = 0.25;
+    ctx.strokeStyle = 'rgba(255,255,255,0.25)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(-18, -1);
+    ctx.lineTo(-30, -1);
+    ctx.stroke();
+    ctx.restore();
+
+    // Missile body (simple, readable)
+    const bodyGrad = ctx.createLinearGradient(-18, -6, 18, 6);
+    bodyGrad.addColorStop(0, '#0c111a');
+    bodyGrad.addColorStop(0.35, '#d7e2f0');
+    bodyGrad.addColorStop(0.7, '#6d7f97');
+    bodyGrad.addColorStop(1, '#0a0f18');
+    ctx.fillStyle = bodyGrad;
+
+    // Main tube
+    ctx.beginPath();
+    ctx.roundRect(-16, -4, 26, 8, 3);
+    ctx.fill();
+
+    // Nose cone
+    ctx.fillStyle = '#cfd9e8';
+    ctx.beginPath();
+    ctx.moveTo(10, -4);
+    ctx.lineTo(18, 0);
+    ctx.lineTo(10, 4);
+    ctx.closePath();
+    ctx.fill();
+
+    // Small fins
+    ctx.fillStyle = '#1a2432';
+    ctx.beginPath();
+    ctx.moveTo(-10, -4);
+    ctx.lineTo(-14, -9);
+    ctx.lineTo(-6, -4);
+    ctx.closePath();
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(-10, 4);
+    ctx.lineTo(-14, 9);
+    ctx.lineTo(-6, 4);
+    ctx.closePath();
+    ctx.fill();
+
+    // Tip light (tiny)
+    ctx.save();
+    ctx.globalAlpha = 0.6;
+    ctx.fillStyle = 'rgba(255,80,80,0.7)';
+    ctx.beginPath();
+    ctx.arc(17, 0, 1.8, 0, Math.PI*2);
+    ctx.fill();
+    ctx.restore();
+
+    ctx.restore();
+}
+
+
+function createExplosion(x, y, color, count = 25, big = false) {
+    const baseSpeed = big ? 10 : 6;
+    for (let i = 0; i < count; i++) {
+        const angle = Math.random() * Math.PI * 2, speed = baseSpeed * (0.3 + Math.random() * 0.7);
+        particles.push({ x, y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed - 2, life: 1, decay: 0.012 + Math.random() * 0.015, color: color, size: (big ? 3.5 : 2.4) + Math.random() * (big ? 4.5 : 3.2) });
+    }
+    // Extra sparks for explosion
+    for (let i = 0; i < count; i++) {
+        const angle = Math.random() * Math.PI * 2, speed = baseSpeed * 1.5 * (0.5 + Math.random());
+        sparks.push({ x, y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed - 1, life: 0.8 + Math.random() * 0.4, size: 2 + Math.random() * 3, color: Math.random() > 0.3 ? '#ffffff' : '#ffff00' });
+    }
+    if (big) {
+        for (let i = 0; i < 10; i++) {
+            const angle = Math.random() * Math.PI * 2, speed = 4 + Math.random() * 6;
+            debris.push({ x, y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed - 5, rotation: Math.random() * Math.PI * 2, rotSpeed: (Math.random() - 0.5) * 0.4, life: 1, size: 6 + Math.random() * 12, color: color });
+        }
+    }
+}
+
+function showWaveAnnouncement(text) {
+    const el = document.getElementById('waveAnnounce');
+    el.textContent = text;
+    el.style.opacity = 1;
+    setTimeout(() => { el.style.transition = 'opacity 1s'; el.style.opacity = 0; }, 2000);
+    setTimeout(() => { el.style.transition = ''; }, 3000);
+}
+
+function spawnEnemy() {
+    // Exploration spawn: spawn ahead of where the player is going (not on top of the player)
+    // 15% chance to spawn a metallic T-Rex, 85% chance for regular bot
+    const isTRex = Math.random() < 0.15;
+    const kind = isTRex ? 'trex' : 'bot';
+
+    const baseX = camX + canvas.width + 160 + Math.random()*260;
+    const groundY = canvas.height - 100;
+
+    const enemy = {
+        kind,
+        x: baseX,
+        y: groundY,
+        targetX: 0, targetY: 0,
+        width: isTRex ? 160 : 72,
+        height: isTRex ? 180 : 118,
+        health: isTRex ? (180 + difficulty * 40) : (90 + difficulty * 25),
+        maxHealth: isTRex ? (180 + difficulty * 40) : (90 + difficulty * 25),
+        speed: isTRex ? (2.2 + difficulty * 0.18 + Math.random()*0.4) : (2.6 + difficulty * 0.22 + Math.random()*0.55),
+        legAngle: 0, legDir: 1,
+        facingRight: false,
+        lastAttack: Date.now(),
+        attackRate: isTRex ? (1800 - difficulty * 70) : (2200 - difficulty * 90),
+        chargeTimer: 0,
+        isCharging: false,
+        // T-Rex always has laser eye attack, bots have 22% chance
+        hasLaser: isTRex ? true : Math.random() < 0.22,
+        lastShot: Date.now() - Math.random()*900,
+        shotRate: isTRex ? Math.max(650, 1200 - difficulty * 70 + (Math.random()*300-150)) : Math.max(780, 1500 - difficulty * 85 + (Math.random()*420-210)),
+        telegraphUntil: 0,
+        telegraphData: null
+    };
+
+    // Limit laser units on screen (fairness) - T-Rex doesn't count toward this limit
+    if (!isTRex) {
+        const allowedLaser = (kills < 10) ? 1 : (kills < 26 ? 2 : 3);
+        const currentLaser = enemies.reduce((n,e)=> n + (e.hasLaser && e.kind !== 'trex' ? 1 : 0), 0);
+        if (enemy.hasLaser && currentLaser >= allowedLaser) enemy.hasLaser = false;
+    }
+
+    enemy.targetX = player.x + (Math.random() * 420 + 240);
+    enemy.targetY = groundY;
+
+    enemies.push(enemy);
+}
+
+// Flying drones array
+let drones = [];
+
+function spawnDrone() {
+    const baseX = camX + canvas.width + 100 + Math.random() * 200;
+    const baseY = 80 + Math.random() * 150; // In the sky
+    
+    drones.push({
+        x: baseX,
+        y: baseY,
+        targetY: baseY,
+        width: 60,
+        height: 35,
+        health: 50 + difficulty * 15,
+        maxHealth: 50 + difficulty * 15,
+        speed: 1.5 + Math.random() * 0.5, // Slower
+        bobPhase: Math.random() * Math.PI * 2,
+        lastShot: Date.now(),
+        shotRate: 2500 + Math.random() * 1500
+    });
+}
+
+function drawDrone(drone) {
+    ctx.save();
+    ctx.translate(drone.x, drone.y);
+    
+    const w = drone.width;
+    const h = drone.height;
+    
+    // Shadow below on ground
+    ctx.fillStyle = 'rgba(0,0,0,0.25)';
+    ctx.beginPath();
+    ctx.ellipse(0, 200, w * 0.5, 10, 0, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Main body - BLACK TRIANGLE
+    ctx.fillStyle = '#0a0a0a';
+    ctx.strokeStyle = '#1a1a1a';
+    ctx.lineWidth = 2;
+    
+    ctx.beginPath();
+    ctx.moveTo(0, -h * 0.6);        // Top point
+    ctx.lineTo(-w * 0.5, h * 0.4);  // Bottom left
+    ctx.lineTo(w * 0.5, h * 0.4);   // Bottom right
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    
+    // Edge lights - soft white
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+    ctx.shadowColor = '#ffffff';
+    ctx.shadowBlur = 8;
+    
+    // Top light
+    ctx.beginPath();
+    ctx.arc(0, -h * 0.45, 3, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Bottom left light
+    ctx.beginPath();
+    ctx.arc(-w * 0.4, h * 0.3, 3, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Bottom right light
+    ctx.beginPath();
+    ctx.arc(w * 0.4, h * 0.3, 3, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // CENTER LIGHT - large bright RED glow
+    ctx.shadowColor = '#ff0000';
+    ctx.shadowBlur = 25;
+    ctx.fillStyle = 'rgba(255, 50, 50, 0.8)';
+    ctx.beginPath();
+    ctx.arc(0, h * 0.1, 10, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Inner bright core
+    ctx.fillStyle = '#ff4444';
+    ctx.shadowBlur = 15;
+    ctx.beginPath();
+    ctx.arc(0, h * 0.1, 5, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Pulsing effect
+    const pulse = 0.5 + Math.sin(Date.now() * 0.005 + drone.bobPhase) * 0.3;
+    ctx.globalAlpha = pulse;
+    ctx.fillStyle = 'rgba(255, 100, 100, 0.5)';
+    ctx.beginPath();
+    ctx.arc(0, h * 0.1, 15, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    
+    ctx.shadowBlur = 0;
+    
+    // Health bar
+    const hp = drone.health / drone.maxHealth;
+    const barW = 40;
+    const barH = 4;
+    ctx.fillStyle = 'rgba(0,0,0,0.7)';
+    ctx.fillRect(-barW/2, -h * 0.8, barW, barH);
+    ctx.fillStyle = '#ff3333';
+    ctx.fillRect(-barW/2, -h * 0.8, barW * hp, barH);
+    
+    ctx.restore();
+}
+
+function fireRocket(fromX, fromY, toX, toY) {
+    const angle = Math.atan2(toY - fromY, toX - fromX);
+    const speed = 14;
+    rockets.push({
+        x: fromX, y: fromY,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        angle: angle,
+        spin: 0,
+        spinSpeed: 0,
+        life: 180
+    });
+    AudioSystem.playRocketLaunch();
+
+    // Launch FX: minimal thin smoke only (no bubble blasts)
+    smokeTrails.push({
+        x: fromX - Math.cos(angle) * 10,
+        y: fromY - Math.sin(angle) * 10,
+        size: 8 + Math.random() * 6,
+        life: 1,
+        color: 'rgba(210,220,235,0.22)',
+        vx: -Math.cos(angle) * 0.9 + (Math.random()*0.4-0.2),
+        vy: -Math.sin(angle) * 0.9 + (Math.random()*0.4-0.2)
+    });smokeTrails.push({
+        x: fromX - Math.cos(angle) * 10,
+        y: fromY - Math.sin(angle) * 10,
+        size: 10 + Math.random() * 10,
+        life: 1,
+        color: 'rgba(210,220,235,0.30)',
+        vx: -Math.cos(angle) * 1.2 + (Math.random()*0.8-0.4),
+        vy: -Math.sin(angle) * 1.2 + (Math.random()*0.8-0.4)
+    });
+}
+
+
+function fireRocketFromPlayerOnce() {
+    if (!gameRunning) return;
+
+    // D-pad movement override (hold-to-move)
+    updateMovementFromDpad();
+    const now = Date.now();
+
+    // Failsafe: if firing is held but something got stuck, unlock after 600ms
+    if (isFiring && lastFireTime > 0 && (now - lastFireTime) > 600) {
+        lastFireTime = -1e9;
+    }
+    
+    // Additional safeguard: cap rockets array to prevent memory issues
+    if (rockets.length > 50) {
+        rockets = rockets.slice(-40);
+    }
+
+    if (now - lastFireTime <= fireRate) return;
+
+    // Aim is stored in screen coords; convert to world coords for projectiles.
+    let aimXw = (Number.isFinite(aimX) ? aimX : mouseX) + camX;
+    let aimYw = (Number.isFinite(aimY) ? aimY : mouseY);
+
+    // Harden against rare NaN / Infinity input states (trackpads, pointer cancel, flight toggles).
+    if (!Number.isFinite(aimXw) || !Number.isFinite(aimYw)) {
+        aimXw = player.x + (player.facingRight ? 420 : -420);
+        aimYw = player.y - player.height * 0.35;
+    }
+
+    // SIMPLE: Fire from player center-right/left toward aim point
+    const gunX = player.x + (player.facingRight ? 40 : -40);
+    const gunY = player.y - player.height * 0.35;
+
+    fireRocket(gunX, gunY, aimXw, aimYw);
+    lastFireTime = now;
+}
+
+
+function activateFlight() {
+    if (flyCharge >= FLY_CHARGE_MAX && !player.isFlying) {
+        player.isFlying = true;
+        player.flyEndTime = Date.now() + FLY_DURATION;
+        flyCharge = 0;
+        updateHUD();
+        createExplosion(player.x, player.y + 40, '#00aaff', 40, true);
+        AudioSystem.playJetpack();
+    }
+}
+
+
+
+function activateShield() {
+    const now = Date.now();
+    if (flyCharge >= FLY_CHARGE_MAX && now > player.shieldUntil && !player.isFlying) {
+        player.shieldUntil = now + SHIELD_DURATION;
+        player.shieldHits = SHIELD_HITS;
+        flyCharge = 0;
+        updateHUD();
+        // Shield pop (visual only)
+        createExplosion(player.x, player.y - 30, '#66aaff', 18);
+    }
+}
+function update(deltaTime) {
+    if (paused) return;
+
+    if (!gameRunning) return;
+    
+    // Process D-pad input for movement
+    updateMovementFromDpad();
+    
+    // FIRING SAFEGUARD: If isFiring has been true for too long without actually firing,
+    // something is stuck - reset it
+    // FIRING SAFEGUARD: only auto-clear if we've actually fired at least once.
+    if (isFiring && lastFireTime > 0 && Date.now() - lastFireTime > 2000) {
+        isFiring = false;
+    }
+    
+    difficulty = 1 + Math.floor(kills / 5) * 0.25;
+    
+    const newWave = Math.floor(kills / 8) + 1;
+    if (newWave > wave) { wave = newWave; showWaveAnnouncement('⚠ WAVE ' + wave + ' ⚠'); }
+    
+    // Spawn only when the player pushes into new territory (exploration)
+    if (player.x > nextEncounterX) {
+        const count = 2 + Math.floor(Math.random()*2) + Math.floor(difficulty*0.25);
+        for (let i=0;i<count;i++) spawnEnemy();
+        // Spawn drones occasionally (30% chance per encounter)
+        if (Math.random() < 0.3) {
+            const droneCount = 1 + Math.floor(Math.random() * 2);
+            for (let i = 0; i < droneCount; i++) spawnDrone();
+        }
+        nextEncounterX += 650 + Math.random()*650;
+    }
+    
+    // Update drones
+    drones.forEach(drone => {
+        // Move slowly
+        drone.x -= drone.speed;
+        drone.bobPhase += 0.03;
+        drone.y = drone.targetY + Math.sin(drone.bobPhase) * 12;
+        
+        // Respawn if too far behind
+        if (drone.x < camX - 100) {
+            drone.x = camX + canvas.width + 100;
+            drone.targetY = 80 + Math.random() * 150;
+        }
+        
+        // SHOOTING - drones fire at player
+        const now = Date.now();
+        const distToPlayer = Math.hypot(drone.x - player.x, drone.y - player.y);
+        if (distToPlayer < 500 && now - drone.lastShot > drone.shotRate) {
+            // Fire a laser bolt at player
+            const ang = Math.atan2((player.y - player.height * 0.3) - drone.y, player.x - drone.x);
+            const sp = 8;
+            enemyLasers.push({
+                x: drone.x, 
+                y: drone.y + 10,
+                vx: Math.cos(ang) * sp,
+                vy: Math.sin(ang) * sp,
+                life: 100,
+                w: 3,
+                color: '#ff3333' // Red laser
+            });
+            drone.lastShot = now;
+            
+            // Small flash effect
+            createExplosion(drone.x, drone.y + 10, '#ff3333', 5);
+        }
+    });
+    
+    // Remove dead drones (health checked in rocket collision)
+    
+    // Aiming: arm points toward bullseye target
+    // Convert aim position (screen coords) to world coords
+    const aimWorldX = aimX + camX;
+    const aimWorldY = aimY;
+    
+    // Player faces direction of bullseye
+    player.facingRight = aimWorldX >= player.x;
+    
+    // Calculate arm angle to point at bullseye
+    const shoulderX = player.x;
+    const shoulderY = player.y - player.height * 0.3;
+    const dx = aimWorldX - shoulderX;
+    const dy = aimWorldY - shoulderY;
+    
+    // Calculate angle - use abs(dx) since we flip the sprite for facing direction
+    player.armAngle = Math.atan2(dy, Math.abs(dx));
+    // Clamp angle so gun doesn't point too far up/down
+    player.armAngle = Math.max(-1.1, Math.min(0.8, player.armAngle));
+
+    if (mobileMoveHeld) { player.targetX = player.x + 1200; player.targetY = canvas.height - 100; }
+    if (isMoving) {
+        // Ground-walk only (no walking up into the air). When not flying, we move in X only.
+        const dx = player.targetX - player.x;
+        if (Math.abs(dx) > 6) {
+            const moveSpeed = player.speed * (player.isFlying ? 2.5 : 1);
+            player.x += Math.sign(dx) * moveSpeed;
+            player.isMoving = true;
+        } else {
+            player.isMoving = false;
+        }
+        
+        // Flying vertical movement - separate from horizontal
+        if (player.isFlying) {
+            const dy = player.targetY - player.y;
+            if (Math.abs(dy) > 6) {
+                // Fast vertical movement when flying
+                player.y += Math.sign(dy) * player.speed * 3;
+            }
+        }
+    } else {
+        player.isMoving = false;
+    }
+
+    if (player.isMoving && !player.isFlying) {
+        player.legAngle += player.legDir * 0.2;
+        if (Math.abs(player.legAngle) > 0.5) player.legDir *= -1;
+    } else player.legAngle *= 0.85;
+
+    const groundY = canvas.height - 100;
+    // Keep player within camera view
+    player.x = Math.max(camX + 60, Math.min(camX + canvas.width - 60, player.x));
+
+    if (!player.isFlying) {
+        // Grounded mode: ease toward ground instead of snapping (prevents "drop to ground" when firing mid-air)
+        player.targetY = groundY;
+        player.y += (groundY - player.y) * 0.18;
+        if (Math.abs(groundY - player.y) < 0.6) player.y = groundY;
+    } else {
+        // Flying: allow full vertical range - can go way up!
+        player.y = Math.max(60, Math.min(groundY - 20, player.y));
+    }
+
+    
+    // Side-scroller camera: follow the player (no forced scrolling)
+    const desiredCam = Math.max(0, player.x - canvas.width * 0.35);
+    camX = camX + (desiredCam - camX) * 0.10;
+if (player.isFlying && Date.now() > player.flyEndTime) { player.isFlying = false; player.targetY = canvas.height - 130; }
+
+    if (isFiring) { fireOneRocket(false); }
+    
+    // Periodic cleanup: verify isFiring state matches actual pointer state
+    if (typeof btnFire !== 'undefined' && btnFire) {
+        const firePressed = btnFire.classList.contains('on');
+        // Only force-clear if no mouse button is also firing
+        if (!firePressed && isFiring && !document.querySelector('canvas:active')) {
+            // Check if stuck for too long without recent fire
+            if (Date.now() - lastFireTime > 1200) {
+                isFiring = false;
+            }
+        }
+    }
+
+    enemies.forEach((enemy) => {
+        const dx = enemy.targetX - enemy.x, dy = enemy.targetY - enemy.y, dist = Math.sqrt(dx * dx + dy * dy);
+        const distToPlayer = Math.hypot(enemy.x - player.x, enemy.y - player.y);
+        
+        // Charge attack
+        if (distToPlayer < 350 && !enemy.isCharging && Math.random() < 0.003) {
+            enemy.isCharging = true;
+            enemy.chargeTimer = 50;
+            if (enemy.kind === 'trex') {
+                AudioSystem.playTRexRoar();
+            } else {
+                AudioSystem.playRoar();
+            }
+        }
+        
+        if (enemy.isCharging) {
+            enemy.chargeTimer--;
+            if (enemy.chargeTimer <= 0) enemy.isCharging = false;
+            const chargeDir = player.x > enemy.x ? 1 : -1;
+            enemy.x += chargeDir * enemy.speed * 3;
+            enemy.legAngle += enemy.legDir * 0.35;
+        } else if (dist > 20) {
+            enemy.x += (dx / dist) * enemy.speed;
+            enemy.y += (dy / dist) * enemy.speed;
+            enemy.legAngle += enemy.legDir * 0.12;
+        }
+        
+        if (Math.abs(enemy.legAngle) > 0.4) enemy.legDir *= -1;
+        if (dist <= 20 || Math.random() < 0.008) {
+            enemy.targetX = player.x + (Math.random() - 0.5) * 400;
+            enemy.targetY = canvas.height - 120 - Math.random() * 50;
+        }
+        
+        enemy.facingRight = player.x > enemy.x;
+
+        // Ranged attack: some cyber‑rex units fire head lasers (with telegraph)
+        if (enemy.hasLaser && distToPlayer < 650 && !player.isFlying) {
+            const now = Date.now();
+
+            // Start telegraph if ready and not already telegraphing
+            if (!enemy.telegraphUntil && (now - enemy.lastShot > enemy.shotRate)) {
+                const muzzleY = enemy.y - enemy.height * 0.58;
+                const muzzleX = enemy.x + (enemy.facingRight ? enemy.width * 0.62 : -enemy.width * 0.62);
+
+                enemy.telegraphUntil = now + LASER_TELEGRAPH_MS;
+                enemy.telegraphData = { muzzleX, muzzleY };
+                // Small warning spark (not huge)
+                createExplosion(muzzleX, muzzleY, '#ff3355', 6);
+            }
+
+            // Fire after telegraph
+            if (enemy.telegraphUntil && now >= enemy.telegraphUntil) {
+                const { muzzleX, muzzleY } = enemy.telegraphData || { muzzleX: enemy.x, muzzleY: enemy.y };
+
+                for (let k = 0; k < 2; k++) {
+                    const ox = muzzleX;
+                    const oy = muzzleY + (k === 0 ? -6 : 6);
+                    const ang = Math.atan2((player.y - player.height * 0.35) - oy, player.x - ox);
+                    const sp = 12.5;
+                    enemyLasers.push({
+                        x: ox, y: oy,
+                        vx: Math.cos(ang) * sp,
+                        vy: Math.sin(ang) * sp,
+                        life: 75,
+                        w: 2.5
+                    });
+                }
+
+                enemy.lastShot = now;
+                enemy.telegraphUntil = 0;
+                enemy.telegraphData = null;
+            }
+        }
+        
+        // Melee attack
+        const meleeRange = 70;
+        if (Math.abs(enemy.x - player.x) < meleeRange && Math.abs(enemy.y - player.y) < 90) {
+            if (Date.now() - enemy.lastAttack > enemy.attackRate) {
+                const now = Date.now();
+
+                // Ignore if invulnerable
+                if (now < player.invulnUntil) {
+                    // do nothing
+                }
+                // Shield absorbs hits
+                else if (now < player.shieldUntil && player.shieldHits > 0) {
+                    player.shieldHits--;
+                    player.screenShake = Math.max(player.screenShake, 6);
+                    createExplosion(player.x, player.y - 30, '#66aaff', 10);
+                    player.invulnUntil = now + 220;
+                    AudioSystem.playHit();
+                }
+                // Take damage
+                else {
+                    player.health -= 18;
+                    player.invulnUntil = now + IFRAME_MS;
+                    player.screenShake = 18;
+                    createExplosion(player.x, player.y - 20, '#ff4444', 12);
+                    AudioSystem.playDamage();
+                    updateHUD();
+                    enemy.lastAttack = now;
+
+                    if (player.health <= 0) {
+                        createExplosion(player.x, player.y, '#00ffcc', 60, true);
+                        AudioSystem.playExplosion(true);
+                        gameOver();
+                    }
+                }
+
+                enemy.lastAttack = now;
+            }
+        }
+
+    });
+
+    rockets = rockets.filter(rocket => {
+        // Spinning motion
+        // rocket spin removed (missiles should not rotate like throwing stars)
+        rocket.spin = 0;
+        
+        // NO HOMING - straight shots only
+        
+        rocket.x += rocket.vx;
+        rocket.y += rocket.vy;
+        rocket.life--;
+
+        for (let i = enemies.length - 1; i >= 0; i--) {
+            const enemy = enemies[i];
+            // WIDE hitbox to include legs - spider tank is very wide
+            const hitboxW = enemy.kind === 'trex' ? 130 : 60;
+            const hitboxH = enemy.kind === 'trex' ? 100 : 70;
+            // enemy.y is at feet, so center hitbox on body (halfway up)
+            const hitboxCenterY = enemy.y - enemy.height * 0.45;
+            
+            if (Math.abs(rocket.x - enemy.x) < hitboxW && Math.abs(rocket.y - hitboxCenterY) < hitboxH) {
+                enemy.health -= 30;
+                createExplosion(rocket.x, rocket.y, '#ff8844', 25);
+                AudioSystem.playHit();
+                if (enemy.health <= 0) {
+                    const isTRex = enemy.kind === 'trex';
+                    createExplosion(enemy.x, enemy.y - 30, isTRex ? '#ff4444' : '#66aa44', isTRex ? 70 : 55, true);
+                    AudioSystem.playExplosion(true);
+                    if (isTRex) {
+                        AudioSystem.playTRexRoar();
+                    } else {
+                        AudioSystem.playRoar();
+                    }
+                    enemies.splice(i, 1);
+                    kills++;
+                    score += isTRex ? 500 : 200;
+                    flyCharge = Math.min(FLY_CHARGE_MAX, flyCharge + (isTRex ? 50 : 30));
+                    updateHUD();
+                }
+                return false;
+            }
+        }
+        
+        // Drone collision
+        for (let i = drones.length - 1; i >= 0; i--) {
+            const drone = drones[i];
+            if (Math.abs(rocket.x - drone.x) < 25 && Math.abs(rocket.y - drone.y) < 20) {
+                drone.health -= 30;
+                createExplosion(rocket.x, rocket.y, '#00ccff', 20);
+                AudioSystem.playHit();
+                if (drone.health <= 0) {
+                    createExplosion(drone.x, drone.y, '#ff6600', 40, true);
+                    AudioSystem.playExplosion(true);
+                    drones.splice(i, 1);
+                    kills++;
+                    score += 150;
+                    flyCharge = Math.min(FLY_CHARGE_MAX, flyCharge + 20);
+                    updateHUD();
+                }
+                return false;
+            }
+        }
+        
+        return rocket.life > 0 && rocket.x > (camX - 50) && rocket.x < (camX + canvas.width + 50) && rocket.y > -50 && rocket.y < canvas.height + 50;
+    });
+
+
+    // Enemy laser bolts
+    enemyLasers = enemyLasers.filter(lz => {
+        lz.x += lz.vx;
+        lz.y += lz.vy;
+        lz.life--;
+
+        // hit check (simple point vs player body)
+        if (!player.isFlying && Math.abs(lz.x - player.x) < 28 && Math.abs(lz.y - (player.y - player.height * 0.30)) < 36) {
+            const now = Date.now();
+
+            if (now < player.invulnUntil) {
+                return false;
+            }
+
+            if (now < player.shieldUntil && player.shieldHits > 0) {
+                player.shieldHits--;
+                player.screenShake = Math.max(player.screenShake, 6);
+                createExplosion(lz.x, lz.y, '#66aaff', 12);
+                player.invulnUntil = now + 220;
+                AudioSystem.playHit();
+                updateHUD();
+                return false;
+            }
+
+            player.health -= 10;
+            player.invulnUntil = now + IFRAME_MS;
+            player.screenShake = Math.max(player.screenShake, 10);
+            createExplosion(lz.x, lz.y, '#ff3355', 18);
+            AudioSystem.playDamage();
+            updateHUD();
+            if (player.health <= 0) {
+                createExplosion(player.x, player.y, '#00ffcc', 60, true);
+                AudioSystem.playExplosion(true);
+                gameOver();
+            }
+            return false;
+        }
+
+        return lz.life > 0 && lz.x > -80 && lz.x < canvas.width + 80 && lz.y > -80 && lz.y < canvas.height + 80;
+    });
+
+    smokeTrails = smokeTrails.filter(s => { s.x += s.vx; s.y += s.vy; s.vy -= 0.03; s.life -= 0.035; s.size *= 1.03; return s.life > 0; });
+    particles = particles.filter(p => { p.x += p.vx; p.y += p.vy; p.vy += 0.12; p.vx *= 0.98; p.life -= p.decay; return p.life > 0; });
+    sparks = sparks.filter(s => { s.x += s.vx; s.y += s.vy; s.vy += 0.08; s.life -= 0.04; return s.life > 0; });
+    debris = debris.filter(d => { d.x += d.vx; d.y += d.vy; d.vy += 0.25; d.rotation += d.rotSpeed; d.life -= 0.012; return d.life > 0 && d.y < canvas.height + 50; });
+    player.screenShake *= 0.88;
+
+    const hint = document.getElementById('easterEggHint');
+    hint.classList.toggle('show', flyCharge >= FLY_CHARGE_MAX && !player.isFlying);
+}
+
+function draw() {
+    ctx.save();
+    if (player.screenShake > 0.5) ctx.translate((Math.random() - 0.5) * player.screenShake, (Math.random() - 0.5) * player.screenShake);
+
+    // Space sky (upgraded)
+    const t = Date.now() * 0.00005;
+
+    // Deep space gradient + vignette
+    const skyGrad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+    skyGrad.addColorStop(0, '#02020a');
+    skyGrad.addColorStop(0.35, '#06061a');
+    skyGrad.addColorStop(0.7, '#0b0b22');
+    skyGrad.addColorStop(1, '#141432');
+    ctx.fillStyle = skyGrad;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Milky-way band
+    ctx.save();
+    ctx.translate(canvas.width * 0.15, canvas.height * 0.18);
+    ctx.rotate(-0.25);
+    const bandGrad = ctx.createLinearGradient(0, 0, canvas.width, 0);
+    bandGrad.addColorStop(0, 'rgba(255,255,255,0)');
+    bandGrad.addColorStop(0.35, 'rgba(120,160,255,0.05)');
+    bandGrad.addColorStop(0.5, 'rgba(255,220,180,0.07)');
+    bandGrad.addColorStop(0.65, 'rgba(120,160,255,0.05)');
+    bandGrad.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = bandGrad;
+    ctx.fillRect(-canvas.width * 0.2, -60, canvas.width * 1.6, 140);
+    ctx.restore();
+
+    // Starfields (3 layers, subtle parallax)
+    function starLayer(count, speed, minR, maxR, baseA) {
+        for (let i = 0; i < count; i++) {
+            const sx = (i * 997.3 + i * i * 0.41) % canvas.width;
+            const sy = (i * 613.7 + i * 0.83) % (canvas.height * 0.75);
+            const drift = (t * speed * 200 + camX * 0.04 * speed) % canvas.width;
+            const x = (sx + drift) % canvas.width;
+            const y = sy;
+            const r = minR + ((i % 7) / 6) * (maxR - minR);
+            const tw = 0.90 + Math.sin((Date.now() * 0.0007) + i) * 0.06;
+            ctx.globalAlpha = baseA * tw;
+            ctx.fillStyle = (i % 11 === 0) ? 'rgba(255,240,220,1)' : ((i % 13 === 0) ? 'rgba(200,220,255,1)' : '#ffffff');
+            ctx.beginPath();
+            ctx.arc(x, y, r, 0, Math.PI * 2);
+            ctx.fill();
+
+            // occasional diffraction sparkle
+            if (i % 47 === 0) {
+                ctx.globalAlpha = baseA * 0.35 * tw;
+                ctx.strokeStyle = ctx.fillStyle;
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.moveTo(x - 6, y); ctx.lineTo(x + 6, y);
+                ctx.moveTo(x, y - 6); ctx.lineTo(x, y + 6);
+                ctx.stroke();
+            }
+        }
+        ctx.globalAlpha = 1;
+    }
+    starLayer(120, 0.7, 0.35, 1.1, 0.35);
+    starLayer(90, 1.2, 0.25, 0.8, 0.25);
+    starLayer(60, 1.8, 0.15, 0.55, 0.18);
+
+    // Nebula clouds (layered)
+    const neb1 = ctx.createRadialGradient(canvas.width * 0.72, canvas.height * 0.22, 0, canvas.width * 0.72, canvas.height * 0.22, 380);
+    neb1.addColorStop(0, 'rgba(170, 90, 255, 0.14)');
+    neb1.addColorStop(0.4, 'rgba(70, 120, 255, 0.08)');
+    neb1.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = neb1;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    const neb2 = ctx.createRadialGradient(canvas.width * 0.35, canvas.height * 0.35, 0, canvas.width * 0.35, canvas.height * 0.35, 420);
+    neb2.addColorStop(0, 'rgba(60, 220, 180, 0.07)');
+    neb2.addColorStop(0.55, 'rgba(40, 120, 160, 0.05)');
+    neb2.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = neb2;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    
+    // Distant planet (more detailed + subtle motion)
+    const planetDrift = (camX * 0.012) % (canvas.width + 260);
+    const planetX = canvas.width * 0.20 - planetDrift;
+    const planetY = canvas.height * 0.23;
+
+    // Base sphere
+    const pr = 70;
+    const planetGrad = ctx.createRadialGradient(planetX - pr*0.25, planetY - pr*0.25, pr*0.10, planetX, planetY, pr);
+    planetGrad.addColorStop(0, '#a7ff4a');
+    planetGrad.addColorStop(0.35, '#38d94a');
+    planetGrad.addColorStop(0.7, '#0b6b2f');
+    planetGrad.addColorStop(1, '#032512');
+    ctx.fillStyle = planetGrad;
+    ctx.beginPath();
+    ctx.arc(planetX, planetY, pr, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Subtle cloud bands + texture (masked to sphere)
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(planetX, planetY, pr, 0, Math.PI*2);
+    ctx.clip();
+    ctx.globalAlpha = 0.22;
+
+    for (let b=0;b<10;b++){
+        const by = planetY - pr + b*(pr*0.22) + Math.sin((Date.now()*0.00035)+b)*2.0;
+        const band = ctx.createLinearGradient(planetX - pr, by, planetX + pr, by);
+        band.addColorStop(0, 'rgba(255,255,255,0)');
+        band.addColorStop(0.35, 'rgba(190,255,190,0.16)');
+        band.addColorStop(0.65, 'rgba(40,140,80,0.18)');
+        band.addColorStop(1, 'rgba(255,255,255,0)');
+        ctx.fillStyle = band;
+        ctx.fillRect(planetX - pr, by, pr*2, pr*0.10);
+    }
+
+    // A few storm swirls
+    ctx.globalAlpha = 0.18;
+    ctx.strokeStyle = 'rgba(220,255,220,0.55)';
+    ctx.lineWidth = 2;
+    for (let i=0;i<6;i++){
+        const ax = planetX - pr*0.25 + i*pr*0.18;
+        const ay = planetY - pr*0.15 + Math.sin(i*2.1)*pr*0.12;
+        ctx.beginPath();
+        ctx.ellipse(ax, ay, pr*0.22, pr*0.08, 0.25, 0, Math.PI*2);
+        ctx.stroke();
+    }
+    ctx.restore();
+
+    // Ring: multi-strand with dust specks (NO atmosphere rim - removed grey C)
+    ctx.save();
+    ctx.translate(planetX, planetY);
+    ctx.rotate(-0.28);
+
+    const ringA = ctx.createLinearGradient(-130, -6, 130, 6);
+    ringA.addColorStop(0, 'rgba(255,255,255,0.02)');
+    ringA.addColorStop(0.25, 'rgba(210,190,170,0.18)');
+    ringA.addColorStop(0.5, 'rgba(255,255,255,0.06)');
+    ringA.addColorStop(0.75, 'rgba(170,150,130,0.16)');
+    ringA.addColorStop(1, 'rgba(255,255,255,0.02)');
+
+    ctx.strokeStyle = ringA;
+    ctx.lineWidth = 3.5;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, 112, 26, 0, 0, Math.PI * 2);
+    ctx.stroke();
+
+    ctx.globalAlpha = 0.55;
+    ctx.lineWidth = 1.4;
+    ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+    ctx.beginPath();
+    ctx.ellipse(0, 0, 120, 28, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.ellipse(0, 0, 104, 24, 0, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // ring dust
+    ctx.globalAlpha = 0.30;
+    ctx.fillStyle = 'rgba(255,255,255,0.18)';
+    for (let i=0;i<70;i++){
+        const a = (i/70) * Math.PI*2;
+        const rx = Math.cos(a) * (108 + (i%9-4)*1.2);
+        const ry = Math.sin(a) * (25 + (i%7-3)*0.7);
+        ctx.beginPath();
+        ctx.arc(rx, ry, (i%5===0?1.6:1.0), 0, Math.PI*2);
+        ctx.fill();
+    }
+
+    ctx.restore();
+    
+    // Blue ringed planet in the sky
+    const bluePlanetX = canvas.width * 0.78;
+    const bluePlanetY = canvas.height * 0.13;
+    const bluePlanetR = 45;
+    
+    ctx.save();
+    ctx.translate(bluePlanetX, bluePlanetY);
+    
+    // Atmospheric glow behind planet
+    ctx.globalAlpha = 0.4;
+    const atmoGlow = ctx.createRadialGradient(0, 0, bluePlanetR * 0.8, 0, 0, bluePlanetR * 1.8);
+    atmoGlow.addColorStop(0, 'rgba(100, 180, 255, 0.3)');
+    atmoGlow.addColorStop(0.5, 'rgba(50, 120, 200, 0.15)');
+    atmoGlow.addColorStop(1, 'rgba(20, 60, 150, 0)');
+    ctx.fillStyle = atmoGlow;
+    ctx.beginPath();
+    ctx.arc(0, 0, bluePlanetR * 1.8, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    
+    // Ring behind planet (back half)
+    ctx.save();
+    ctx.globalAlpha = 0.6;
+    
+    // Ring gradient
+    const ringGrad = ctx.createLinearGradient(-bluePlanetR * 2.2, 0, bluePlanetR * 2.2, 0);
+    ringGrad.addColorStop(0, 'rgba(180, 200, 220, 0.1)');
+    ringGrad.addColorStop(0.3, 'rgba(200, 220, 240, 0.4)');
+    ringGrad.addColorStop(0.5, 'rgba(220, 235, 250, 0.5)');
+    ringGrad.addColorStop(0.7, 'rgba(200, 220, 240, 0.4)');
+    ringGrad.addColorStop(1, 'rgba(180, 200, 220, 0.1)');
+    
+    ctx.strokeStyle = ringGrad;
+    ctx.lineWidth = 12;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, bluePlanetR * 2, bluePlanetR * 0.4, 0, Math.PI, Math.PI * 2); // Top half only (behind)
+    ctx.stroke();
+    
+    // Inner ring
+    ctx.lineWidth = 6;
+    ctx.globalAlpha = 0.4;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, bluePlanetR * 1.6, bluePlanetR * 0.32, 0, Math.PI, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+    
+    // Planet body
+    const bluePlanetGrad = ctx.createRadialGradient(
+        -bluePlanetR * 0.3, -bluePlanetR * 0.3, bluePlanetR * 0.1,
+        0, 0, bluePlanetR
+    );
+    bluePlanetGrad.addColorStop(0, '#7ec8e3');  // Light blue highlight
+    bluePlanetGrad.addColorStop(0.3, '#4a9ebe'); // Mid blue
+    bluePlanetGrad.addColorStop(0.6, '#2d7aa3'); // Deeper blue
+    bluePlanetGrad.addColorStop(0.85, '#1a5a80'); // Dark blue
+    bluePlanetGrad.addColorStop(1, '#0d3a55');   // Shadow edge
+    ctx.fillStyle = bluePlanetGrad;
+    ctx.beginPath();
+    ctx.arc(0, 0, bluePlanetR, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Surface bands/storms
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(0, 0, bluePlanetR, 0, Math.PI * 2);
+    ctx.clip();
+    
+    ctx.globalAlpha = 0.15;
+    ctx.fillStyle = '#ffffff';
+    // Horizontal bands
+    for (let i = 0; i < 4; i++) {
+        const bandY = -bluePlanetR * 0.6 + i * bluePlanetR * 0.35;
+        ctx.beginPath();
+        ctx.ellipse(0, bandY, bluePlanetR * 1.1, 4 + i * 2, 0, 0, Math.PI * 2);
+        ctx.fill();
+    }
+    
+    // Storm spot
+    ctx.globalAlpha = 0.2;
+    ctx.fillStyle = '#aaddff';
+    ctx.beginPath();
+    ctx.ellipse(bluePlanetR * 0.3, bluePlanetR * 0.2, 8, 5, 0.3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+    
+    // Subtle atmosphere rim
+    ctx.globalAlpha = 0.3;
+    ctx.strokeStyle = '#aaddff';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(0, 0, bluePlanetR + 2, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+    
+    // Ring in front of planet (front half)
+    ctx.save();
+    ctx.globalAlpha = 0.7;
+    ctx.strokeStyle = ringGrad;
+    ctx.lineWidth = 12;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, bluePlanetR * 2, bluePlanetR * 0.4, 0, 0, Math.PI); // Bottom half only (in front)
+    ctx.stroke();
+    
+    // Inner ring front
+    ctx.lineWidth = 6;
+    ctx.globalAlpha = 0.5;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, bluePlanetR * 1.6, bluePlanetR * 0.32, 0, 0, Math.PI);
+    ctx.stroke();
+    
+    // Ring particles/sparkle
+    ctx.globalAlpha = 0.6;
+    ctx.fillStyle = '#ffffff';
+    for (let i = 0; i < 20; i++) {
+        const angle = (i / 20) * Math.PI + Math.sin(Date.now() * 0.001 + i) * 0.1;
+        const rx = Math.cos(angle) * (bluePlanetR * 1.8 + (i % 5 - 2) * 3);
+        const ry = Math.sin(angle) * (bluePlanetR * 0.36 + (i % 3 - 1) * 2);
+        ctx.beginPath();
+        ctx.arc(rx, ry, i % 3 === 0 ? 1.5 : 1, 0, Math.PI * 2);
+        ctx.fill();
+    }
+    ctx.restore();
+    
+    ctx.restore();
+
+    // Parallax horizon
+    ctx.save();
+    ctx.translate(-(camX * 0.18), 0);
+
+
+    // Distant alien mountains + horizon haze
+    ctx.fillStyle = '#151525';
+    ctx.beginPath();
+    ctx.moveTo(0, canvas.height - 105);
+    for (let x = 0; x <= canvas.width; x += 70) {
+        const h = 64 + Math.sin(x * 0.014) * 42 + Math.cos(x * 0.009) * 28;
+        ctx.lineTo(x, canvas.height - 105 - h);
+    }
+    ctx.lineTo(canvas.width, canvas.height);
+    ctx.lineTo(0, canvas.height);
+    ctx.fill();
+
+    const haze = ctx.createLinearGradient(0, canvas.height - 220, 0, canvas.height - 60);
+    haze.addColorStop(0, 'rgba(140,160,255,0)');
+    haze.addColorStop(0.55, 'rgba(80,110,200,0.06)');
+    haze.addColorStop(1, 'rgba(10,10,30,0.18)');
+    ctx.fillStyle = haze;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Alien ground
+    ctx.restore();
+
+    // Alien ground (subtle texture)
+    const groundGrad = ctx.createLinearGradient(0, canvas.height - 90, 0, canvas.height);
+    groundGrad.addColorStop(0, '#25253a');
+    groundGrad.addColorStop(0.55, '#161629');
+    groundGrad.addColorStop(1, '#070713');
+    ctx.fillStyle = groundGrad;
+    ctx.fillRect(0, canvas.height - 90, canvas.width, 90);
+
+    ctx.globalAlpha = 0.08;
+    ctx.fillStyle = '#000';
+    for (let i = 0; i < 140; i++) {
+        const gx = (i * 97.3) % canvas.width;
+        const gy = canvas.height - 90 + (i * 37.7) % 90;
+        ctx.beginPath();
+        ctx.arc(gx, gy, 8 + (i % 9) * 1.7, 0, Math.PI * 2);
+        ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+
+    // vignette
+    const vig = ctx.createRadialGradient(canvas.width/2, canvas.height/2, canvas.height*0.2, canvas.width/2, canvas.height/2, canvas.height*0.85);
+    vig.addColorStop(0, 'rgba(0,0,0,0)');
+    vig.addColorStop(1, 'rgba(0,0,0,0.35)');
+    ctx.fillStyle = vig;
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+
+    // Grid lines on ground
+    ctx.strokeStyle = '#00ffcc';
+    const groundY = canvas.height - 60;
+    for (let i = 0; i < 12; i++) {
+        const y = groundY + i * 10;
+        ctx.globalAlpha = Math.max(0.02, 0.15 - i * 0.01);
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(canvas.width, y);
+        ctx.stroke();
+    }
+    const gridOffset = -((camX % 80 + 80) % 80);
+    for (let x = gridOffset; x < canvas.width + 80; x += 80) {
+        ctx.globalAlpha = 0.1;
+        ctx.beginPath();
+        ctx.moveTo(x, groundY);
+        ctx.lineTo(canvas.width / 2 + (x - canvas.width / 2) * 1.8, canvas.height);
+        ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+    // World-space entities
+    ctx.save();
+    ctx.translate(-camX, 0);
+
+
+    // Smoke trails (streaks only — no big bubble circles)
+    smokeTrails.forEach(s => {
+        // draw as short streak + tiny ember dot
+        const tx = s.x - s.vx * 6;
+        const ty = s.y - s.vy * 6;
+        ctx.globalAlpha = Math.max(0, Math.min(1, s.life)) * 0.65;
+        ctx.strokeStyle = 'rgba(210,220,235,0.45)';
+        ctx.lineWidth = Math.max(1, s.size * 0.18);
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(s.x, s.y);
+        ctx.lineTo(tx, ty);
+        ctx.stroke();
+
+        ctx.globalAlpha *= 0.9;
+        ctx.fillStyle = (s.color || 'rgba(210,220,235,0.20)');
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, Math.max(0.8, s.size * 0.08), 0, Math.PI * 2);
+        ctx.fill();
+    });
+    ctx.globalAlpha = 1;
+
+    // Debris
+    debris.forEach(d => {
+        ctx.save();
+        ctx.translate(d.x, d.y);
+        ctx.rotate(d.rotation);
+        ctx.fillStyle = d.color;
+        ctx.globalAlpha = d.life;
+        ctx.fillRect(-d.size/2, -d.size/4, d.size, d.size/2);
+        ctx.restore();
+    });
+    ctx.globalAlpha = 1;
+
+    // Particles (minimal — no giant bubble blasts)
+    particles.forEach(p => {
+        ctx.globalAlpha = p.life;
+        ctx.fillStyle = p.color;
+        const r = Math.max(0.8, Math.min(3.2, p.size * 0.22)) * p.life;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+        ctx.fill();
+    });
+    ctx.globalAlpha = 1;
+
+    // Sparks
+    sparks.forEach(s => {
+        ctx.fillStyle = s.color;
+        ctx.shadowColor = s.color;
+        ctx.shadowBlur = 8;
+        ctx.globalAlpha = s.life;
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, s.size * s.life, 0, Math.PI * 2);
+        ctx.fill();
+    });
+    ctx.shadowBlur = 0;
+    ctx.globalAlpha = 1;
+
+    // Rockets
+    rockets.forEach(r => drawRocket(r));
+
+    // Enemy lasers
+    enemyLasers.forEach(lz => {
+        ctx.save();
+        ctx.globalAlpha = 0.95;
+        const laserColor = lz.color || '#ff3355';
+        ctx.strokeStyle = laserColor;
+        ctx.lineWidth = lz.w;
+        ctx.shadowColor = laserColor;
+        ctx.shadowBlur = 18;
+        ctx.beginPath();
+        ctx.moveTo(lz.x, lz.y);
+        ctx.lineTo(lz.x - lz.vx * 1.6, lz.y - lz.vy * 1.6);
+        ctx.stroke();
+        ctx.fillStyle = lz.color ? '#ffffff' : '#ffd0d7';
+        ctx.beginPath();
+        ctx.arc(lz.x, lz.y, 2.2, 0, Math.PI*2);
+        ctx.fill();
+        ctx.restore();
+    });
+
+    // Enemies
+    enemies.forEach(enemy => {
+        if (enemy.kind === 'trex') {
+            drawMetallicTRex(enemy.x, enemy.y, enemy.width, enemy.height, enemy.legAngle, enemy.facingRight, enemy.health, enemy.maxHealth, enemy.isCharging, enemy.telegraphUntil);
+        } else {
+            drawHumanoidBot(enemy.x, enemy.y, enemy.width, enemy.height, enemy.legAngle, enemy.facingRight, enemy.health, enemy.maxHealth);
+        }
+        // Laser warning tell
+        if (enemy.hasLaser && enemy.telegraphUntil && Date.now() < enemy.telegraphUntil) {
+            const mx = enemy.x + (enemy.facingRight ? enemy.width * 0.62 : -enemy.width * 0.62);
+            const my = enemy.y - enemy.height * 0.58;
+            ctx.save();
+            ctx.globalAlpha = 0.35;
+            ctx.strokeStyle = 'rgba(255,70,90,0.9)';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([6, 10]);
+            ctx.beginPath();
+            ctx.moveTo(mx - camX, my);
+            ctx.lineTo(player.x - camX, player.y - player.height * 0.35);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            ctx.restore();
+        }
+    });
+
+    // Drones (flying enemies)
+    drones.forEach(drone => {
+        drawDrone(drone);
+    });
+
+    // Player
+    if (gameRunning) {
+        drawAimLine();
+        drawPlayer(player.x, player.y, player.width, player.height, player.legAngle, player.isFlying, player.facingRight, player.armAngle);
+        // Shield visual - GOLD Energy bubble with lightning effects
+        if (Date.now() < player.shieldUntil && player.shieldHits > 0) {
+            const shieldTime = Date.now() * 0.003;
+            const centerX = player.x;
+            const centerY = player.y - player.height * 0.3;
+            const radiusX = player.width * 1.2;
+            const radiusY = player.height * 0.9;
+            
+            ctx.save();
+            
+            // Outer energy glow (pulsing) - GOLD
+            const pulse = 0.6 + Math.sin(shieldTime * 2) * 0.2;
+            ctx.globalAlpha = pulse * 0.8;
+            ctx.strokeStyle = '#ffcc00';
+            ctx.lineWidth = 3;
+            ctx.shadowColor = '#ffaa00';
+            ctx.shadowBlur = 25;
+            ctx.beginPath();
+            ctx.ellipse(centerX, centerY, radiusX, radiusY, 0, 0, Math.PI * 2);
+            ctx.stroke();
+            
+            // Inner bubble gradient - GOLD
+            ctx.globalAlpha = 0.15 + Math.sin(shieldTime * 3) * 0.05;
+            const bubbleGrad = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, radiusY);
+            bubbleGrad.addColorStop(0, 'rgba(255, 220, 100, 0.3)');
+            bubbleGrad.addColorStop(0.5, 'rgba(255, 180, 50, 0.15)');
+            bubbleGrad.addColorStop(0.8, 'rgba(200, 150, 0, 0.1)');
+            bubbleGrad.addColorStop(1, 'rgba(255, 200, 0, 0.3)');
+            ctx.fillStyle = bubbleGrad;
+            ctx.beginPath();
+            ctx.ellipse(centerX, centerY, radiusX * 0.95, radiusY * 0.95, 0, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Lightning arcs crawling on the shield surface - GOLD
+            ctx.globalAlpha = 0.7 + Math.random() * 0.3;
+            ctx.strokeStyle = '#ffffff';
+            ctx.shadowColor = '#ffaa00';
+            ctx.shadowBlur = 15;
+            ctx.lineWidth = 2;
+            
+            // Draw 3-5 lightning arcs
+            const numArcs = 3 + Math.floor(Math.random() * 3);
+            for (let a = 0; a < numArcs; a++) {
+                const startAngle = shieldTime + a * 1.5 + Math.random() * 0.5;
+                const arcLength = 0.5 + Math.random() * 0.8;
+                
+                ctx.beginPath();
+                let prevX = centerX + Math.cos(startAngle) * radiusX;
+                let prevY = centerY + Math.sin(startAngle) * radiusY;
+                ctx.moveTo(prevX, prevY);
+                
+                // Jagged lightning along the arc
+                const steps = 6 + Math.floor(Math.random() * 4);
+                for (let i = 1; i <= steps; i++) {
+                    const angle = startAngle + (i / steps) * arcLength;
+                    const jitterX = (Math.random() - 0.5) * 8;
+                    const jitterY = (Math.random() - 0.5) * 8;
+                    const x = centerX + Math.cos(angle) * radiusX + jitterX;
+                    const y = centerY + Math.sin(angle) * radiusY + jitterY;
+                    ctx.lineTo(x, y);
+                }
+                ctx.stroke();
+            }
+            
+            // Occasional bright flash/spark - GOLD
+            if (Math.random() < 0.15) {
+                const sparkAngle = Math.random() * Math.PI * 2;
+                const sparkX = centerX + Math.cos(sparkAngle) * radiusX * 0.9;
+                const sparkY = centerY + Math.sin(sparkAngle) * radiusY * 0.9;
+                
+                ctx.fillStyle = '#ffffff';
+                ctx.shadowColor = '#ffcc00';
+                ctx.shadowBlur = 20;
+                ctx.beginPath();
+                ctx.arc(sparkX, sparkY, 3 + Math.random() * 3, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            
+            // Energy field lines (subtle hexagonal pattern) - GOLD
+            ctx.globalAlpha = 0.1;
+            ctx.strokeStyle = '#ffaa00';
+            ctx.lineWidth = 1;
+            ctx.shadowBlur = 0;
+            for (let i = 0; i < 8; i++) {
+                const angle = (i / 8) * Math.PI * 2 + shieldTime * 0.2;
+                ctx.beginPath();
+                ctx.moveTo(centerX, centerY);
+                ctx.lineTo(centerX + Math.cos(angle) * radiusX * 0.9, centerY + Math.sin(angle) * radiusY * 0.9);
+                ctx.stroke();
+            }
+            
+            ctx.restore();
+        }
+    }    ctx.restore();
+
+    // Move hint (after clearing the local area)
+    if (gameRunning && enemies.length === 0) {
+        drawMoveArrowHint();
+    }
+
+    ctx.restore();
+}
+
+function updateHUD() {
+    document.getElementById('scoreDisplay').textContent = score;
+    document.getElementById('killsDisplay').textContent = kills;
+    document.getElementById('healthFill').style.width = Math.max(0, player.health / player.maxHealth * 100) + '%';
+    document.getElementById('flyFill').style.width = (flyCharge / FLY_CHARGE_MAX * 100) + '%';
+
+    // Enable/disable ability buttons (mobile)
+    const ready = flyCharge >= FLY_CHARGE_MAX && !player.isFlying && Date.now() > player.shieldUntil;
+    const fb = document.getElementById('flyBtn');
+    const sb = document.getElementById('shieldBtn');
+    if (fb) fb.style.opacity = ready ? '1' : '0.45';
+    if (sb) sb.style.opacity = ready ? '1' : '0.45';
+}
+
+function gameOver() {
+    gameRunning = false;
+    // Return cursor to normal and hide the bullseye when the run ends
+    document.body.classList.remove('inGame');
+    document.getElementById('finalScore').textContent = kills + ' KILLS';
+    document.getElementById('gameOverScreen').style.display = 'flex';
+}
+
+function startGame() {
+    AudioSystem.resume();
+
+    // Switch to in-game cursor mode (hide OS cursor, show bullseye)
+    document.body.classList.add('inGame');
+
+    // Make sure the aim starts at the current pointer position (or center if unknown)
+    if (!(typeof mouseX === 'number' && typeof mouseY === 'number')) {
+        mouseX = window.innerWidth * 0.5;
+        mouseY = window.innerHeight * 0.5;
+    }
+    updateBullseye();
+
+    camX = 0;
+    score = 0; kills = 0; flyCharge = 0; wave = 1;
+    enemies = []; rockets = []; enemyLasers = []; particles = []; sparks = []; smokeTrails = []; debris = []; drones = [];
+    spawnTimer = 0; difficulty = 1; spawnInterval = 2800;
+
+    initPlayer(); updateHUD();
+
+    // First encounter starts immediately (no empty opening)
+    nextEncounterX = player.x + 220;
+    spawnEnemy();
+
+    document.getElementById('startScreen').style.display = 'none';
+    document.getElementById('gameOverScreen').style.display = 'none';
+    gameRunning = true;
+    showWaveAnnouncement('⚠ WAVE 1 ⚠');
+}
+
+let lastTime = 0;
+function gameLoop(timestamp) {
+  try {
+    const deltaTime = timestamp - lastTime;
+    lastTime = timestamp;
+    update(deltaTime);
+    draw();
+  } catch (err) {
+    fatalError = (err && err.stack) ? err.stack : String(err);
+    ctx.setTransform(1,0,0,1,0,0);
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    ctx.fillStyle = '#0b0f1a';
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+    ctx.fillStyle = '#ff4d4d';
+    ctx.font = '16px monospace';
+    ctx.fillText('Game crashed (copy this error):', 20, 40);
+    ctx.fillStyle = '#e6e6e6';
+    const lines = String(fatalError).split('\n').slice(0, 16);
+    for (let i=0;i<lines.length;i++) ctx.fillText(lines[i].slice(0, 160), 20, 70 + i*18);
+    return;
+  }
+  requestAnimationFrame(gameLoop);
+}
+
+// Bullseye cursor element
+const bullseye = document.getElementById('bullseye');
+
+// Update bullseye (aim reticle) position
+function updateBullseye() { /* reticle is drawn in-canvas */ }
+
+
+// Initialize bullseye to screen center so it never appears "stuck" at (0,0)
+(function initBullseyeCenter(){
+    mouseX = window.innerWidth * 0.5;
+    mouseY = window.innerHeight * 0.5;
+    aimX = mouseX;
+    aimY = mouseY;
+    updateBullseye();
+})();
+window.addEventListener('resize', () => {
+    // keep aim reasonable on resize
+    mouseX = Math.min(Math.max(20, mouseX), window.innerWidth - 20);
+    mouseY = Math.min(Math.max(20, mouseY), window.innerHeight - 20);
+    aimX = Math.min(Math.max(20, aimX), window.innerWidth - 20);
+    aimY = Math.min(Math.max(20, aimY), window.innerHeight - 20);
+    updateBullseye();
+});
+
+// Keep the bullseye locked to the pointer (desktop + touch/stylus).
+// Use window-level listeners so the aim never gets "stuck" at the top if the pointer slips off the canvas.
+// Aim control:
+// - Desktop: LEFT click sets the bullseye position (aim point)
+// - Touch: TAP sets the bullseye; drag while touching to adjust
+let aimPointerDown = false;
+let aimPointerId = null;
+
+const setAimFromEvent = (e) => {
+    if (!e) return;
+    if (typeof e.clientX === 'number' && typeof e.clientY === 'number') {
+        mouseX = e.clientX;
+        mouseY = e.clientY;
+        // click-to-place: the reticle lives where you click/tap, independent of cursor movement
+        aimX = mouseX;
+        aimY = mouseY;
+        updateBullseye();
+    }
+};
+
+window.addEventListener('pointerdown', (e) => {
+    // Only allow aim placement after the game starts
+    if (!document.body.classList.contains('inGame')) return;
+
+    // If the user is pressing HUD/D-pad controls, don't move the aim reticle.
+    // (This was causing the bullseye to "jump" onto the FIRE button and feel stuck.)
+    const t = e.target;
+    if (t && t.closest && (t.closest('#dpad') || t.closest('#hud') || t.closest('#pauseOverlay'))) {
+        return;
+    }
+
+    // Desktop: primary button places aim and can drag-to-adjust while held
+    if (e.pointerType === 'mouse') {
+        if (e.button !== 0) return;
+        aimPointerDown = true;
+        aimPointerId = e.pointerId;
+        setAimFromEvent(e);
+        return;
+    }
+
+    // Touch / pen: tap places aim and enables drag-to-adjust while pressed
+    aimPointerDown = true;
+    aimPointerId = e.pointerId;
+    setAimFromEvent(e);
+}, { passive: true });
+
+window.addEventListener('pointermove', (e) => {
+    // Drag-adjust aim while pressed:
+    // - Touch/Pen: while finger/stylus is down
+    // - Mouse: while primary button is held (click-drag)
+    // Never treat HUD/D-pad as aim.
+    if (!document.body.classList.contains('inGame')) return;
+
+    const t = e.target;
+    if (t && t.closest && (t.closest('#dpad') || t.closest('#hud') || t.closest('#pauseOverlay'))) {
+        return;
+    }
+
+    if (!aimPointerDown) return;
+    if (aimPointerId !== null && e.pointerId !== aimPointerId) return;
+
+    if (e.pointerType === 'mouse') {
+        // Only while primary button held
+        if ((e.buttons & 1) !== 1) return;
+        setAimFromEvent(e);
+        return;
+    }
+
+    if (e.pointerType === 'touch' || e.pointerType === 'pen') {
+        setAimFromEvent(e);
+    }
+}, { passive: true });
+
+window.addEventListener('pointerup', (e) => {
+    if (aimPointerId !== null && e.pointerId !== aimPointerId) return;
+    aimPointerDown = false;
+    aimPointerId = null;
+}, { passive: true });
+
+window.addEventListener('pointercancel', (e) => {
+    if (aimPointerId !== null && e.pointerId !== aimPointerId) return;
+    aimPointerDown = false;
+    aimPointerId = null;
+}, { passive: true });
+
+// Mouse (desktop) is AIM ONLY.
+// Firing is ONLY:
+//   - Keyboard: hold [F]
+//   - Mobile/Tablet: hold the D-pad FIRE button
+// (This matches your request and prevents mouse buttons from stealing aim.)
+// Track which keys are currently held
+const keysHeld = {};
+
+// WASD keyboard controls for movement and F for fire
+document.addEventListener('keydown', (e) => {
+    if (e.repeat) return; // Ignore key repeat
+    keysHeld[e.code] = true;
+    
+    if (e.code === 'KeyP' || e.code === 'Escape') { e.preventDefault(); togglePause(); return; }
+    if (e.code === 'Space') { e.preventDefault(); activateFlight(); }
+    if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') { e.preventDefault(); activateShield(); }
+    // WASD movement
+    if (e.code === 'KeyW' || e.code === 'ArrowUp') { e.preventDefault(); dpadState.up = true; }
+    if (e.code === 'KeyS' || e.code === 'ArrowDown') { e.preventDefault(); dpadState.down = true; }
+    if (e.code === 'KeyA' || e.code === 'ArrowLeft') { e.preventDefault(); dpadState.left = true; }
+    if (e.code === 'KeyD' || e.code === 'ArrowRight') { e.preventDefault(); dpadState.right = true; }
+    // F key to fire
+    if (e.code === 'KeyF') { e.preventDefault(); isFiring = true; fireOneRocket(true); }
+});
+document.addEventListener('keyup', (e) => {
+    keysHeld[e.code] = false;
+    
+    if (e.code === 'KeyW' || e.code === 'ArrowUp') { dpadState.up = false; }
+    if (e.code === 'KeyS' || e.code === 'ArrowDown') { dpadState.down = false; }
+    if (e.code === 'KeyA' || e.code === 'ArrowLeft') { dpadState.left = false; }
+    if (e.code === 'KeyD' || e.code === 'ArrowRight') { dpadState.right = false; }
+    if (e.code === 'KeyF') { isFiring = false; }
+});
+// ===== On-screen D-Pad (works on desktop + mobile; avoids right-click) =====
+const btnUp = document.getElementById('btnUp');
+const btnDown = document.getElementById('btnDown');
+const btnLeft = document.getElementById('btnLeft');
+const btnRight = document.getElementById('btnRight');
+const btnFire = document.getElementById('btnFire');
+
+const flyBtn = document.getElementById('flyBtn');
+const shieldBtn = document.getElementById('shieldBtn');
+const pauseBtn = document.getElementById('pauseBtn');
+
+const dpadState = { up:false, down:false, left:false, right:false };
+
+function setBtnOn(el, on){ if(!el) return; el.classList.toggle('on', !!on); }
+
+function hold(el, downFn, upFn){
+  let pid = null;
+  let isActive = false;
+  const up = (e) => {
+    if (pid !== null && e && e.pointerId !== undefined && e.pointerId !== pid) return;
+    try { if (pid !== null) el.releasePointerCapture(pid); } catch {}
+    pid = null;
+    if (isActive) {
+        isActive = false;
+        upFn();
+    }
+    syncDpadVisuals();
+  };
+  el.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    AudioSystem.resume();
+    // Release any existing capture first
+    if (pid !== null) {
+        try { el.releasePointerCapture(pid); } catch {}
+        if (isActive) {
+            isActive = false;
+            upFn();
+        }
+    }
+    pid = e.pointerId;
+    try { el.setPointerCapture(pid); } catch {}
+    isActive = true;
+    downFn();
+    syncDpadVisuals();
+  });
+  el.addEventListener('pointerup', up);
+  el.addEventListener('pointercancel', up);
+  el.addEventListener('lostpointercapture', (e) => { 
+    if (pid !== null && (e.pointerId === undefined || e.pointerId === pid)) { 
+        pid = null; 
+        if (isActive) {
+            isActive = false;
+            upFn(); 
+        }
+        syncDpadVisuals(); 
+    } 
+  });
+}
+
+function syncDpadVisuals(){
+  setBtnOn(btnUp, dpadState.up && !paused);
+  setBtnOn(btnDown, dpadState.down && !paused);
+  setBtnOn(btnLeft, dpadState.left && !paused);
+  setBtnOn(btnRight, dpadState.right && !paused);
+  setBtnOn(btnFire, isFiring && !paused);
+}
+
+hold(btnUp,   ()=>dpadState.up=true,    ()=>dpadState.up=false);
+hold(btnDown, ()=>dpadState.down=true,  ()=>dpadState.down=false);
+hold(btnLeft, ()=>dpadState.left=true,  ()=>dpadState.left=false);
+hold(btnRight,()=>dpadState.right=true, ()=>dpadState.right=false);
+
+// FIRE BUTTON - Auto-aim: ground = shoot at nearest enemy or forward, flying = shoot downward
+function getAutoAimTarget() {
+    const armX = player.x + (player.facingRight ? 35 : -35);
+    const armY = player.y - player.height * 0.35;
+    
+    if (player.isFlying) {
+        // Flying: shoot downward at 45 degree angle in facing direction
+        return {
+            x: player.x + (player.facingRight ? 300 : -300),
+            y: player.y + 250
+        };
+    }
+    
+    // On ground: find nearest enemy in facing direction
+    let bestTarget = null;
+    let bestDist = 600; // max range
+    
+    enemies.forEach(enemy => {
+        const enemyDir = enemy.x > player.x;
+        // Only target enemies in the direction we're facing
+        if (enemyDir === player.facingRight) {
+            const dist = Math.abs(enemy.x - player.x);
+            if (dist < bestDist) {
+                bestDist = dist;
+                bestTarget = { x: enemy.x, y: enemy.y - enemy.height * 0.4 };
+            }
+        }
+    });
+    
+    // If no enemy found, shoot straight forward
+    if (!bestTarget) {
+        bestTarget = {
+            x: player.x + (player.facingRight ? 500 : -500),
+            y: armY
+        };
+    }
+    
+    return bestTarget;
+}
+
+function doFire() {
+    if (!gameRunning || paused) return;
+    AudioSystem.resume();
+    
+    // SIMPLE: Fire from player toward aim point
+    const gunX = player.x + (player.facingRight ? 40 : -40);
+    const gunY = player.y - player.height * 0.35;
+    
+    // Shoot at aim reticle position
+    const targetX = aimX + camX;
+    const targetY = aimY;
+    fireRocket(gunX, gunY, targetX, targetY);
+    playShoot();
+}
+
+// D-pad FIRE handled via pointer events below (and keyboard F).
+// D-pad FIRE: hold-to-fire (no timers here; the main update loop handles fireRate)
+btnFire.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    AudioSystem.resume();
+    isFiring = true;
+    fireOneRocket(true); // immediate shot
+    btnFire.setPointerCapture?.(e.pointerId);
+    syncDpadVisuals();
+});
+const stopFire = () => { isFiring = false; syncDpadVisuals(); };
+btnFire.addEventListener('pointerup', (e) => { e?.preventDefault?.(); stopFire(); });
+btnFire.addEventListener('pointerleave', (e) => { e?.preventDefault?.(); stopFire(); });
+btnFire.addEventListener('pointercancel', (e) => { e?.preventDefault?.(); stopFire(); });
+
+
+pauseBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); togglePause(); });
+
+// Abilities buttons: shown only when charged (handled in updateUI). Pointerdown triggers ability.
+flyBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); AudioSystem.resume(); activateFly(); });
+shieldBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); AudioSystem.resume(); activateShield(); });
+
+// Disable context menu on the game so right-click doesn't steal focus (still optional)
+canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+
+// Update movement target from D-pad each frame (see patch: updateMovementFromDpad()).
+function updateMovementFromDpad(){
+  const dx = (dpadState.right ? 1 : 0) - (dpadState.left ? 1 : 0);
+  const dy = (dpadState.down ? 1 : 0) - (dpadState.up ? 1 : 0);
+  const groundLevel = canvas.height - 100;
+
+  // If any direction is held, force movement like a classic pad.
+  if (dx !== 0 || dy !== 0){
+    isMoving = true;
+
+    // Push target ahead in world coords so the existing movement system keeps walking.
+    const pushX = 420;
+
+    player.targetX = player.x + dx * pushX;
+    
+    // Keep on ground unless flying
+    if (!player.isFlying){
+      player.targetY = groundLevel;
+    } else {
+      // When flying, allow much more vertical movement
+      player.targetY = player.y + dy * 500;
+    }
+  } else {
+    // If D-pad not held, stop moving
+    isMoving = false;
+  }
+}
+
+// Pointer events (more reliable than touch events on many phones/tablets)
+flyBtn.addEventListener('touchstart', (e) => { e.preventDefault(); activateFlight(); flyBtn.classList.add('active'); });
+shieldBtn.addEventListener('touchstart', (e) => { e.preventDefault(); activateShield(); shieldBtn.classList.add('active'); });
+flyBtn.addEventListener('touchend', (e) => { e.preventDefault(); flyBtn.classList.remove('active'); });
+shieldBtn.addEventListener('touchend', (e) => { e.preventDefault();
+if (pauseBtn) {
+    const onPause = (e) => { if (e) e.preventDefault(); AudioSystem.resume(); togglePause(); pauseBtn.classList.toggle('active', paused); };
+    pauseBtn.addEventListener('touchstart', onPause);
+    pauseBtn.addEventListener('click', onPause);
+}
+ shieldBtn.classList.remove('active'); });
+canvas.addEventListener('touchmove', (e) => { 
+    e.preventDefault(); 
+    const touch = e.touches[0]; 
+    mouseX = touch.clientX; 
+    mouseY = touch.clientY; 
+    updateBullseye();
+});
+canvas.addEventListener('touchstart', (e) => { 
+    e.preventDefault(); 
+    AudioSystem.resume(); 
+    const touch = e.touches[0]; 
+    mouseX = touch.clientX; 
+    mouseY = touch.clientY; 
+    updateBullseye();
+});
+
+document.getElementById('soundToggle').addEventListener('click', () => { AudioSystem.enabled = !AudioSystem.enabled; document.getElementById('soundToggle').textContent = AudioSystem.enabled ? '🔊 SOUND ON' : '🔇 SOUND OFF'; });
+document.getElementById('startBtn').addEventListener('click', startGame);
+document.getElementById('restartBtn').addEventListener('click', startGame);
+
+function togglePause() {
+    paused = !paused;
+    const overlay = document.getElementById('pauseOverlay');
+    if (overlay) overlay.style.display = paused ? 'flex' : 'none';
+}
+
+AudioSystem.init(); initPlayer(); requestAnimationFrame(gameLoop);
+    </script>
+</body>
+</html>
