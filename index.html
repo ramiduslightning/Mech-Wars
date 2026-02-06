@@ -51,6 +51,43 @@
         #soundToggle { position: absolute; top: 20px; right: 20px; font-family: 'Orbitron', sans-serif; font-size: 12px; padding: 8px 15px; background: rgba(0,0,0,0.5); border: 2px solid #00ffcc; color: #00ffcc; cursor: pointer; z-index: 50; }
         #waveAnnounce { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-family: 'Orbitron', sans-serif; font-size: clamp(24px, 6vw, 48px); color: #ff6600; text-shadow: 0 0 30px #ff6600, 0 0 60px #ff3300; opacity: 0; pointer-events: none; z-index: 30; letter-spacing: 4px; }
         @media (max-width: 600px) { .hud-value { font-size: 20px; } #healthBar { width: 120px; } }
+        
+        /* Mobile-specific adjustments */
+        @media (max-width: 480px) {
+            .dpad { width: 180px; height: 180px; grid-template-columns: 56px 56px 56px; grid-template-rows: 56px 56px 56px; padding: 6px; }
+            .dpad-btn.fire { font-size: 12px; }
+            .mobile-btn { width: 70px; height: 70px; font-size: 9px; }
+            #flyBtn, #shieldBtn { width: 55px; height: 55px; font-size: 8px; }
+            #flyBtn { bottom: 100px; right: 10px; }
+            #shieldBtn { bottom: 165px; right: 10px; }
+            #pauseBtn { bottom: 20px; right: 95px; width: 60px; height: 60px; font-size: 9px; }
+            #mobileControls { padding: 0 10px; bottom: 10px; }
+            .hud-panel { padding: 8px 12px; }
+            .hud-label { font-size: 8px; letter-spacing: 2px; }
+            .hud-value { font-size: 16px; }
+            #healthBar { width: 100px; height: 10px; }
+            #flyMeter { width: 80px; height: 8px; }
+            #easterEggHint { font-size: 11px; bottom: 85px; }
+        }
+        
+        /* Very small screens */
+        @media (max-width: 380px) {
+            .dpad { width: 150px; height: 150px; grid-template-columns: 46px 46px 46px; grid-template-rows: 46px 46px 46px; }
+            .dpad-btn.fire { font-size: 10px; }
+        }
+        
+        /* Landscape phone */
+        @media (max-height: 500px) and (orientation: landscape) {
+            .dpad { width: 160px; height: 160px; grid-template-columns: 50px 50px 50px; grid-template-rows: 50px 50px 50px; }
+            #mobileControls { bottom: 5px; }
+            #flyBtn { bottom: 80px; right: 10px; width: 50px; height: 50px; }
+            #shieldBtn { bottom: 140px; right: 10px; width: 50px; height: 50px; }
+            #pauseBtn { bottom: 10px; right: 75px; width: 50px; height: 50px; }
+            #hud { padding: 5px 10px; }
+            .hud-panel { padding: 5px 8px; }
+            .hud-value { font-size: 14px; }
+            #easterEggHint { bottom: 70px; font-size: 10px; }
+        }
     
 /* ===== D-Pad Controls (desktop + mobile) ===== */
 .dpad{
@@ -87,6 +124,19 @@
 .abilityStack{ display:flex; flex-direction:column; gap:10px; align-items:stretch; }
 .mobile-btn.ability.hidden{ display:none !important; }
 
+/* Pause button styling */
+#pauseBtn { 
+    position: fixed; 
+    bottom: 25px; 
+    right: 115px; 
+    background: rgba(0, 255, 204, 0.2); 
+    border-color: #00ffcc; 
+    color: #00ffcc; 
+    text-shadow: 0 0 15px #00ffcc; 
+    box-shadow: 0 0 20px rgba(0, 255, 204, 0.4); 
+    z-index: 60;
+}
+
 </style>
 </head>
 <body>
@@ -112,20 +162,25 @@
   <div class="abilityStack">
     <div id="flyBtn" class="mobile-btn ability hidden">✈<br>FLY</div>
     <div id="shieldBtn" class="mobile-btn ability hidden">🛡<br>SHIELD</div>
-    <div id="pauseBtn" class="mobile-btn" style="background: rgba(0, 255, 204, 0.2); border-color: #00ffcc; color: #00ffcc; text-shadow: 0 0 15px #00ffcc; box-shadow: 0 0 20px rgba(0, 255, 204, 0.4);">⏸<br>PAUSE</div>
   </div>
 </div>
+<div id="pauseBtn" class="mobile-btn">⏸<br>PAUSE</div>
         <div id="easterEggHint">⚡ CHARGE READY — SPACE: FLY • SHIFT: SHIELD ⚡</div>
         <div id="waveAnnounce"></div>
         <div id="startScreen">
             <div class="title">MECH <span>WARS</span></div>
             <div class="subtitle">ALIEN PLANET • ROBOT UPRISING</div>
-            <div class="instructions">
-                <span>[MOUSE]</span> — Aim gun (gun follows cursor)<br>
+            <div class="instructions" id="desktopInstructions">
+                <span>[MOUSE]</span> — Aim gun<br>
                 <span>[CLICK / F]</span> — Shoot<br>
-                <span>[D-PAD / WASD]</span> — Move<br>
+                <span>[WASD / ARROWS]</span> — Move<br>
                 <span>[SPACE]</span> — Jetpack &nbsp; <span>[SHIFT]</span> — Shield<br>
-                <span>[ESC / PAUSE]</span> — Pause game
+                <span>[ESC / P]</span> — Pause
+            </div>
+            <div class="instructions" id="mobileInstructions" style="display:none;">
+                <span>[TAP SCREEN]</span> — Aim gun<br>
+                <span>[D-PAD]</span> — Move &amp; Fire<br>
+                <span>[FLY / SHIELD]</span> — Abilities (when charged)
             </div>
             <button class="start-btn" id="startBtn">▶ DEPLOY</button>
         </div>
@@ -140,7 +195,7 @@
     
     <div id="pauseOverlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.65); z-index:50; align-items:center; justify-content:center; flex-direction:column; font-family:system-ui, -apple-system, Segoe UI, Roboto, Arial; color:#d7fff1; text-align:center;">
         <div style="font-size:40px; font-weight:800; letter-spacing:2px;">PAUSED</div>
-        <div style="margin-top:10px; font-size:14px; opacity:0.85;">Press <b>P</b>/<b>Esc</b> or tap <b>PAUSE</b> to resume</div>
+        <div style="margin-top:10px; font-size:14px; opacity:0.85;">Press <b>P</b>/<b>Esc</b> or tap <b>▶ PLAY</b> to resume</div>
     </div>
 <script>
 const AudioSystem = {
@@ -319,6 +374,15 @@ let mobileMoveHeld = false;
 let lmbDownTime = 0, lmbDownX = 0, lmbDownY = 0;
 const fireRate = 320;
 
+// Detect mobile/touch device and show appropriate instructions
+const isTouchDevice = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+if (isTouchDevice) {
+    const desktopInst = document.getElementById('desktopInstructions');
+    const mobileInst = document.getElementById('mobileInstructions');
+    if (desktopInst) desktopInst.style.display = 'none';
+    if (mobileInst) mobileInst.style.display = 'block';
+}
+
 // Unified fire helper (keyboard F + D-pad FIRE). Fires immediately when forced,
 // otherwise respects fireRate in the main update loop.
 function fireOneRocket(force=false) {
@@ -326,9 +390,9 @@ function fireOneRocket(force=false) {
     const now = Date.now();
     if (!force && (now - lastFireTime) <= fireRate) return;
 
-    // SIMPLE: Fire from player toward aim point
-    const gunX = player.x + (player.facingRight ? 40 : -40);
-    const gunY = player.y - player.height * 0.35;
+    // Fire from player's gun side toward the aim point
+    const gunX = player.x + (player.facingRight ? 45 : -45);
+    const gunY = player.y - player.height * 0.3;
 
     // Aim reticle is stored in screen coords; convert X to world coords via camX.
     const targetX = (Number.isFinite(aimX) ? aimX : mouseX) + camX;
@@ -497,12 +561,7 @@ function drawPlayer(x, y, width, height, legAngle, isFlying, facingRight, armAng
         ctx.restore();
     }
 
-    // ===== Legs (hydraulic, chunky) =====
-    const hipY = height * 0.05;
-    const legSpan = width * 0.19;
-    const upperH = height * 0.33; // longer legs
-    const lowerH = height * 0.35; // longer legs
-
+    // Steel gradient helper function
     function steelGrad(x0,x1) {
         const g = ctx.createLinearGradient(x0,0,x1,0);
         g.addColorStop(0, steelDark);
@@ -512,51 +571,58 @@ function drawPlayer(x, y, width, height, legAngle, isFlying, facingRight, armAng
         return g;
     }
 
-    for (let side = -1; side <= 1; side += 2) {
-        ctx.save();
-        ctx.translate(side * legSpan, hipY);
-        ctx.rotate(legAngle * side * 0.35);
+    // ===== Legs (hydraulic, chunky) - Only visible when not flying =====
+    if (!isFlying) {
+        const hipY = height * 0.05;
+        const legSpan = width * 0.19;
+        const upperH = height * 0.33; // longer legs
+        const lowerH = height * 0.35; // longer legs
 
-        // Upper leg block
-        ctx.fillStyle = steelGrad(-18, 18);
-        ctx.beginPath();
-        ctx.roundRect(-14, -6, 28, upperH, 6);
-        ctx.fill();
+        for (let side = -1; side <= 1; side += 2) {
+            ctx.save();
+            ctx.translate(side * legSpan, hipY);
+            ctx.rotate(legAngle * side * 0.35);
 
-        // Pistons
-        ctx.strokeStyle = 'rgba(200,220,255,0.22)';
-        ctx.lineWidth = 3;
-        ctx.beginPath();
-        ctx.moveTo(-10, 8);
-        ctx.lineTo(-16, upperH - 10);
-        ctx.moveTo(10, 8);
-        ctx.lineTo(16, upperH - 10);
-        ctx.stroke();
+            // Upper leg block
+            ctx.fillStyle = steelGrad(-18, 18);
+            ctx.beginPath();
+            ctx.roundRect(-14, -6, 28, upperH, 6);
+            ctx.fill();
 
-        // Knee joint
-        ctx.fillStyle = steelLite;
-        ctx.beginPath();
-        ctx.arc(0, upperH + 2, 10, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.save();
-        ctx.shadowColor = trim; ctx.shadowBlur = 14;
-        ctx.fillStyle = 'rgba(0,255,204,0.75)';
-        ctx.beginPath();
-        ctx.arc(0, upperH + 2, 4, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.restore();
+            // Pistons
+            ctx.strokeStyle = 'rgba(200,220,255,0.22)';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.moveTo(-10, 8);
+            ctx.lineTo(-16, upperH - 10);
+            ctx.moveTo(10, 8);
+            ctx.lineTo(16, upperH - 10);
+            ctx.stroke();
 
-        // Lower leg
-        ctx.fillStyle = steelGrad(-16, 16);
-        ctx.beginPath();
-        ctx.roundRect(-12, upperH, 24, lowerH, 6);
-        ctx.fill();
+            // Knee joint
+            ctx.fillStyle = steelLite;
+            ctx.beginPath();
+            ctx.arc(0, upperH + 2, 10, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.save();
+            ctx.shadowColor = trim; ctx.shadowBlur = 14;
+            ctx.fillStyle = 'rgba(0,255,204,0.75)';
+            ctx.beginPath();
+            ctx.arc(0, upperH + 2, 4, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
 
-        // Shin plate
-        ctx.fillStyle = 'rgba(255,255,255,0.06)';
-        ctx.beginPath();
-        ctx.roundRect(-10, upperH + 10, 20, lowerH - 18, 6);
-        ctx.fill();
+            // Lower leg
+            ctx.fillStyle = steelGrad(-16, 16);
+            ctx.beginPath();
+            ctx.roundRect(-12, upperH, 24, lowerH, 6);
+            ctx.fill();
+
+            // Shin plate
+            ctx.fillStyle = 'rgba(255,255,255,0.06)';
+            ctx.beginPath();
+            ctx.roundRect(-10, upperH + 10, 20, lowerH - 18, 6);
+            ctx.fill();
 
         // Foot
         ctx.fillStyle = steelDark;
@@ -569,7 +635,8 @@ function drawPlayer(x, y, width, height, legAngle, isFlying, facingRight, armAng
         ctx.fill();
 
         ctx.restore();
-    }
+        }
+    } // End of if (!isFlying) for legs
 
     // ===== Torso (chunky mech chest + reactor) =====
     const torsoW = width * 0.62;
@@ -1322,13 +1389,27 @@ function drawMetallicTRex(x, y, width, height, legAngle, facingRight, health, ma
     ctx.fill();
     ctx.stroke();
     
-    // Foot/claw
+    // Spider claw foot - pointed tips
     ctx.fillStyle = metalMid;
     ctx.beginPath();
-    ctx.moveTo(-95*s, 40*s + legMove2 * 0.5);
-    ctx.lineTo(-80*s, 40*s + legMove2 * 0.5);
-    ctx.lineTo(-78*s, 55*s + legMove2 * 0.3);
-    ctx.lineTo(-97*s, 55*s + legMove2 * 0.3);
+    // Main point
+    ctx.moveTo(-87*s, 40*s + legMove2 * 0.5);
+    ctx.lineTo(-90*s, 62*s + legMove2 * 0.3);
+    ctx.lineTo(-85*s, 55*s + legMove2 * 0.3);
+    ctx.closePath();
+    ctx.fill();
+    // Side prong left
+    ctx.beginPath();
+    ctx.moveTo(-92*s, 42*s + legMove2 * 0.5);
+    ctx.lineTo(-100*s, 58*s + legMove2 * 0.3);
+    ctx.lineTo(-94*s, 52*s + legMove2 * 0.3);
+    ctx.closePath();
+    ctx.fill();
+    // Side prong right
+    ctx.beginPath();
+    ctx.moveTo(-82*s, 42*s + legMove2 * 0.5);
+    ctx.lineTo(-78*s, 58*s + legMove2 * 0.3);
+    ctx.lineTo(-80*s, 52*s + legMove2 * 0.3);
     ctx.closePath();
     ctx.fill();
     ctx.restore();
@@ -1357,12 +1438,24 @@ function drawMetallicTRex(x, y, width, height, legAngle, facingRight, health, ma
     ctx.fill();
     ctx.stroke();
     
+    // Spider claw foot - pointed tips
     ctx.fillStyle = metalMid;
     ctx.beginPath();
-    ctx.moveTo(80*s, 40*s + legMove * 0.5);
-    ctx.lineTo(95*s, 40*s + legMove * 0.5);
-    ctx.lineTo(97*s, 55*s + legMove * 0.3);
-    ctx.lineTo(78*s, 55*s + legMove * 0.3);
+    ctx.moveTo(87*s, 40*s + legMove * 0.5);
+    ctx.lineTo(90*s, 62*s + legMove * 0.3);
+    ctx.lineTo(85*s, 55*s + legMove * 0.3);
+    ctx.closePath();
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(82*s, 42*s + legMove * 0.5);
+    ctx.lineTo(78*s, 58*s + legMove * 0.3);
+    ctx.lineTo(80*s, 52*s + legMove * 0.3);
+    ctx.closePath();
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(92*s, 42*s + legMove * 0.5);
+    ctx.lineTo(100*s, 58*s + legMove * 0.3);
+    ctx.lineTo(94*s, 52*s + legMove * 0.3);
     ctx.closePath();
     ctx.fill();
     ctx.restore();
@@ -1446,13 +1539,24 @@ function drawMetallicTRex(x, y, width, height, legAngle, facingRight, health, ma
     ctx.fill();
     ctx.stroke();
     
-    // Front foot
+    // Spider claw foot - pointed tips
     ctx.fillStyle = metalLight;
     ctx.beginPath();
-    ctx.moveTo(-105*s, 50*s + legMove * 0.5);
-    ctx.lineTo(-90*s, 50*s + legMove * 0.5);
-    ctx.lineTo(-88*s, 65*s + legMove * 0.3);
-    ctx.lineTo(-107*s, 65*s + legMove * 0.3);
+    ctx.moveTo(-97*s, 50*s + legMove * 0.5);
+    ctx.lineTo(-100*s, 72*s + legMove * 0.3);
+    ctx.lineTo(-95*s, 65*s + legMove * 0.3);
+    ctx.closePath();
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(-102*s, 52*s + legMove * 0.5);
+    ctx.lineTo(-110*s, 68*s + legMove * 0.3);
+    ctx.lineTo(-104*s, 62*s + legMove * 0.3);
+    ctx.closePath();
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(-92*s, 52*s + legMove * 0.5);
+    ctx.lineTo(-88*s, 68*s + legMove * 0.3);
+    ctx.lineTo(-90*s, 62*s + legMove * 0.3);
     ctx.closePath();
     ctx.fill();
     ctx.restore();
@@ -1481,12 +1585,24 @@ function drawMetallicTRex(x, y, width, height, legAngle, facingRight, health, ma
     ctx.fill();
     ctx.stroke();
     
+    // Spider claw foot - pointed tips
     ctx.fillStyle = metalLight;
     ctx.beginPath();
-    ctx.moveTo(100*s, 50*s + legMove2 * 0.5);
-    ctx.lineTo(115*s, 50*s + legMove2 * 0.5);
-    ctx.lineTo(117*s, 65*s + legMove2 * 0.3);
-    ctx.lineTo(98*s, 65*s + legMove2 * 0.3);
+    ctx.moveTo(107*s, 50*s + legMove2 * 0.5);
+    ctx.lineTo(110*s, 72*s + legMove2 * 0.3);
+    ctx.lineTo(105*s, 65*s + legMove2 * 0.3);
+    ctx.closePath();
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(102*s, 52*s + legMove2 * 0.5);
+    ctx.lineTo(98*s, 68*s + legMove2 * 0.3);
+    ctx.lineTo(100*s, 62*s + legMove2 * 0.3);
+    ctx.closePath();
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(112*s, 52*s + legMove2 * 0.5);
+    ctx.lineTo(120*s, 68*s + legMove2 * 0.3);
+    ctx.lineTo(114*s, 62*s + legMove2 * 0.3);
     ctx.closePath();
     ctx.fill();
     ctx.restore();
@@ -1555,23 +1671,6 @@ function drawMetallicTRex(x, y, width, height, legAngle, facingRight, health, ma
     
     ctx.shadowBlur = 0;
     ctx.restore();
-
-    // === SECONDARY SENSORS (red instead of orange) ===
-    const sensors = [[-30*s, -65*s], [45*s, -70*s], [-45*s, -45*s]];
-    sensors.forEach(([sx, sy]) => {
-        ctx.fillStyle = '#0a0a0a';
-        ctx.beginPath();
-        ctx.arc(sx, sy, 6*s, 0, Math.PI * 2);
-        ctx.fill();
-        
-        ctx.fillStyle = '#cc0000';
-        ctx.shadowColor = '#ff0000';
-        ctx.shadowBlur = 6;
-        ctx.beginPath();
-        ctx.arc(sx, sy, 3*s, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.shadowBlur = 0;
-    });
 
     // === HEALTH BAR ===
     // Turn off neon glow for clean health bar
@@ -1926,9 +2025,9 @@ function fireRocketFromPlayerOnce() {
         aimYw = player.y - player.height * 0.35;
     }
 
-    // SIMPLE: Fire from player center-right/left toward aim point
-    const gunX = player.x + (player.facingRight ? 40 : -40);
-    const gunY = player.y - player.height * 0.35;
+    // Fire from player's gun side toward the aim point
+    const gunX = player.x + (player.facingRight ? 45 : -45);
+    const gunY = player.y - player.height * 0.3;
 
     fireRocket(gunX, gunY, aimXw, aimYw);
     lastFireTime = now;
@@ -2558,53 +2657,49 @@ function draw() {
     ctx.stroke();
     ctx.restore();
     
-    // Planet body
+    // Planet body - Gassy swirling surface like Venus
     const bluePlanetGrad = ctx.createRadialGradient(
         -bluePlanetR * 0.3, -bluePlanetR * 0.3, bluePlanetR * 0.1,
         0, 0, bluePlanetR
     );
-    bluePlanetGrad.addColorStop(0, '#7ec8e3');  // Light blue highlight
-    bluePlanetGrad.addColorStop(0.3, '#4a9ebe'); // Mid blue
-    bluePlanetGrad.addColorStop(0.6, '#2d7aa3'); // Deeper blue
-    bluePlanetGrad.addColorStop(0.85, '#1a5a80'); // Dark blue
-    bluePlanetGrad.addColorStop(1, '#0d3a55');   // Shadow edge
+    bluePlanetGrad.addColorStop(0, '#a8d8ff');  // Light blue highlight
+    bluePlanetGrad.addColorStop(0.25, '#6ab8e8'); // Mid blue
+    bluePlanetGrad.addColorStop(0.5, '#4a98c8'); // Deeper blue
+    bluePlanetGrad.addColorStop(0.75, '#2a78a8'); // Dark blue
+    bluePlanetGrad.addColorStop(1, '#1a5888');   // Shadow edge
     ctx.fillStyle = bluePlanetGrad;
     ctx.beginPath();
     ctx.arc(0, 0, bluePlanetR, 0, Math.PI * 2);
     ctx.fill();
     
-    // Surface bands/storms
+    // Swirling gas bands (Venus-like)
     ctx.save();
     ctx.beginPath();
     ctx.arc(0, 0, bluePlanetR, 0, Math.PI * 2);
     ctx.clip();
     
-    ctx.globalAlpha = 0.15;
-    ctx.fillStyle = '#ffffff';
-    // Horizontal bands
-    for (let i = 0; i < 4; i++) {
-        const bandY = -bluePlanetR * 0.6 + i * bluePlanetR * 0.35;
+    // Multiple swirling cloud bands
+    const gasTime = Date.now() * 0.0001;
+    for (let i = 0; i < 6; i++) {
+        ctx.globalAlpha = 0.12 + (i % 2) * 0.05;
+        ctx.fillStyle = i % 2 === 0 ? '#cceeff' : '#88ccee';
+        const bandY = -bluePlanetR * 0.8 + i * bluePlanetR * 0.3;
+        const waveOffset = Math.sin(gasTime + i * 0.5) * 3;
         ctx.beginPath();
-        ctx.ellipse(0, bandY, bluePlanetR * 1.1, 4 + i * 2, 0, 0, Math.PI * 2);
+        ctx.ellipse(waveOffset, bandY, bluePlanetR * 1.2, 5 + (i % 3) * 2, 0.05 * i, 0, Math.PI * 2);
         ctx.fill();
     }
     
-    // Storm spot
-    ctx.globalAlpha = 0.2;
-    ctx.fillStyle = '#aaddff';
+    // Swirling storm/vortex
+    ctx.globalAlpha = 0.15;
+    ctx.fillStyle = '#ddeeff';
     ctx.beginPath();
-    ctx.ellipse(bluePlanetR * 0.3, bluePlanetR * 0.2, 8, 5, 0.3, 0, Math.PI * 2);
+    ctx.ellipse(bluePlanetR * 0.25, -bluePlanetR * 0.1, 10, 7, 0.4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.ellipse(-bluePlanetR * 0.3, bluePlanetR * 0.3, 8, 5, -0.3, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
-    
-    // Subtle atmosphere rim
-    ctx.globalAlpha = 0.3;
-    ctx.strokeStyle = '#aaddff';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc(0, 0, bluePlanetR + 2, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.globalAlpha = 1;
     
     // Ring in front of planet (front half)
     ctx.save();
@@ -2621,18 +2716,6 @@ function draw() {
     ctx.beginPath();
     ctx.ellipse(0, 0, bluePlanetR * 1.6, bluePlanetR * 0.32, 0, 0, Math.PI);
     ctx.stroke();
-    
-    // Ring particles/sparkle
-    ctx.globalAlpha = 0.6;
-    ctx.fillStyle = '#ffffff';
-    for (let i = 0; i < 20; i++) {
-        const angle = (i / 20) * Math.PI + Math.sin(Date.now() * 0.001 + i) * 0.1;
-        const rx = Math.cos(angle) * (bluePlanetR * 1.8 + (i % 5 - 2) * 3);
-        const ry = Math.sin(angle) * (bluePlanetR * 0.36 + (i % 3 - 1) * 2);
-        ctx.beginPath();
-        ctx.arc(rx, ry, i % 3 === 0 ? 1.5 : 1, 0, Math.PI * 2);
-        ctx.fill();
-    }
     ctx.restore();
     
     ctx.restore();
@@ -3083,12 +3166,12 @@ window.addEventListener('pointerdown', (e) => {
 window.addEventListener('pointermove', (e) => {
     // Drag-adjust aim while pressed:
     // - Touch/Pen: while finger/stylus is down
-    // - Mouse: while primary button is held (click-drag)
-    // Never treat HUD/D-pad as aim.
+    // - Mouse: while primary button is held (click-drag to adjust)
+    // Click to place aim, then it stays locked until you click again
     if (!document.body.classList.contains('inGame')) return;
 
     const t = e.target;
-    if (t && t.closest && (t.closest('#dpad') || t.closest('#hud') || t.closest('#pauseOverlay'))) {
+    if (t && t.closest && (t.closest('#dpad') || t.closest('#hud') || t.closest('#pauseOverlay') || t.closest('#pauseBtn') || t.closest('.mobile-btn'))) {
         return;
     }
 
@@ -3096,7 +3179,7 @@ window.addEventListener('pointermove', (e) => {
     if (aimPointerId !== null && e.pointerId !== aimPointerId) return;
 
     if (e.pointerType === 'mouse') {
-        // Only while primary button held
+        // Only drag-adjust while primary button held
         if ((e.buttons & 1) !== 1) return;
         setAimFromEvent(e);
         return;
@@ -3209,6 +3292,36 @@ function hold(el, downFn, upFn){
         syncDpadVisuals(); 
     } 
   });
+  
+  // Touch event backups for mobile browsers
+  el.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    AudioSystem.resume();
+    if (!isActive) {
+        isActive = true;
+        downFn();
+        el.classList.add('on');
+        syncDpadVisuals();
+    }
+  });
+  el.addEventListener('touchend', (e) => {
+    e.preventDefault();
+    if (isActive) {
+        isActive = false;
+        upFn();
+        el.classList.remove('on');
+        syncDpadVisuals();
+    }
+  });
+  el.addEventListener('touchcancel', (e) => {
+    e.preventDefault();
+    if (isActive) {
+        isActive = false;
+        upFn();
+        el.classList.remove('on');
+        syncDpadVisuals();
+    }
+  });
 }
 
 function syncDpadVisuals(){
@@ -3268,9 +3381,9 @@ function doFire() {
     if (!gameRunning || paused) return;
     AudioSystem.resume();
     
-    // SIMPLE: Fire from player toward aim point
-    const gunX = player.x + (player.facingRight ? 40 : -40);
-    const gunY = player.y - player.height * 0.35;
+    // Fire from player's gun side toward the aim point
+    const gunX = player.x + (player.facingRight ? 45 : -45);
+    const gunY = player.y - player.height * 0.3;
     
     // Shoot at aim reticle position
     const targetX = aimX + camX;
@@ -3294,8 +3407,40 @@ btnFire.addEventListener('pointerup', (e) => { e?.preventDefault?.(); stopFire()
 btnFire.addEventListener('pointerleave', (e) => { e?.preventDefault?.(); stopFire(); });
 btnFire.addEventListener('pointercancel', (e) => { e?.preventDefault?.(); stopFire(); });
 
+// Touch backup for fire button (some mobile browsers need this)
+btnFire.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    AudioSystem.resume();
+    isFiring = true;
+    fireOneRocket(true);
+    btnFire.classList.add('on');
+});
+btnFire.addEventListener('touchend', (e) => {
+    e.preventDefault();
+    isFiring = false;
+    btnFire.classList.remove('on');
+    syncDpadVisuals();
+});
+btnFire.addEventListener('touchcancel', (e) => {
+    e.preventDefault();
+    isFiring = false;
+    btnFire.classList.remove('on');
+    syncDpadVisuals();
+});
 
-pauseBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); togglePause(); });
+
+pauseBtn.addEventListener('pointerdown', (e) => { 
+    e.preventDefault(); 
+    e.stopPropagation();
+    togglePause(); 
+});
+
+// Touch backup for pause button
+pauseBtn.addEventListener('touchstart', (e) => { 
+    e.preventDefault(); 
+    e.stopPropagation();
+    togglePause(); 
+});
 
 // Abilities buttons: shown only when charged (handled in updateUI). Pointerdown triggers ability.
 flyBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); AudioSystem.resume(); activateFly(); });
@@ -3336,13 +3481,8 @@ function updateMovementFromDpad(){
 flyBtn.addEventListener('touchstart', (e) => { e.preventDefault(); activateFlight(); flyBtn.classList.add('active'); });
 shieldBtn.addEventListener('touchstart', (e) => { e.preventDefault(); activateShield(); shieldBtn.classList.add('active'); });
 flyBtn.addEventListener('touchend', (e) => { e.preventDefault(); flyBtn.classList.remove('active'); });
-shieldBtn.addEventListener('touchend', (e) => { e.preventDefault();
-if (pauseBtn) {
-    const onPause = (e) => { if (e) e.preventDefault(); AudioSystem.resume(); togglePause(); pauseBtn.classList.toggle('active', paused); };
-    pauseBtn.addEventListener('touchstart', onPause);
-    pauseBtn.addEventListener('click', onPause);
-}
- shieldBtn.classList.remove('active'); });
+shieldBtn.addEventListener('touchend', (e) => { e.preventDefault(); shieldBtn.classList.remove('active'); });
+
 canvas.addEventListener('touchmove', (e) => { 
     e.preventDefault(); 
     const touch = e.touches[0]; 
@@ -3363,10 +3503,33 @@ document.getElementById('soundToggle').addEventListener('click', () => { AudioSy
 document.getElementById('startBtn').addEventListener('click', startGame);
 document.getElementById('restartBtn').addEventListener('click', startGame);
 
+let pauseStartTime = 0;
+
 function togglePause() {
     paused = !paused;
     const overlay = document.getElementById('pauseOverlay');
     if (overlay) overlay.style.display = paused ? 'flex' : 'none';
+    // Update button to show pause or play
+    const pauseBtn = document.getElementById('pauseBtn');
+    if (pauseBtn) {
+        pauseBtn.innerHTML = paused ? '▶<br>PLAY' : '⏸<br>PAUSE';
+    }
+    
+    if (paused) {
+        // Record when we paused
+        pauseStartTime = Date.now();
+    } else {
+        // Calculate how long we were paused and extend all timers
+        const pauseDuration = Date.now() - pauseStartTime;
+        if (pauseDuration > 0) {
+            // Extend shield timer
+            if (player.shieldUntil > 0) player.shieldUntil += pauseDuration;
+            // Extend fly timer
+            if (player.flyEndTime > 0) player.flyEndTime += pauseDuration;
+            // Extend invulnerability timer
+            if (player.invulnUntil > 0) player.invulnUntil += pauseDuration;
+        }
+    }
 }
 
 AudioSystem.init(); initPlayer(); requestAnimationFrame(gameLoop);
