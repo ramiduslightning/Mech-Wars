@@ -129,11 +129,11 @@
     position: fixed; 
     bottom: 25px; 
     right: 115px; 
-    background: rgba(0, 255, 204, 0.2); 
-    border-color: #00ffcc; 
-    color: #00ffcc; 
-    text-shadow: 0 0 15px #00ffcc; 
-    box-shadow: 0 0 20px rgba(0, 255, 204, 0.4); 
+    background: rgba(80, 255, 140, 0.2); 
+    border-color: #50FF8C; 
+    color: #50FF8C; 
+    text-shadow: 0 0 15px #50FF8C; 
+    box-shadow: 0 0 20px rgba(80, 255, 140, 0.4); 
     z-index: 60;
 }
 
@@ -259,6 +259,55 @@ const AudioSystem = {
         noise.start(t);
     },
     
+    playSpiderLaser() {
+        if (!this.enabled || !this.ctx) return;
+        const t = this.ctx.currentTime;
+        
+        // Deep ominous charge-up sound
+        const bass = this.ctx.createOscillator();
+        const bassGain = this.ctx.createGain();
+        bass.connect(bassGain);
+        bassGain.connect(this.ctx.destination);
+        
+        bass.type = 'sine';
+        bass.frequency.setValueAtTime(40, t);
+        bass.frequency.exponentialRampToValueAtTime(120, t + 0.3);
+        bassGain.gain.setValueAtTime(0.3, t);
+        bassGain.gain.exponentialRampToValueAtTime(0.01, t + 0.4);
+        bass.start(t);
+        bass.stop(t + 0.4);
+        
+        // Scary metallic screech
+        const screech = this.ctx.createOscillator();
+        const screechGain = this.ctx.createGain();
+        screech.connect(screechGain);
+        screechGain.connect(this.ctx.destination);
+        
+        screech.type = 'sawtooth';
+        screech.frequency.setValueAtTime(800, t + 0.15);
+        screech.frequency.exponentialRampToValueAtTime(2000, t + 0.25);
+        screech.frequency.exponentialRampToValueAtTime(400, t + 0.4);
+        screechGain.gain.setValueAtTime(0, t + 0.15);
+        screechGain.gain.linearRampToValueAtTime(0.2, t + 0.2);
+        screechGain.gain.exponentialRampToValueAtTime(0.01, t + 0.4);
+        screech.start(t + 0.15);
+        screech.stop(t + 0.4);
+        
+        // High-pitched energy whine
+        const whine = this.ctx.createOscillator();
+        const whineGain = this.ctx.createGain();
+        whine.connect(whineGain);
+        whineGain.connect(this.ctx.destination);
+        
+        whine.type = 'triangle';
+        whine.frequency.setValueAtTime(1500, t);
+        whine.frequency.linearRampToValueAtTime(3000, t + 0.3);
+        whineGain.gain.setValueAtTime(0.15, t);
+        whineGain.gain.exponentialRampToValueAtTime(0.01, t + 0.35);
+        whine.start(t);
+        whine.stop(t + 0.35);
+    },
+    
     playExplosion(big = false) {
         if (!this.enabled || !this.ctx) return;
         const t = this.ctx.currentTime;
@@ -354,7 +403,7 @@ let nextEncounterX = 650; // world x threshold to trigger the next group
 
 const FLY_CHARGE_MAX = 100, FLY_DURATION = 15000;
 const SHIELD_DURATION = 15000, SHIELD_HITS = 4;
-const LASER_TELEGRAPH_MS = 450;
+const LASER_TELEGRAPH_MS = 250; // Reduced for faster, more obvious attacks
 const IFRAME_MS = 800;
 
 function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
@@ -1164,163 +1213,185 @@ function drawHumanoidBot(x, y, width, height, legAngle, facingRight, health, max
     ctx.globalAlpha = 0.5;
     ctx.fillStyle = 'rgba(0,0,0,0.35)';
     ctx.beginPath();
-    ctx.ellipse(0, height*0.52, width*0.42, 10, 0, 0, Math.PI*2);
+    ctx.ellipse(0, height*0.52, width*0.52, 12, 0, 0, Math.PI*2);
     ctx.fill();
     ctx.globalAlpha = 1;
 
-    // Metallic palette
-    const steel1 = '#c9d2de';
-    const steel2 = '#3b4656';
-    const steel3 = '#0f141c';
+    // Metallic palette - darker for spider look
+    const steel1 = '#404040';  // Dark gray
+    const steel2 = '#2a2a2a';  // Darker gray
+    const steel3 = '#0f0f0f';  // Almost black
+    const redGlow = '#ff4444'; // Red accent
 
-    // Legs
-    for (const sgn of [-1, 1]) {
-        const hipX = sgn * width*0.18;
-        const hipY = height*0.18;
-        const kneeX = hipX + sgn * (6 + Math.sin(legAngle)*8);
-        const kneeY = hipY + height*0.22;
-        const footX = hipX + sgn * (10 + Math.sin(legAngle)*10);
-        const footY = hipY + height*0.48;
+    const s = width / 72; // Scale factor
+    const legMove = Math.sin(legAngle) * 8 * s;
+    const legMove2 = Math.sin(legAngle + Math.PI) * 8 * s;
 
+    // === SPIDER LEGS (4 legs total) ===
+    // Back legs (drawn first, behind body)
+    for (const side of [-1, 1]) {
+        ctx.save();
+        ctx.strokeStyle = steel2;
+        ctx.lineWidth = 5;
         ctx.lineCap = 'round';
-        ctx.strokeStyle = steel2;
-        ctx.lineWidth = 10;
+        
+        const hipX = side * width * 0.25;
+        const hipY = -height * 0.15;
+        const kneeX = side * width * 0.5 + (side * legMove2);
+        const kneeY = height * 0.1;
+        const footX = side * width * 0.4 + (side * legMove2 * 0.7);
+        const footY = height * 0.52;
+        
+        // Upper leg
         ctx.beginPath();
         ctx.moveTo(hipX, hipY);
         ctx.lineTo(kneeX, kneeY);
+        ctx.stroke();
+        
+        // Lower leg
+        ctx.strokeStyle = steel3;
+        ctx.beginPath();
+        ctx.moveTo(kneeX, kneeY);
         ctx.lineTo(footX, footY);
         ctx.stroke();
+        
+        // Joint
+        ctx.fillStyle = steel1;
+        ctx.beginPath();
+        ctx.arc(kneeX, kneeY, 4, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Foot claw (3 prongs)
+        ctx.fillStyle = steel3;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(footX, footY);
+        ctx.lineTo(footX - side * 8, footY + 10);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(footX, footY);
+        ctx.lineTo(footX, footY + 12);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(footX, footY);
+        ctx.lineTo(footX + side * 8, footY + 10);
+        ctx.stroke();
+        
+        ctx.restore();
+    }
 
-        ctx.strokeStyle = 'rgba(210,230,255,0.20)';
-        ctx.lineWidth = 2;
+    // === TANK BODY (angular, compact) ===
+    const bodyW = width * 0.6;
+    const bodyH = height * 0.35;
+    const bodyY = -height * 0.25;
+    
+    // Main body gradient
+    const bodyGrad = ctx.createLinearGradient(-bodyW/2, bodyY, bodyW/2, bodyY + bodyH);
+    bodyGrad.addColorStop(0, steel1);
+    bodyGrad.addColorStop(0.5, steel2);
+    bodyGrad.addColorStop(1, steel3);
+    ctx.fillStyle = bodyGrad;
+    ctx.beginPath();
+    ctx.moveTo(-bodyW/2, bodyY);
+    ctx.lineTo(bodyW/2, bodyY);
+    ctx.lineTo(bodyW/2 - 8, bodyY + bodyH);
+    ctx.lineTo(-bodyW/2 + 8, bodyY + bodyH);
+    ctx.closePath();
+    ctx.fill();
+    
+    // Armor plates
+    ctx.strokeStyle = 'rgba(0,0,0,0.5)';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    
+    // Top turret/sensor dome
+    const domeW = bodyW * 0.4;
+    const domeH = height * 0.25;
+    const domeY = bodyY - domeH + 5;
+    ctx.fillStyle = steel2;
+    ctx.beginPath();
+    ctx.ellipse(0, domeY + domeH/2, domeW/2, domeH/2, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = steel1;
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    // Front legs (drawn on top)
+    for (const side of [-1, 1]) {
+        ctx.save();
+        ctx.strokeStyle = steel1;
+        ctx.lineWidth = 5;
+        ctx.lineCap = 'round';
+        
+        const hipX = side * width * 0.15;
+        const hipY = -height * 0.05;
+        const kneeX = side * width * 0.45 + (side * legMove);
+        const kneeY = height * 0.15;
+        const footX = side * width * 0.35 + (side * legMove * 0.7);
+        const footY = height * 0.52;
+        
+        // Upper leg
         ctx.beginPath();
         ctx.moveTo(hipX, hipY);
         ctx.lineTo(kneeX, kneeY);
+        ctx.stroke();
+        
+        // Lower leg  
+        ctx.strokeStyle = steel2;
+        ctx.beginPath();
+        ctx.moveTo(kneeX, kneeY);
         ctx.lineTo(footX, footY);
         ctx.stroke();
-
-        // Foot plate
+        
+        // Joint
+        ctx.fillStyle = steel1;
+        ctx.beginPath();
+        ctx.arc(kneeX, kneeY, 4, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Foot claw (3 prongs)
         ctx.fillStyle = steel3;
+        ctx.lineWidth = 3;
         ctx.beginPath();
-        ctx.roundRect(footX-14, footY-4, 28, 10, 5);
-        ctx.fill();
-    }
-
-    // Torso (humanoid silhouette: chest + abdomen + pelvis, not a single box)
-    const torsoY = -height*0.03;
-    const torsoW = width*0.56; // used for shoulders/arms spacing
-
-
-    // Pelvis
-    const pelvisW = width*0.46;
-    const pelvisH = height*0.10;
-    const pelvisY = torsoY + height*0.24;
-    const pelvisGrad = ctx.createLinearGradient(-pelvisW/2, pelvisY, pelvisW/2, pelvisY+pelvisH);
-    pelvisGrad.addColorStop(0, steel2);
-    pelvisGrad.addColorStop(0.5, steel1);
-    pelvisGrad.addColorStop(1, steel3);
-    ctx.fillStyle = pelvisGrad;
-    ctx.beginPath();
-    ctx.roundRect(-pelvisW/2, pelvisY, pelvisW, pelvisH, 8);
-    ctx.fill();
-
-    // Abdomen (narrow waist)
-    const abWTop = width*0.42;
-    const abWBot = width*0.38;
-    const abH = height*0.14;
-    const abY = torsoY + height*0.12;
-    const abGrad = ctx.createLinearGradient(-abWTop/2, abY, abWTop/2, abY+abH);
-    abGrad.addColorStop(0, steel3);
-    abGrad.addColorStop(0.45, steel2);
-    abGrad.addColorStop(1, steel3);
-    ctx.fillStyle = abGrad;
-    ctx.beginPath();
-    ctx.moveTo(-abWTop/2, abY);
-    ctx.lineTo(abWTop/2, abY);
-    ctx.lineTo(abWBot/2, abY+abH);
-    ctx.lineTo(-abWBot/2, abY+abH);
-    ctx.closePath();
-    ctx.fill();
-
-    // Chest (broader, slightly trapezoidal)
-    const chestWTop = width*0.64;
-    const chestWBot = width*0.54;
-    const chestH = height*0.22;
-    const chestY = torsoY - height*0.02;
-    const chestGrad = ctx.createLinearGradient(-chestWTop/2, chestY, chestWTop/2, chestY+chestH);
-    chestGrad.addColorStop(0, steel1);
-    chestGrad.addColorStop(0.55, steel2);
-    chestGrad.addColorStop(1, steel3);
-    ctx.fillStyle = chestGrad;
-    ctx.beginPath();
-    ctx.moveTo(-chestWTop/2, chestY+6);
-    ctx.lineTo(chestWTop/2, chestY+6);
-    ctx.lineTo(chestWBot/2, chestY+chestH);
-    ctx.lineTo(-chestWBot/2, chestY+chestH);
-    ctx.closePath();
-    ctx.fill();
-
-    // Center plate + bolts
-    ctx.fillStyle = 'rgba(10,14,20,0.65)';
-    ctx.beginPath();
-    ctx.roundRect(-chestWBot*0.16, chestY+chestH*0.28, chestWBot*0.32, chestH*0.52, 8);
-    ctx.fill();
-    ctx.fillStyle = 'rgba(255,255,255,0.12)';
-    for (let i=0;i<5;i++){
-        ctx.beginPath();
-        ctx.arc(-chestWBot*0.12 + i*(chestWBot*0.06), chestY+chestH*0.38, 1.4, 0, Math.PI*2);
-        ctx.fill();
-    }
-    // Shoulder plates
-    for (const sgn of [-1, 1]) {
-        ctx.fillStyle = 'rgba(20,26,36,0.9)';
-        ctx.beginPath();
-        ctx.roundRect(sgn*(torsoW*0.48)-14, torsoY+6, 28, 18, 7);
-        ctx.fill();
-    }
-
-    // Arms (humanoid)
-    for (const sgn of [-1, 1]) {
-        const ax0 = sgn * (torsoW*0.5);
-        const ay0 = torsoY + 18;
-        const ax1 = sgn * (torsoW*0.78);
-        const ay1 = torsoY + 42;
-        const ax2 = sgn * (torsoW*0.65);
-        const ay2 = torsoY + 74;
-
-        ctx.strokeStyle = steel2;
-        ctx.lineWidth = 8;
-        ctx.beginPath();
-        ctx.moveTo(ax0, ay0);
-        ctx.lineTo(ax1, ay1);
-        ctx.lineTo(ax2, ay2);
+        ctx.moveTo(footX, footY);
+        ctx.lineTo(footX - side * 8, footY + 10);
         ctx.stroke();
-
-        ctx.fillStyle = steel3;
         ctx.beginPath();
-        ctx.roundRect(ax2-10, ay2-6, 20, 12, 4);
-        ctx.fill();
+        ctx.moveTo(footX, footY);
+        ctx.lineTo(footX, footY + 12);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(footX, footY);
+        ctx.lineTo(footX + side * 8, footY + 10);
+        ctx.stroke();
+        
+        ctx.restore();
     }
 
-    // Head
-    const headW = width*0.34;
-    const headH = height*0.22;
-    const headY = torsoY - headH + 6;
-    const headGrad = ctx.createLinearGradient(-headW/2, headY, headW/2, headY+headH);
-    headGrad.addColorStop(0, steel1);
-    headGrad.addColorStop(1, steel3);
-    ctx.fillStyle = headGrad;
-    ctx.beginPath();
-    ctx.roundRect(-headW/2, headY, headW, headH, 10);
-    ctx.fill();
-
-    // Red visor / eyes
+    // Red sensor eyes / targeting system
+    ctx.save();
+    ctx.shadowColor = redGlow;
+    ctx.shadowBlur = 15;
+    ctx.fillStyle = redGlow;
     ctx.globalAlpha = 0.9;
-    ctx.fillStyle = 'rgba(255,40,55,0.9)';
+    for (const side of [-1, 1]) {
+        ctx.beginPath();
+        ctx.arc(side * domeW * 0.25, domeY + domeH * 0.5, 4, 0, Math.PI * 2);
+        ctx.fill();
+    }
+    ctx.restore();
+    
+    // Panel details on body
+    ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+    ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.roundRect(-headW*0.30, headY + headH*0.38, headW*0.60, headH*0.22, 6);
-    ctx.fill();
-    ctx.globalAlpha = 1;
+    ctx.moveTo(-bodyW * 0.3, bodyY + 5);
+    ctx.lineTo(-bodyW * 0.3, bodyY + bodyH - 5);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(bodyW * 0.3, bodyY + 5);
+    ctx.lineTo(bodyW * 0.3, bodyY + bodyH - 5);
+    ctx.stroke();
 
     // Health bar
     const hbY = -height * 0.62;
@@ -1344,10 +1415,10 @@ function drawMetallicTRex(x, y, width, height, legAngle, facingRight, health, ma
     const now = Date.now();
     const s = width / 100;
     
-    // Colors
-    const metalDark = '#1a1a22';
-    const metalMid = '#2a2a35';
-    const metalLight = '#3a3a48';
+    // Colors - DARKER BLACK METAL
+    const metalDark = '#0a0a0a';   // Near black
+    const metalMid = '#1a1a1a';    // Dark black-gray
+    const metalLight = '#2a2a2a';  // Slightly lighter black
     const glowRed = '#ff0000';
     
     // === RED NEON GLOW - like player's green glow ===
@@ -1702,6 +1773,51 @@ function drawMetallicTRex(x, y, width, height, legAngle, facingRight, health, ma
         ctx.lineWidth = 1;
         ctx.strokeRect(barX, barY, barW, barH);
     }
+    
+    // === ELECTRICITY ARCS (scary effect) - ALL AROUND BODY AND LEGS ===
+    const elecTime = now * 0.003;
+    
+    // Draw 3-5 random electricity arcs around the body - MORE FREQUENT
+    if (Math.sin(elecTime) > -0.3) {  // Appears more often (was > 0.2)
+        ctx.save();
+        ctx.strokeStyle = '#ff0000';
+        ctx.shadowColor = '#ff0000';
+        ctx.shadowBlur = 25;  // Brighter glow
+        ctx.lineWidth = 3;    // Thicker arcs
+        ctx.globalAlpha = 0.7 + Math.sin(elecTime * 2) * 0.3;
+        
+        const numArcs = 3 + Math.floor(Math.random() * 3);  // 3-5 arcs
+        for (let i = 0; i < numArcs; i++) {
+            // Random start point anywhere on the spider tank (including legs)
+            // Wider range to cover legs and entire body
+            const startX = (Math.random() - 0.5) * width * 1.4;  // Wider for legs
+            const startY = -height * (Math.random() * 0.9);  // From top to legs
+            
+            ctx.beginPath();
+            ctx.moveTo(startX, startY);
+            
+            // Jagged lightning path - MORE SEGMENTS, circulate around body
+            let px = startX, py = startY;
+            const segments = 4 + Math.floor(Math.random() * 4);  // 4-7 segments
+            for (let j = 0; j < segments; j++) {
+                // Make arcs wrap around the body/legs
+                const nx = px + (Math.random() - 0.5) * 60;  // Wider spread
+                const ny = py + (Math.random() - 0.5) * 50;
+                ctx.lineTo(nx, ny);
+                px = nx;
+                py = ny;
+            }
+            ctx.stroke();
+            
+            // Bright spark at end - BIGGER
+            ctx.fillStyle = '#ffffff';
+            ctx.shadowBlur = 20;
+            ctx.beginPath();
+            ctx.arc(px, py, 5, 0, Math.PI * 2);  // Bigger spark
+            ctx.fill();
+        }
+        ctx.restore();
+    }
 
     ctx.restore();
 }
@@ -1777,6 +1893,37 @@ function drawRocket(rocket) {
     ctx.arc(17, 0, 1.8, 0, Math.PI*2);
     ctx.fill();
     ctx.restore();
+    
+    // SECOND PLANET - Red/Orange gas giant
+    const planet2X = canvas.width * 0.75;
+    const planet2Y = canvas.height * 0.15;
+    const p2r = 50;
+    const planet2Grad = ctx.createRadialGradient(planet2X - p2r*0.3, planet2Y - p2r*0.3, p2r*0.1, planet2X, planet2Y, p2r);
+    planet2Grad.addColorStop(0, '#ffaa44');
+    planet2Grad.addColorStop(0.4, '#ff6622');
+    planet2Grad.addColorStop(0.75, '#cc2200');
+    planet2Grad.addColorStop(1, '#330000');
+    ctx.fillStyle = planet2Grad;
+    ctx.beginPath();
+    ctx.arc(planet2X, planet2Y, p2r, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Red planet bands
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(planet2X, planet2Y, p2r, 0, Math.PI*2);
+    ctx.clip();
+    ctx.globalAlpha = 0.25;
+    for (let b=0; b<8; b++){
+        const by = planet2Y - p2r + b*(p2r*0.25);
+        const band = ctx.createLinearGradient(planet2X - p2r, by, planet2X + p2r, by);
+        band.addColorStop(0, 'rgba(255,255,255,0)');
+        band.addColorStop(0.5, 'rgba(255,100,50,0.3)');
+        band.addColorStop(1, 'rgba(255,255,255,0)');
+        ctx.fillStyle = band;
+        ctx.fillRect(planet2X - p2r, by, p2r*2, p2r*0.12);
+    }
+    ctx.restore();
 
     ctx.restore();
 }
@@ -1835,7 +1982,7 @@ function spawnEnemy() {
         chargeTimer: 0,
         isCharging: false,
         // T-Rex always has laser eye attack, bots have 22% chance
-        hasLaser: isTRex ? true : Math.random() < 0.22,
+        hasLaser: isTRex ? true : false, // Only T-Rex has lasers, not regular bots
         lastShot: Date.now() - Math.random()*900,
         shotRate: isTRex ? Math.max(650, 1200 - difficulty * 70 + (Math.random()*300-150)) : Math.max(780, 1500 - difficulty * 85 + (Math.random()*420-210)),
         telegraphUntil: 0,
@@ -1873,7 +2020,7 @@ function spawnDrone() {
         speed: 1.5 + Math.random() * 0.5, // Slower
         bobPhase: Math.random() * Math.PI * 2,
         lastShot: Date.now(),
-        shotRate: 2500 + Math.random() * 1500
+        shotRate: 800 + Math.random() * 600 // Fire every 0.8-1.4 seconds
     });
 }
 
@@ -2025,9 +2172,41 @@ function fireRocketFromPlayerOnce() {
         aimYw = player.y - player.height * 0.35;
     }
 
-    // Fire from player's gun side toward the aim point
-    const gunX = player.x + (player.facingRight ? 45 : -45);
-    const gunY = player.y - player.height * 0.3;
+    // Fire from player's gun barrel tips - EXACTLY matching the drawing code
+    const torsoW = player.width * 0.62;
+    const torsoY = -player.height * 0.34;
+    
+    // Shoulder position in LOCAL player coordinates (same as drawing)
+    const shoulderX = torsoW/2 - 10;
+    const shoulderY = torsoY + 18;
+    
+    // The gun muzzles are at (96, -4) and (96, 4) in the ROTATED arm space
+    // Let's use the center point at (96, 0)
+    const muzzleX = 96;
+    const muzzleY = 0;
+    
+    // Get the clamped arm angle (same as drawing code)
+    const clampedArmAngle = Math.max(-1.2, Math.min(1.2, player.armAngle));
+    
+    // Apply rotation to muzzle position (standard 2D rotation)
+    const rotatedMuzzleX = muzzleX * Math.cos(clampedArmAngle) - muzzleY * Math.sin(clampedArmAngle);
+    const rotatedMuzzleY = muzzleX * Math.sin(clampedArmAngle) + muzzleY * Math.cos(clampedArmAngle);
+    
+    // Add shoulder offset to get position relative to player origin
+    const gunLocalX = shoulderX + rotatedMuzzleX;
+    const gunLocalY = shoulderY + rotatedMuzzleY;
+    
+    // Convert to world coordinates, accounting for sprite flip when facing left
+    let gunX, gunY;
+    if (player.facingRight) {
+        // Normal: just add to player position
+        gunX = player.x + gunLocalX;
+        gunY = player.y + gunLocalY;
+    } else {
+        // Facing left: X is flipped due to scale(-1, 1) in drawing
+        gunX = player.x - gunLocalX;
+        gunY = player.y + gunLocalY;
+    }
 
     fireRocket(gunX, gunY, aimXw, aimYw);
     lastFireTime = now;
@@ -2092,21 +2271,32 @@ function update(deltaTime) {
     
     // Update drones
     drones.forEach(drone => {
-        // Move slowly
-        drone.x -= drone.speed;
+        // Move towards player horizontally
+        const dx = player.x - drone.x;
+        const targetDistance = 350; // Hover at medium range
+        
+        if (Math.abs(dx) > targetDistance) {
+            // Move towards player if too far
+            drone.x += Math.sign(dx) * drone.speed;
+        } else if (Math.abs(dx) < targetDistance - 100) {
+            // Back away if too close
+            drone.x -= Math.sign(dx) * drone.speed * 0.5;
+        }
+        
+        // Bobbing motion
         drone.bobPhase += 0.03;
         drone.y = drone.targetY + Math.sin(drone.bobPhase) * 12;
         
-        // Respawn if too far behind
-        if (drone.x < camX - 100) {
-            drone.x = camX + canvas.width + 100;
+        // Respawn if too far off screen
+        if (drone.x < camX - 200 || drone.x > camX + canvas.width + 200) {
+            drone.x = player.x + 400 + Math.random() * 300;
             drone.targetY = 80 + Math.random() * 150;
         }
         
-        // SHOOTING - drones fire at player
+        // SHOOTING - drones fire at player MORE AGGRESSIVELY
         const now = Date.now();
         const distToPlayer = Math.hypot(drone.x - player.x, drone.y - player.y);
-        if (distToPlayer < 500 && now - drone.lastShot > drone.shotRate) {
+        if (distToPlayer < 700 && now - drone.lastShot > drone.shotRate) {
             // Fire a laser bolt at player
             const ang = Math.atan2((player.y - player.height * 0.3) - drone.y, player.x - drone.x);
             const sp = 8;
@@ -2116,13 +2306,16 @@ function update(deltaTime) {
                 vx: Math.cos(ang) * sp,
                 vy: Math.sin(ang) * sp,
                 life: 100,
-                w: 3,
+                w: 5, // Thicker laser beam
                 color: '#ff3333' // Red laser
             });
             drone.lastShot = now;
             
-            // Small flash effect
-            createExplosion(drone.x, drone.y + 10, '#ff3333', 5);
+            // Flash effect for visibility
+            createExplosion(drone.x, drone.y + 10, '#ff3333', 12);
+            
+            // Play laser sound
+            AudioSystem.playHit();
         }
     });
     
@@ -2246,7 +2439,7 @@ if (player.isFlying && Date.now() > player.flyEndTime) { player.isFlying = false
         enemy.facingRight = player.x > enemy.x;
 
         // Ranged attack: some cyber‑rex units fire head lasers (with telegraph)
-        if (enemy.hasLaser && distToPlayer < 650 && !player.isFlying) {
+        if (enemy.hasLaser && distToPlayer < 650) {
             const now = Date.now();
 
             // Start telegraph if ready and not already telegraphing
@@ -2256,8 +2449,10 @@ if (player.isFlying && Date.now() > player.flyEndTime) { player.isFlying = false
 
                 enemy.telegraphUntil = now + LASER_TELEGRAPH_MS;
                 enemy.telegraphData = { muzzleX, muzzleY };
-                // Small warning spark (not huge)
-                createExplosion(muzzleX, muzzleY, '#ff3355', 6);
+                // Large warning explosion so player knows it's about to fire
+                createExplosion(muzzleX, muzzleY, '#ff3355', 18);
+                // Add warning sound
+                AudioSystem.playHit();
             }
 
             // Fire after telegraph
@@ -2269,18 +2464,44 @@ if (player.isFlying && Date.now() > player.flyEndTime) { player.isFlying = false
                     const oy = muzzleY + (k === 0 ? -6 : 6);
                     const ang = Math.atan2((player.y - player.height * 0.35) - oy, player.x - ox);
                     const sp = 12.5;
+                    
+                    // WILD LASER BEAM - thicker, red, dangerous looking
                     enemyLasers.push({
                         x: ox, y: oy,
                         vx: Math.cos(ang) * sp,
                         vy: Math.sin(ang) * sp,
                         life: 75,
-                        w: 2.5
+                        w: 6,  // MUCH THICKER than regular lasers
+                        color: '#ff0000'  // Bright red for spider tank
                     });
                 }
 
                 enemy.lastShot = now;
                 enemy.telegraphUntil = 0;
                 enemy.telegraphData = null;
+                
+                // Play scary spider tank laser sound
+                AudioSystem.playSpiderLaser();
+                
+                // WILD FIRING EFFECT - Multiple explosions
+                createExplosion(muzzleX, muzzleY, '#ff0000', 35);  // Main explosion
+                createExplosion(muzzleX - 15, muzzleY - 10, '#ff6600', 20);  // Side burst
+                createExplosion(muzzleX + 15, muzzleY + 10, '#ffaa00', 20);  // Side burst
+                
+                // Extra sparks for dramatic effect
+                for (let i = 0; i < 10; i++) {
+                    const angle = Math.random() * Math.PI * 2;
+                    const speed = 3 + Math.random() * 5;
+                    sparks.push({
+                        x: muzzleX,
+                        y: muzzleY,
+                        vx: Math.cos(angle) * speed,
+                        vy: Math.sin(angle) * speed,
+                        life: 0.8 + Math.random() * 0.4,
+                        size: 3 + Math.random() * 4,
+                        color: '#ff0000'
+                    });
+                }
             }
         }
         
@@ -2397,8 +2618,8 @@ if (player.isFlying && Date.now() > player.flyEndTime) { player.isFlying = false
         lz.y += lz.vy;
         lz.life--;
 
-        // hit check (simple point vs player body)
-        if (!player.isFlying && Math.abs(lz.x - player.x) < 28 && Math.abs(lz.y - (player.y - player.height * 0.30)) < 36) {
+        // hit check (simple point vs player body) - now works even when flying
+        if (Math.abs(lz.x - player.x) < 28 && Math.abs(lz.y - (player.y - player.height * 0.30)) < 36) {
             const now = Date.now();
 
             if (now < player.invulnUntil) {
@@ -2429,7 +2650,7 @@ if (player.isFlying && Date.now() > player.flyEndTime) { player.isFlying = false
             return false;
         }
 
-        return lz.life > 0 && lz.x > -80 && lz.x < canvas.width + 80 && lz.y > -80 && lz.y < canvas.height + 80;
+        return lz.life > 0 && lz.x > camX - 80 && lz.x < camX + canvas.width + 80 && lz.y > -80 && lz.y < canvas.height + 80;
     });
 
     smokeTrails = smokeTrails.filter(s => { s.x += s.vx; s.y += s.vy; s.vy -= 0.03; s.life -= 0.035; s.size *= 1.03; return s.life > 0; });
@@ -2449,13 +2670,8 @@ function draw() {
     // Space sky (upgraded)
     const t = Date.now() * 0.00005;
 
-    // Deep space gradient + vignette
-    const skyGrad = ctx.createLinearGradient(0, 0, 0, canvas.height);
-    skyGrad.addColorStop(0, '#02020a');
-    skyGrad.addColorStop(0.35, '#06061a');
-    skyGrad.addColorStop(0.7, '#0b0b22');
-    skyGrad.addColorStop(1, '#141432');
-    ctx.fillStyle = skyGrad;
+    // Pure black space
+    ctx.fillStyle = '#000000';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     // Milky-way band
@@ -2501,9 +2717,9 @@ function draw() {
         }
         ctx.globalAlpha = 1;
     }
-    starLayer(120, 0.7, 0.35, 1.1, 0.35);
-    starLayer(90, 1.2, 0.25, 0.8, 0.25);
-    starLayer(60, 1.8, 0.15, 0.55, 0.18);
+    starLayer(150, 0.7, 0.5, 1.4, 0.7);   // More stars, brighter, bigger
+    starLayer(120, 1.2, 0.35, 1.0, 0.55);
+    starLayer(80, 1.8, 0.25, 0.75, 0.40);
 
     // Nebula clouds (layered)
     const neb1 = ctx.createRadialGradient(canvas.width * 0.72, canvas.height * 0.22, 0, canvas.width * 0.72, canvas.height * 0.22, 380);
@@ -2725,74 +2941,152 @@ function draw() {
     ctx.translate(-(camX * 0.18), 0);
 
 
-    // Distant alien mountains + horizon haze
-    ctx.fillStyle = '#151525';
+    // Alien mountain silhouettes (simple, atmospheric)
+    ctx.fillStyle = '#1a1a22';
     ctx.beginPath();
     ctx.moveTo(0, canvas.height - 105);
-    for (let x = 0; x <= canvas.width; x += 70) {
-        const h = 64 + Math.sin(x * 0.014) * 42 + Math.cos(x * 0.009) * 28;
+    
+    // Create mountain peaks with varied heights
+    for (let x = 0; x <= canvas.width; x += 60) {
+        const h = 50 + Math.sin(x * 0.012) * 55 + Math.cos(x * 0.008) * 40 + Math.sin(x * 0.025) * 25;
         ctx.lineTo(x, canvas.height - 105 - h);
     }
+    
     ctx.lineTo(canvas.width, canvas.height);
     ctx.lineTo(0, canvas.height);
+    ctx.closePath();
     ctx.fill();
+    
+    // Add depth with second layer of mountains
+    ctx.globalAlpha = 0.6;
+    ctx.fillStyle = '#252530';
+    ctx.beginPath();
+    ctx.moveTo(0, canvas.height - 105);
+    
+    for (let x = 0; x <= canvas.width; x += 70) {
+        const h = 30 + Math.sin(x * 0.008 + 100) * 35 + Math.cos(x * 0.015 + 50) * 20;
+        ctx.lineTo(x, canvas.height - 105 - h);
+    }
+    
+    ctx.lineTo(canvas.width, canvas.height);
+    ctx.lineTo(0, canvas.height);
+    ctx.closePath();
+    ctx.fill();
+    ctx.globalAlpha = 1;
 
     const haze = ctx.createLinearGradient(0, canvas.height - 220, 0, canvas.height - 60);
-    haze.addColorStop(0, 'rgba(140,160,255,0)');
-    haze.addColorStop(0.55, 'rgba(80,110,200,0.06)');
-    haze.addColorStop(1, 'rgba(10,10,30,0.18)');
+    haze.addColorStop(0, 'rgba(80,80,100,0)');
+    haze.addColorStop(0.55, 'rgba(50,50,70,0.08)');
+    haze.addColorStop(1, 'rgba(10,10,20,0.22)');
     ctx.fillStyle = haze;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     // Alien ground
     ctx.restore();
 
-    // Alien ground (subtle texture)
+    // Pure BLACK metallic ground with steam vents
     const groundGrad = ctx.createLinearGradient(0, canvas.height - 90, 0, canvas.height);
-    groundGrad.addColorStop(0, '#25253a');
-    groundGrad.addColorStop(0.55, '#161629');
-    groundGrad.addColorStop(1, '#070713');
+    groundGrad.addColorStop(0, '#0a0a0a');  // Almost black
+    groundGrad.addColorStop(0.5, '#050505');  // Pure black
+    groundGrad.addColorStop(1, '#000000');  // Black
     ctx.fillStyle = groundGrad;
     ctx.fillRect(0, canvas.height - 90, canvas.width, 90);
 
-    ctx.globalAlpha = 0.08;
-    ctx.fillStyle = '#000';
-    for (let i = 0; i < 140; i++) {
-        const gx = (i * 97.3) % canvas.width;
-        const gy = canvas.height - 90 + (i * 37.7) % 90;
-        ctx.beginPath();
-        ctx.arc(gx, gy, 8 + (i % 9) * 1.7, 0, Math.PI * 2);
-        ctx.fill();
-    }
-    ctx.globalAlpha = 1;
-
-    // vignette
-    const vig = ctx.createRadialGradient(canvas.width/2, canvas.height/2, canvas.height*0.2, canvas.width/2, canvas.height/2, canvas.height*0.85);
-    vig.addColorStop(0, 'rgba(0,0,0,0)');
-    vig.addColorStop(1, 'rgba(0,0,0,0.35)');
-    ctx.fillStyle = vig;
-    ctx.fillRect(0,0,canvas.width,canvas.height);
-
-    // Grid lines on ground
-    ctx.strokeStyle = '#00ffcc';
-    const groundY = canvas.height - 60;
-    for (let i = 0; i < 12; i++) {
-        const y = groundY + i * 10;
-        ctx.globalAlpha = Math.max(0.02, 0.15 - i * 0.01);
-        ctx.lineWidth = 1;
+    // Metal panel seams
+    ctx.save();
+    ctx.strokeStyle = '#1a1a1a';
+    ctx.lineWidth = 2;
+    
+    // Horizontal seams
+    for (let i = 0; i < 6; i++) {
+        const y = canvas.height - 90 + i * 15;
+        ctx.globalAlpha = 0.3;
         ctx.beginPath();
         ctx.moveTo(0, y);
         ctx.lineTo(canvas.width, y);
         ctx.stroke();
     }
-    const gridOffset = -((camX % 80 + 80) % 80);
-    for (let x = gridOffset; x < canvas.width + 80; x += 80) {
-        ctx.globalAlpha = 0.1;
+    
+    // Vertical panel seams (with perspective)
+    const gridOffset = -((camX % 120 + 120) % 120);
+    for (let x = gridOffset; x < canvas.width + 120; x += 120) {
+        ctx.globalAlpha = 0.25;
+        ctx.strokeStyle = '#151515';
+        ctx.lineWidth = 3;
         ctx.beginPath();
-        ctx.moveTo(x, groundY);
-        ctx.lineTo(canvas.width / 2 + (x - canvas.width / 2) * 1.8, canvas.height);
+        ctx.moveTo(x, canvas.height - 90);
+        ctx.lineTo(canvas.width / 2 + (x - canvas.width / 2) * 1.5, canvas.height);
         ctx.stroke();
     }
+    
+    // MORE STEAM VENTS - coming out of the ground
+    ctx.globalAlpha = 1;
+    const steamTime = Date.now() * 0.001;
+    const numVents = 16;  // DOUBLED from 8
+    
+    for (let i = 0; i < numVents; i++) {
+        const ventX = (i * 87.3 + camX * 0.5) % canvas.width;
+        const ventY = canvas.height - 85 + (i * 11) % 70;
+        
+        // Steam puff animation - multiple puffs per vent
+        const puffPhase = (steamTime * 0.8 + i * 0.3) % 2;
+        if (puffPhase < 1.5) {
+            const steamAlpha = Math.max(0, 0.7 - puffPhase * 0.45);
+            const steamSize = 20 + puffPhase * 35;
+            const steamRise = puffPhase * 50;
+            
+            // Steam gradient
+            const steamGrad = ctx.createRadialGradient(
+                ventX, ventY - steamRise, 0,
+                ventX, ventY - steamRise, steamSize
+            );
+            steamGrad.addColorStop(0, `rgba(220, 220, 240, ${steamAlpha})`);
+            steamGrad.addColorStop(0.5, `rgba(170, 170, 190, ${steamAlpha * 0.6})`);
+            steamGrad.addColorStop(1, 'rgba(120, 120, 140, 0)');
+            
+            ctx.fillStyle = steamGrad;
+            ctx.beginPath();
+            ctx.arc(ventX, ventY - steamRise, steamSize, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        
+        // Second steam puff for denser effect
+        const puffPhase2 = (steamTime * 0.8 + i * 0.3 + 0.8) % 2;
+        if (puffPhase2 < 1.5) {
+            const steamAlpha = Math.max(0, 0.5 - puffPhase2 * 0.35);
+            const steamSize = 15 + puffPhase2 * 30;
+            const steamRise = puffPhase2 * 45;
+            
+            ctx.fillStyle = `rgba(180, 180, 200, ${steamAlpha})`;
+            ctx.beginPath();
+            ctx.arc(ventX + 5, ventY - steamRise, steamSize, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    }
+    
+    // NO RED LAVA DOTS - removed!
+    
+    // Metal rivets/bolts
+    ctx.fillStyle = '#0a0a0a';
+    for (let x = gridOffset; x < canvas.width + 120; x += 60) {
+        for (let i = 0; i < 4; i++) {
+            const y = canvas.height - 85 + i * 20;
+            ctx.globalAlpha = 0.8;
+            ctx.beginPath();
+            ctx.arc(x, y, 3, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Subtle highlight
+            ctx.fillStyle = '#2a2a2a';
+            ctx.globalAlpha = 0.2;
+            ctx.beginPath();
+            ctx.arc(x - 1, y - 1, 1.5, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = '#0a0a0a';
+        }
+    }
+    
+    ctx.restore();
     ctx.globalAlpha = 1;
     // World-space entities
     ctx.save();
@@ -2860,23 +3154,49 @@ function draw() {
     // Rockets
     rockets.forEach(r => drawRocket(r));
 
-    // Enemy lasers
+    // Enemy lasers - ENHANCED VISIBILITY
     enemyLasers.forEach(lz => {
         ctx.save();
         ctx.globalAlpha = 0.95;
         const laserColor = lz.color || '#ff3355';
+        
+        // Outer glow layer
         ctx.strokeStyle = laserColor;
-        ctx.lineWidth = lz.w;
+        ctx.lineWidth = lz.w * 2.5;
         ctx.shadowColor = laserColor;
-        ctx.shadowBlur = 18;
+        ctx.shadowBlur = 35;
+        ctx.globalAlpha = 0.4;
         ctx.beginPath();
         ctx.moveTo(lz.x, lz.y);
-        ctx.lineTo(lz.x - lz.vx * 1.6, lz.y - lz.vy * 1.6);
+        ctx.lineTo(lz.x - lz.vx * 3, lz.y - lz.vy * 3);
         ctx.stroke();
-        ctx.fillStyle = lz.color ? '#ffffff' : '#ffd0d7';
+        
+        // Main laser beam
+        ctx.globalAlpha = 0.95;
+        ctx.lineWidth = lz.w;
+        ctx.shadowBlur = 25;
         ctx.beginPath();
-        ctx.arc(lz.x, lz.y, 2.2, 0, Math.PI*2);
+        ctx.moveTo(lz.x, lz.y);
+        ctx.lineTo(lz.x - lz.vx * 2.5, lz.y - lz.vy * 2.5);
+        ctx.stroke();
+        
+        // Bright core
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = lz.w * 0.4;
+        ctx.shadowBlur = 15;
+        ctx.shadowColor = '#ffffff';
+        ctx.beginPath();
+        ctx.moveTo(lz.x, lz.y);
+        ctx.lineTo(lz.x - lz.vx * 2, lz.y - lz.vy * 2);
+        ctx.stroke();
+        
+        // Bright head
+        ctx.fillStyle = '#ffffff';
+        ctx.shadowBlur = 20;
+        ctx.beginPath();
+        ctx.arc(lz.x, lz.y, lz.w * 0.8, 0, Math.PI*2);
         ctx.fill();
+        
         ctx.restore();
     });
 
