@@ -26,12 +26,12 @@
         #healthFill { height: 100%; background: linear-gradient(90deg, #ff0000, #ff6600, #00ff66); transition: width 0.3s; }
         #flyMeter { width: 120px; height: 10px; background: #1a1a1a; border: 2px solid #ffcc00; margin-top: 8px; overflow: hidden; }
         #flyFill { height: 100%; width: 0%; background: linear-gradient(90deg, #ffcc00, #ff6600, #ff3300); transition: width 0.2s; }
-        #mobileControls { display: flex; position: absolute; bottom: 20px; left: 0; right: 0; padding: 0 20px; justify-content: space-between; align-items: flex-end; z-index: 20; }
+        #mobileControls { display: flex; position: absolute; bottom: 10px; left: 0; right: 0; padding: 0 10px; justify-content: space-between; align-items: flex-end; z-index: 20; }
         .mobile-btn { width: 90px; height: 90px; border-radius: 50%; border: 4px solid; font-family: 'Orbitron', sans-serif; font-weight: 700; font-size: 11px; display: flex; align-items: center; justify-content: center; text-align: center; cursor: pointer; }
 /* removed */         #moveBtn { background: rgba(0, 255, 204, 0.25); border-color: #00ffcc; color: #00ffcc; }
 /* removed */         #fireBtn { background: rgba(255, 51, 51, 0.25); border-color: #ff3333; color: #ff3333; }
-        #flyBtn { width: 70px; height: 70px; font-size: 10px; background: rgba(255, 204, 0, 0.25); border-color: #ffcc00; color: #ffcc00; position: absolute; bottom: 120px; right: 20px; }
-        #shieldBtn { width: 70px; height: 70px; font-size: 10px; background: rgba(120, 180, 255, 0.22); border-color: #66aaff; color: #66aaff; position: absolute; bottom: 200px; right: 20px; }
+        #flyBtn { width: 55px; height: 55px; font-size: 9px; background: rgba(255, 204, 0, 0.25); border-color: #ffcc00; color: #ffcc00; position: absolute; bottom: 90px; right: 10px; }
+        #shieldBtn { width: 55px; height: 55px; font-size: 9px; background: rgba(120, 180, 255, 0.22); border-color: #66aaff; color: #66aaff; position: absolute; bottom: 155px; right: 10px; }
         .mobile-btn:active, .mobile-btn.active { transform: scale(0.92); filter: brightness(1.6); }
         #startScreen, #gameOverScreen { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: radial-gradient(ellipse at center, rgba(10,20,40,0.95) 0%, rgba(0,0,0,0.98) 100%); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 100; }
         #gameOverScreen { display: none; }
@@ -50,43 +50,51 @@
         @keyframes hintBlink { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
         #soundToggle { position: absolute; top: 20px; right: 20px; font-family: 'Orbitron', sans-serif; font-size: 12px; padding: 8px 15px; background: rgba(0,0,0,0.5); border: 2px solid #00ffcc; color: #00ffcc; cursor: pointer; z-index: 50; }
         #waveAnnounce { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-family: 'Orbitron', sans-serif; font-size: clamp(24px, 6vw, 48px); color: #ff6600; text-shadow: 0 0 30px #ff6600, 0 0 60px #ff3300; opacity: 0; pointer-events: none; z-index: 30; letter-spacing: 4px; }
-        @media (max-width: 600px) { .hud-value { font-size: 20px; } #healthBar { width: 120px; } }
+        @media (max-width: 600px) { 
+            .hud-value { font-size: 18px; } 
+            #healthBar { width: 110px; height: 12px; }
+            /* Hide kills counter on mobile - not critical info */
+            #hud > div:nth-child(2) { display: none !important; }
+        }
         
         /* Mobile-specific adjustments */
         @media (max-width: 480px) {
-            .dpad { width: 180px; height: 180px; grid-template-columns: 56px 56px 56px; grid-template-rows: 56px 56px 56px; padding: 6px; }
-            .dpad-btn.fire { font-size: 12px; }
-            .mobile-btn { width: 70px; height: 70px; font-size: 9px; }
-            #flyBtn, #shieldBtn { width: 55px; height: 55px; font-size: 8px; }
-            #flyBtn { bottom: 100px; right: 10px; }
-            #shieldBtn { bottom: 165px; right: 10px; }
-            #pauseBtn { bottom: 20px; right: 95px; width: 60px; height: 60px; font-size: 9px; }
-            #mobileControls { padding: 0 10px; bottom: 10px; }
-            .hud-panel { padding: 8px 12px; }
+            .dpad { width: 140px; height: 140px; grid-template-columns: 43px 43px 43px; grid-template-rows: 43px 43px 43px; padding: 4px; }
+            .dpad-btn { font-size: 10px; border-radius: 10px; }
+            .dpad-btn.fire { font-size: 10px; }
+            .mobile-btn { width: 60px; height: 60px; font-size: 9px; }
+            #flyBtn, #shieldBtn { width: 48px; height: 48px; font-size: 8px; }
+            #flyBtn { bottom: 75px; right: 8px; }
+            #shieldBtn { bottom: 130px; right: 8px; }
+            #pauseBtn { bottom: 15px; right: 75px; width: 50px; height: 50px; font-size: 8px; }
+            #mobileControls { padding: 0 8px; bottom: 8px; }
+            .hud-panel { padding: 6px 10px; }
             .hud-label { font-size: 8px; letter-spacing: 2px; }
-            .hud-value { font-size: 16px; }
-            #healthBar { width: 100px; height: 10px; }
-            #flyMeter { width: 80px; height: 8px; }
-            #easterEggHint { font-size: 11px; bottom: 85px; }
+            .hud-value { font-size: 15px; }
+            #healthBar { width: 90px; height: 10px; }
+            #flyMeter { width: 70px; height: 7px; }
+            #easterEggHint { font-size: 10px; bottom: 75px; }
         }
         
         /* Very small screens */
         @media (max-width: 380px) {
-            .dpad { width: 150px; height: 150px; grid-template-columns: 46px 46px 46px; grid-template-rows: 46px 46px 46px; }
-            .dpad-btn.fire { font-size: 10px; }
+            .dpad { width: 120px; height: 120px; grid-template-columns: 37px 37px 37px; grid-template-rows: 37px 37px 37px; padding: 3px; }
+            .dpad-btn { font-size: 9px; }
+            .dpad-btn.fire { font-size: 9px; }
         }
         
         /* Landscape phone */
         @media (max-height: 500px) and (orientation: landscape) {
-            .dpad { width: 160px; height: 160px; grid-template-columns: 50px 50px 50px; grid-template-rows: 50px 50px 50px; }
+            .dpad { width: 130px; height: 130px; grid-template-columns: 40px 40px 40px; grid-template-rows: 40px 40px 40px; padding: 3px; }
+            .dpad-btn { font-size: 9px; }
             #mobileControls { bottom: 5px; }
-            #flyBtn { bottom: 80px; right: 10px; width: 50px; height: 50px; }
-            #shieldBtn { bottom: 140px; right: 10px; width: 50px; height: 50px; }
-            #pauseBtn { bottom: 10px; right: 75px; width: 50px; height: 50px; }
+            #flyBtn { bottom: 70px; right: 8px; width: 45px; height: 45px; font-size: 8px; }
+            #shieldBtn { bottom: 120px; right: 8px; width: 45px; height: 45px; font-size: 8px; }
+            #pauseBtn { bottom: 8px; right: 65px; width: 45px; height: 45px; font-size: 8px; }
             #hud { padding: 5px 10px; }
-            .hud-panel { padding: 5px 8px; }
-            .hud-value { font-size: 14px; }
-            #easterEggHint { bottom: 70px; font-size: 10px; }
+            .hud-panel { padding: 4px 8px; }
+            .hud-value { font-size: 13px; }
+            #easterEggHint { bottom: 60px; font-size: 9px; }
             
             /* COMPACT START SCREEN FOR LANDSCAPE */
             .title { font-size: clamp(32px, 7vw, 50px) !important; margin-bottom: 3px !important; letter-spacing: 4px !important; }
@@ -137,49 +145,58 @@
     
 /* ===== D-Pad Controls (desktop + mobile) ===== */
 .dpad{
-  width: 220px; height: 220px; border-radius: 26px;
-  background: linear-gradient(180deg, rgba(28,36,70,.62), rgba(10,12,22,.38));
-  border: 1px solid rgba(160,190,255,.22);
-  box-shadow: 0 14px 40px rgba(0,0,0,.35);
+  width: 160px; height: 160px; border-radius: 20px;
+  background: linear-gradient(180deg, rgba(0,30,50,.5), rgba(0,10,20,.3));
+  border: 2px solid rgba(0,255,255,.4);
+  box-shadow: 0 0 20px rgba(0,255,255,.3), inset 0 0 20px rgba(0,255,255,.1);
   backdrop-filter: blur(6px);
   display: grid;
-  grid-template-columns: 70px 70px 70px;
-  grid-template-rows: 70px 70px 70px;
-  padding: 10px;
+  grid-template-columns: 50px 50px 50px;
+  grid-template-rows: 50px 50px 50px;
+  padding: 5px;
   user-select: none; -webkit-user-select: none;
   touch-action: none;
 }
 .dpad-btn{
   display:flex; align-items:center; justify-content:center;
-  border-radius:18px;
-  border:1px solid rgba(180,210,255,.22);
-  background: radial-gradient(circle at 30% 30%, rgba(200,230,255,.18), rgba(40,60,120,.18), rgba(0,0,0,.14));
-  color:#eaf1ff;
+  border-radius:12px;
+  border:1px solid rgba(0,255,255,.3);
+  background: radial-gradient(circle at 30% 30%, rgba(0,200,255,.15), rgba(0,100,150,.12), rgba(0,0,0,.2));
+  color:#00ffff;
   font-weight: 900;
+  font-size: 11px;
   letter-spacing:.5px;
-  box-shadow: inset 0 0 18px rgba(120,170,255,.12);
+  box-shadow: 0 0 10px rgba(0,255,255,.2), inset 0 0 10px rgba(0,255,255,.08);
   cursor: pointer;
+  text-shadow: 0 0 5px #00ffff;
 }
-.dpad-btn:active{ transform: translateY(1px); }
-.dpad-btn.on{ outline:2px solid rgba(120,255,170,.55); box-shadow:0 0 18px rgba(120,255,170,.18), inset 0 0 18px rgba(120,170,255,.12); }
+.dpad-btn:active{ transform: translateY(1px); box-shadow: 0 0 15px rgba(0,255,255,.5), inset 0 0 15px rgba(0,255,255,.2); }
+.dpad-btn.on{ 
+  outline:2px solid rgba(0,255,255,.8); 
+  box-shadow:0 0 20px rgba(0,255,255,.6), inset 0 0 15px rgba(0,255,255,.3);
+  background: radial-gradient(circle at 30% 30%, rgba(0,255,255,.3), rgba(0,150,200,.2), rgba(0,50,100,.2));
+}
 .dpad-btn.up{ grid-column:2; grid-row:1; }
 .dpad-btn.left{ grid-column:1; grid-row:2; }
-.dpad-btn.fire{ grid-column:2; grid-row:2; font-size: 14px; }
+.dpad-btn.fire{ grid-column:2; grid-row:2; font-size: 11px; }
 .dpad-btn.right{ grid-column:3; grid-row:2; }
 .dpad-btn.down{ grid-column:2; grid-row:3; }
-.abilityStack{ display:flex; flex-direction:column; gap:10px; align-items:stretch; }
+.abilityStack{ display:flex; flex-direction:column; gap:8px; align-items:stretch; }
 .mobile-btn.ability.hidden{ display:none !important; }
 
-/* Pause button styling */
+/* Pause button styling - CYAN THEME */
 #pauseBtn { 
     position: fixed; 
-    bottom: 25px; 
-    right: 115px; 
-    background: rgba(80, 255, 140, 0.2); 
-    border-color: #50FF8C; 
-    color: #50FF8C; 
-    text-shadow: 0 0 15px #50FF8C; 
-    box-shadow: 0 0 20px rgba(80, 255, 140, 0.4); 
+    bottom: 20px; 
+    right: 90px; 
+    width: 55px;
+    height: 55px;
+    font-size: 10px;
+    background: rgba(0, 255, 255, 0.15); 
+    border-color: #00ffff; 
+    color: #00ffff; 
+    text-shadow: 0 0 10px #00ffff; 
+    box-shadow: 0 0 15px rgba(0, 255, 255, 0.4), inset 0 0 10px rgba(0, 255, 255, 0.1); 
     z-index: 60;
 }
 
