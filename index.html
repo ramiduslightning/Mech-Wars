@@ -26,13 +26,15 @@
         #healthFill { height: 100%; background: linear-gradient(90deg, #ff0000, #ff6600, #00ff66); transition: width 0.3s; }
         #flyMeter { width: 120px; height: 10px; background: #1a1a1a; border: 2px solid #ffcc00; margin-top: 8px; overflow: hidden; }
         #flyFill { height: 100%; width: 0%; background: linear-gradient(90deg, #ffcc00, #ff6600, #ff3300); transition: width 0.2s; }
-        #mobileControls { display: flex; position: absolute; bottom: 10px; left: 10px; padding: 0; justify-content: flex-start; align-items: flex-end; z-index: 20; }
+        #mobileControls { display: block; position: relative; pointer-events: none; }
+        #mobileControls > * { pointer-events: auto; }
         .mobile-btn { width: 90px; height: 90px; border-radius: 50%; border: 4px solid; font-family: 'Orbitron', sans-serif; font-weight: 700; font-size: 11px; display: flex; align-items: center; justify-content: center; text-align: center; cursor: pointer; }
 /* removed */         #moveBtn { background: rgba(0, 255, 204, 0.25); border-color: #00ffcc; color: #00ffcc; }
 /* removed */         #fireBtn { background: rgba(255, 51, 51, 0.25); border-color: #ff3333; color: #ff3333; }
-        #flyBtn { width: 55px; height: 55px; font-size: 9px; background: rgba(255, 204, 0, 0.25); border-color: #ffcc00; color: #ffcc00; position: absolute; bottom: 90px; right: 10px; }
-        #shieldBtn { width: 55px; height: 55px; font-size: 9px; background: rgba(120, 180, 255, 0.22); border-color: #66aaff; color: #66aaff; position: absolute; bottom: 155px; right: 10px; }
+        #flyBtn { width: 55px; height: 55px; font-size: 9px; background: rgba(255, 204, 0, 0.25); border-color: #ffcc00; color: #ffcc00; position: fixed; bottom: 90px; right: 10px; }
+        #shieldBtn { width: 55px; height: 55px; font-size: 9px; background: rgba(120, 180, 255, 0.22); border-color: #66aaff; color: #66aaff; position: fixed; bottom: 155px; right: 10px; }
         .mobile-btn:active, .mobile-btn.active { transform: scale(0.92); filter: brightness(1.6); }
+        #soundToggle { display: none !important; }
         #startScreen, #gameOverScreen { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: radial-gradient(ellipse at center, rgba(10,20,40,0.95) 0%, rgba(0,0,0,0.98) 100%); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 100; }
         #gameOverScreen { display: none; }
         .title { font-family: 'Orbitron', sans-serif; font-size: clamp(40px, 12vw, 90px); font-weight: 900; color: #00ffcc; text-shadow: 0 0 40px #00ffcc, 0 0 80px #00aaff, 0 0 120px #0066ff; letter-spacing: 12px; margin-bottom: 5px; animation: titlePulse 2s infinite; }
@@ -53,56 +55,49 @@
         @media (max-width: 600px) { 
             .hud-value { font-size: 18px; } 
             #healthBar { width: 110px; height: 12px; }
-            /* Hide unnecessary UI on mobile - player needs to see! */
+            /* Hide unnecessary UI on mobile */
             #hud { display: none !important; }
-            #soundToggle { display: none !important; }
             
-            /* Move D-pad to UPPER LEFT */
-            #mobileControls { 
-                top: 15px !important; 
-                bottom: auto !important; 
-                left: 15px !important; 
-                right: auto !important; 
-                width: auto !important;
-                justify-content: flex-start !important;
+            /* D-pad stays fixed positioned */
+            .dpad { 
+                bottom: 10px !important; 
+                left: 10px !important;
             }
             
-            /* Reposition ability buttons to right side */
-            #flyBtn { top: 15px !important; bottom: auto !important; right: 15px !important; }
-            #shieldBtn { top: 80px !important; bottom: auto !important; right: 15px !important; }
+            /* Show ability buttons on RIGHT SIDE */
+            #flyBtn { bottom: 85px !important; right: 10px !important; width: 52px; height: 52px; }
+            #shieldBtn { bottom: 145px !important; right: 10px !important; width: 52px; height: 52px; }
         }
         
         /* Mobile-specific adjustments */
         @media (max-width: 480px) {
-            .dpad { width: 120px; height: 120px; grid-template-columns: 37px 37px 37px; grid-template-rows: 37px 37px 37px; padding: 3px; }
-            .dpad-btn { font-size: 9px; border-radius: 8px; }
-            .dpad-btn.fire { font-size: 9px; }
-            .mobile-btn { width: 50px; height: 50px; font-size: 8px; }
-            #flyBtn { width: 50px; height: 50px; font-size: 8px; top: 12px !important; right: 12px !important; }
-            #shieldBtn { width: 50px; height: 50px; font-size: 8px; top: 70px !important; right: 12px !important; }
-            #pauseBtn { bottom: 12px; right: 12px; width: 48px; height: 48px; font-size: 8px; }
-            #mobileControls { top: 12px !important; left: 12px !important; }
+            .dpad { width: 105px; height: 105px; grid-template-columns: 32px 32px 32px; grid-template-rows: 32px 32px 32px; padding: 2px; bottom: 8px !important; left: 8px !important; }
+            .dpad-btn { font-size: 8px; border-radius: 7px; }
+            .dpad-btn.fire { font-size: 8px; }
+            #flyBtn { width: 48px; height: 48px; font-size: 8px; bottom: 75px !important; right: 8px !important; }
+            #shieldBtn { width: 48px; height: 48px; font-size: 8px; bottom: 130px !important; right: 8px !important; }
+            #pauseBtn { bottom: 10px; right: 10px; width: 45px; height: 45px; font-size: 8px; }
             #easterEggHint { font-size: 10px; bottom: 70px; }
         }
         
         /* Very small screens */
         @media (max-width: 380px) {
-            .dpad { width: 105px; height: 105px; grid-template-columns: 32px 32px 32px; grid-template-rows: 32px 32px 32px; padding: 2px; }
-            .dpad-btn { font-size: 8px; }
-            .dpad-btn.fire { font-size: 8px; }
-            #flyBtn, #shieldBtn { width: 45px; height: 45px; font-size: 7px; }
-            #pauseBtn { width: 42px; height: 42px; font-size: 7px; }
+            .dpad { width: 95px; height: 95px; grid-template-columns: 29px 29px 29px; grid-template-rows: 29px 29px 29px; padding: 2px; bottom: 8px !important; left: 8px !important; }
+            .dpad-btn { font-size: 7px; border-radius: 6px; }
+            .dpad-btn.fire { font-size: 7px; }
+            #flyBtn { width: 44px; height: 44px; font-size: 7px; }
+            #shieldBtn { width: 44px; height: 44px; font-size: 7px; }
+            #pauseBtn { width: 40px; height: 40px; font-size: 7px; }
         }
         
         /* Landscape phone */
         @media (max-height: 500px) and (orientation: landscape) {
-            .dpad { width: 110px; height: 110px; grid-template-columns: 34px 34px 34px; grid-template-rows: 34px 34px 34px; padding: 2px; }
-            .dpad-btn { font-size: 8px; }
-            #mobileControls { top: 8px !important; left: 8px !important; }
-            #flyBtn { top: 8px !important; right: 8px !important; width: 42px; height: 42px; font-size: 7px; }
-            #shieldBtn { top: 56px !important; right: 8px !important; width: 42px; height: 42px; font-size: 7px; }
-            #pauseBtn { bottom: 8px; right: 8px; width: 42px; height: 42px; font-size: 7px; }
-            #easterEggHint { bottom: 55px; font-size: 9px; }
+            .dpad { width: 100px; height: 100px; grid-template-columns: 31px 31px 31px; grid-template-rows: 31px 31px 31px; padding: 2px; bottom: 6px !important; left: 6px !important; }
+            .dpad-btn { font-size: 8px; border-radius: 6px; }
+            #flyBtn { bottom: 65px !important; right: 6px !important; width: 40px; height: 40px; font-size: 7px; }
+            #shieldBtn { bottom: 110px !important; right: 6px !important; width: 40px; height: 40px; font-size: 7px; }
+            #pauseBtn { bottom: 6px; right: 6px; width: 40px; height: 40px; font-size: 7px; }
+            #easterEggHint { bottom: 50px; font-size: 9px; }
             
             /* COMPACT START SCREEN FOR LANDSCAPE */
             .title { font-size: clamp(32px, 7vw, 50px) !important; margin-bottom: 3px !important; letter-spacing: 4px !important; }
@@ -151,53 +146,60 @@
             }
         }
     
-/* ===== D-Pad Controls (desktop + mobile) - TRANSLUCENT WHITE ===== */
+/* ===== D-Pad Controls (desktop + mobile) - NEON BLUE ===== */
 .dpad{
-  width: 140px; height: 140px; border-radius: 18px;
-  background: rgba(255,255,255,.05);
-  border: 1px solid rgba(255,255,255,.15);
-  box-shadow: 0 0 15px rgba(0,0,0,.3), inset 0 0 15px rgba(255,255,255,.03);
-  backdrop-filter: blur(8px);
+  position: fixed;
+  bottom: 10px;
+  left: 10px;
+  width: 120px; height: 120px; border-radius: 16px;
+  background: linear-gradient(135deg, rgba(100,180,255,.12), rgba(80,160,255,.04));
+  border: 1px solid rgba(100,180,255,.3);
+  box-shadow: 0 0 25px rgba(100,180,255,.4), 0 8px 32px rgba(0,0,0,.4), inset 0 1px 0 rgba(120,200,255,.2);
+  backdrop-filter: blur(12px);
   display: grid;
-  grid-template-columns: 43px 43px 43px;
-  grid-template-rows: 43px 43px 43px;
-  padding: 4px;
+  grid-template-columns: 37px 37px 37px;
+  grid-template-rows: 37px 37px 37px;
+  padding: 3px;
   user-select: none; -webkit-user-select: none;
   touch-action: none;
+  cursor: move;
+  z-index: 20;
 }
 .dpad-btn{
   display:flex; align-items:center; justify-content:center;
-  border-radius:10px;
-  border:1px solid rgba(255,255,255,.2);
-  background: rgba(255,255,255,.08);
-  color: rgba(255,255,255,.8);
-  font-weight: 700;
-  font-size: 10px;
-  letter-spacing:.3px;
-  box-shadow: inset 0 0 8px rgba(255,255,255,.05);
+  border-radius:8px;
+  border:1px solid rgba(100,180,255,.25);
+  background: linear-gradient(135deg, rgba(100,180,255,.18), rgba(80,160,255,.06));
+  color: rgba(180,220,255,.95);
+  font-weight: 600;
+  font-size: 9px;
+  letter-spacing:.2px;
+  box-shadow: inset 0 1px 0 rgba(120,200,255,.12), 0 2px 8px rgba(0,0,0,.15);
   cursor: pointer;
-  text-shadow: 0 0 3px rgba(255,255,255,.5);
+  text-shadow: 0 0 6px rgba(100,180,255,.8);
+  transition: all 0.1s ease;
 }
 .dpad-btn:active{ 
-  transform: translateY(1px); 
-  background: rgba(255,255,255,.15);
-  box-shadow: 0 0 10px rgba(255,255,255,.3), inset 0 0 10px rgba(255,255,255,.1);
+  transform: translateY(1px) scale(0.98); 
+  background: linear-gradient(135deg, rgba(100,180,255,.25), rgba(80,160,255,.12));
+  box-shadow: 0 0 15px rgba(100,180,255,.5), inset 0 1px 3px rgba(0,0,0,.2);
 }
 .dpad-btn.on{ 
-  outline:1px solid rgba(255,255,255,.5); 
-  background: rgba(255,255,255,.2);
-  box-shadow:0 0 12px rgba(255,255,255,.4), inset 0 0 10px rgba(255,255,255,.15);
-  color: rgba(255,255,255,.95);
+  background: linear-gradient(135deg, rgba(100,180,255,.35), rgba(80,160,255,.18));
+  box-shadow: 0 0 20px rgba(100,180,255,.6), inset 0 0 10px rgba(120,200,255,.25);
+  color: rgba(200,230,255,1);
+  border-color: rgba(120,200,255,.5);
+  text-shadow: 0 0 10px rgba(100,180,255,1);
 }
 .dpad-btn.up{ grid-column:2; grid-row:1; }
 .dpad-btn.left{ grid-column:1; grid-row:2; }
-.dpad-btn.fire{ grid-column:2; grid-row:2; font-size: 10px; }
+.dpad-btn.fire{ grid-column:2; grid-row:2; font-size: 9px; font-weight: 700; }
 .dpad-btn.right{ grid-column:3; grid-row:2; }
 .dpad-btn.down{ grid-column:2; grid-row:3; }
-.abilityStack{ display:flex; flex-direction:column; gap:8px; align-items:stretch; }
+.abilityStack{ display:flex; flex-direction:column; gap:6px; align-items:stretch; }
 .mobile-btn.ability.hidden{ display:none !important; }
 
-/* Pause button styling - GREEN PLANET THEME */
+/* Pause button styling - Faded white, glows blue when paused */
 #pauseBtn { 
     position: fixed; 
     bottom: 20px; 
@@ -205,12 +207,38 @@
     width: 55px;
     height: 55px;
     font-size: 10px;
-    background: rgba(140, 255, 120, 0.15); 
-    border-color: #8cff78; 
-    color: #8cff78; 
-    text-shadow: 0 0 10px #8cff78; 
-    box-shadow: 0 0 15px rgba(140, 255, 120, 0.4), inset 0 0 10px rgba(140, 255, 120, 0.1); 
+    background: rgba(255, 255, 255, 0.08); 
+    border: 3px solid rgba(255, 255, 255, 0.2);
+    color: rgba(255, 255, 255, 0.5); 
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3); 
+    box-shadow: 0 0 8px rgba(0, 0, 0, 0.3), inset 0 0 8px rgba(255, 255, 255, 0.05); 
     z-index: 60;
+    transition: all 0.3s ease;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    font-family: 'Orbitron', sans-serif;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+/* Glow blue when paused */
+#pauseBtn.paused { 
+    background: rgba(100, 180, 255, 0.2); 
+    border-color: #64b4ff; 
+    color: #64b4ff; 
+    text-shadow: 0 0 12px #64b4ff; 
+    box-shadow: 0 0 25px rgba(100, 180, 255, 0.6), inset 0 0 15px rgba(100, 180, 255, 0.2); 
+}
+
+#pauseBtn:hover {
+    transform: scale(1.05);
+}
+
+#pauseBtn:active {
+    transform: scale(0.95);
 }
 
 </style>
@@ -252,7 +280,7 @@
         <div id="waveAnnounce"></div>
         <div id="startScreen">
             <div class="title">MECH <span>WARS</span></div>
-            <div class="subtitle">ALIEN PLANET • ROBOT UPRISING</div>
+            <div class="subtitle">ALIEN MOON • ROBOT UPRISING</div>
             <div class="instructions" id="desktopInstructions">
                 <span>[MOUSE]</span> — Aim gun<br>
                 <span>[CLICK / F]</span> — Shoot<br>
@@ -522,13 +550,37 @@ function fireOneRocket(force=false) {
     const now = Date.now();
     if (!force && (now - lastFireTime) <= fireRate) return;
 
-    // Fire from player's gun side toward the aim point
-    const gunX = player.x + (player.facingRight ? 45 : -45);
-    const gunY = player.y - player.height * 0.3;
+    // Fire from actual gun barrel with rotation
+    const torsoW = player.width * 0.62;
+    const torsoY = -player.height * 0.34;
+    const shoulderX = torsoW/2 - 10;
+    const shoulderY = torsoY + 18;
+    const muzzleX = 132;  // Extended barrel tip
+    const muzzleY = -4;   // Top barrel
+    
+    // Use arm angle directly - sprite flip handles left/right orientation
+    const clampedArmAngle = Math.max(-1.57, Math.min(0.8, player.armAngle));
+    
+    const rotatedMuzzleX = muzzleX * Math.cos(clampedArmAngle) - muzzleY * Math.sin(clampedArmAngle);
+    const rotatedMuzzleY = muzzleX * Math.sin(clampedArmAngle) + muzzleY * Math.cos(clampedArmAngle);
+    
+    const gunLocalX = shoulderX + rotatedMuzzleX;
+    const gunLocalY = shoulderY + rotatedMuzzleY;
+    
+    // Position accounting for facing direction
+    const gunX = player.x + (player.facingRight ? gunLocalX : -gunLocalX);
+    const gunY = player.y + gunLocalY;
 
-    // Aim reticle is stored in screen coords; convert X to world coords via camX.
-    const targetX = (Number.isFinite(aimX) ? aimX : mouseX) + camX;
-    const targetY = (Number.isFinite(aimY) ? aimY : mouseY);
+    // Fire in the EXACT direction the gun is visually pointing
+    // Use the gun's actual angle instead of aim position
+    const fireDistance = 2000;
+    let targetX, targetY;
+
+    // Robust: keep projectile direction aligned with the visually flipped gun.
+    // When facing left, the sprite is mirrored, so we flip the angle across PI.
+    const angle = player.facingRight ? clampedArmAngle : (Math.PI - clampedArmAngle);
+    targetX = gunX + Math.cos(angle) * fireDistance;
+    targetY = gunY + Math.sin(angle) * fireDistance;
 
     fireRocket(gunX, gunY, targetX, targetY);
     lastFireTime = now;
@@ -536,7 +588,9 @@ function fireOneRocket(force=false) {
 
 
 function initPlayer() { 
-    player.x = camX + canvas.width * 0.25; 
+    // Spawn player further right on mobile so D-pad doesn't block view
+    const spawnOffset = canvas.width < 600 ? 0.38 : 0.25;
+    player.x = camX + canvas.width * spawnOffset; 
     player.y = canvas.height - 160; 
     player.targetX = player.x; 
     player.targetY = player.y; 
@@ -544,6 +598,10 @@ function initPlayer() {
     player.isFlying = false; 
     player.screenShake = 0; 
     nextEncounterX = player.x + 650;
+    
+    // Initialize position tracking for jump prevention
+    window.lastValidPlayerX = player.x;
+    
     // Initialize aim reticle in front of player
     mouseX = canvas.width * 0.65;
     mouseY = canvas.height - 180;
@@ -611,11 +669,11 @@ function drawMoveArrowHint() {
 
     ctx.save();
     ctx.globalAlpha = pulse;
-    ctx.shadowColor = 'rgba(80, 255, 140, 0.98)';
+    ctx.shadowColor = 'rgba(0, 255, 204, 0.98)';
     ctx.shadowBlur = 18;
 
     // Arrow body
-    ctx.strokeStyle = 'rgba(80,255,140,0.92)';
+    ctx.strokeStyle = 'rgba(0,255,204,0.92)';
     ctx.lineWidth = 6;
     ctx.lineCap = 'round';
     ctx.beginPath();
@@ -634,7 +692,7 @@ function drawMoveArrowHint() {
     // Text
     ctx.shadowBlur = 0;
     ctx.globalAlpha = Math.min(1, pulse + 0.15);
-    ctx.fillStyle = 'rgba(120,255,170,0.95)';
+    ctx.fillStyle = 'rgba(0,255,204,0.95)';
     ctx.font = 'bold 16px Orbitron, sans-serif';
     ctx.fillText('MOVE →', x - 60, y - 26);
 
@@ -791,10 +849,11 @@ function drawPlayer(x, y, width, height, legAngle, isFlying, facingRight, armAng
             const fx = (i===0?-11:11);
             const flameH = 38 + Math.random()*22;
             const grad = ctx.createLinearGradient(fx, torsoY + torsoH + 36, fx, torsoY + torsoH + 36 + flameH);
-            grad.addColorStop(0, 'rgba(255,255,255,0.95)');
-            grad.addColorStop(0.2, 'rgba(0,255,204,0.75)');
-            grad.addColorStop(0.6, 'rgba(0,140,255,0.35)');
-            grad.addColorStop(1, 'rgba(0,0,0,0)');
+            grad.addColorStop(0, 'rgba(255,255,255,0.95)');      // White hot core
+            grad.addColorStop(0.2, 'rgba(255,220,100,0.85)');     // Bright gold
+            grad.addColorStop(0.5, 'rgba(255,180,60,0.6)');       // Deep gold
+            grad.addColorStop(0.8, 'rgba(255,140,30,0.3)');       // Orange-gold
+            grad.addColorStop(1, 'rgba(0,0,0,0)');                // Fade to transparent
             ctx.fillStyle = grad;
             ctx.beginPath();
             ctx.moveTo(fx - 10, torsoY + torsoH + 36);
@@ -875,7 +934,7 @@ function drawPlayer(x, y, width, height, legAngle, isFlying, facingRight, armAng
     // Cannon arm
     ctx.save();
     ctx.translate(shoulderX, shoulderY);
-    const aim = Math.max(-1.2, Math.min(1.2, armAngle));
+    const aim = Math.max(-1.57, Math.min(0.8, armAngle));
     ctx.rotate(aim);
 
     // Upper arm
@@ -884,27 +943,34 @@ function drawPlayer(x, y, width, height, legAngle, isFlying, facingRight, armAng
     ctx.roundRect(0, -7, 28, 14, 7);
     ctx.fill();
 
-    // Forearm shroud + twin barrels
+    // Forearm shroud - extended for longer barrel
     ctx.fillStyle = steelGrad(0, 56);
     ctx.beginPath();
-    ctx.roundRect(18, -10, 48, 20, 8);
+    ctx.roundRect(18, -10, 60, 20, 8);  // Extended from 48 to 60
     ctx.fill();
 
-    // Barrel pair
+    // LONGER barrel pair - extended significantly
     ctx.fillStyle = '#0a0f18';
     ctx.beginPath();
-    ctx.roundRect(60, -7, 34, 6, 3);
-    ctx.roundRect(60, 1, 34, 6, 3);
+    ctx.roundRect(70, -7, 60, 6, 3);  // Extended from 34 to 60, moved start from 60 to 70
+    ctx.roundRect(70, 1, 60, 6, 3);
     ctx.fill();
-
-    // Muzzle glow
+    
+    // Barrel accent rings for style
+    ctx.fillStyle = steelMid;
+    ctx.fillRect(85, -7, 2, 6);
+    ctx.fillRect(85, 1, 2, 6);
+    ctx.fillRect(110, -7, 2, 6);
+    ctx.fillRect(110, 1, 2, 6);
+    
+    // Muzzle glow at extended barrel tips - GOLD like visor
     ctx.save();
-    ctx.shadowColor = 'rgba(255,140,80,0.9)';
-    ctx.shadowBlur = 18;
-    ctx.fillStyle = 'rgba(255,180,120,0.7)';
+    ctx.shadowColor = 'rgba(255, 204, 64, 0.95)';
+    ctx.shadowBlur = 15;
+    ctx.fillStyle = 'rgba(255, 204, 64, 0.9)';  // Gold like visor #ffcc40
     ctx.beginPath();
-    ctx.arc(96, -4, 3, 0, Math.PI*2);
-    ctx.arc(96, 4, 3, 0, Math.PI*2);
+    ctx.arc(132, -4, 3, 0, Math.PI*2);  // Top barrel tip - moved from 96 to 132
+    ctx.arc(132, 4, 3, 0, Math.PI*2);   // Bottom barrel tip
     ctx.fill();
     ctx.restore();
 
@@ -1498,10 +1564,10 @@ function drawMetallicTRex(x, y, width, height, legAngle, facingRight, health, ma
     const now = Date.now();
     const s = width / 100;
     
-    // Colors - DARKER BLACK METAL
-    const metalDark = '#0a0a0a';   // Near black
-    const metalMid = '#1a1a1a';    // Dark black-gray
-    const metalLight = '#2a2a2a';  // Slightly lighter black
+    // Colors - VERY DARK BLACK METAL
+    const metalDark = '#020202';   // Nearly pure black
+    const metalMid = '#060606';    // Slightly lighter black
+    const metalLight = '#0c0c0c';  // Dark charcoal
     const glowRed = '#ff0000';
     
     // === RED NEON GLOW - like player's green glow ===
@@ -1638,21 +1704,125 @@ function drawMetallicTRex(x, y, width, height, legAngle, facingRight, health, ma
     ctx.closePath();
     ctx.fill();
     
-    // Armor panel lines
-    ctx.strokeStyle = '#0a0a10';
-    ctx.lineWidth = 2;
+    // THICK RED FOG - volumetric fog effect, not particles
+    ctx.save();
+    // Clip to body shape
     ctx.beginPath();
-    ctx.moveTo(-35*s, -75*s);
-    ctx.lineTo(-35*s, -20*s);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(20*s, -80*s);
-    ctx.lineTo(20*s, -15*s);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(55*s, -70*s);
-    ctx.lineTo(60*s, -25*s);
-    ctx.stroke();
+    ctx.moveTo(-50*s, -30*s);
+    ctx.lineTo(-45*s, -70*s);
+    ctx.lineTo(-20*s, -85*s);
+    ctx.lineTo(40*s, -85*s);
+    ctx.lineTo(70*s, -65*s);
+    ctx.lineTo(80*s, -40*s);
+    ctx.lineTo(75*s, -20*s);
+    ctx.lineTo(50*s, -10*s);
+    ctx.lineTo(-30*s, -10*s);
+    ctx.lineTo(-55*s, -20*s);
+    ctx.closePath();
+    ctx.clip();
+    
+    const gasTime = now * 0.001; // Slower for fog
+    
+    // BASE FOG LAYER - fill entire body with red fog (reduced another 10%)
+    ctx.globalAlpha = 0.2025;  // Was 0.225
+    const baseFog = ctx.createLinearGradient(-60*s, -85*s, 80*s, -10*s);
+    baseFog.addColorStop(0, 'rgba(180, 20, 20, 0.567)');  // Was 0.63
+    baseFog.addColorStop(0.5, 'rgba(220, 30, 30, 0.486)');  // Was 0.54
+    baseFog.addColorStop(1, 'rgba(160, 15, 15, 0.405)');  // Was 0.45
+    ctx.fillStyle = baseFog;
+    ctx.fillRect(-70*s, -95*s, 160*s, 90*s);
+    
+    // LAYER 1: Massive fog clouds (reduced another 10%)
+    ctx.globalAlpha = 0.162;  // Was 0.18
+    for (let i = 0; i < 4; i++) {
+        const fx = -70*s + i * 45*s + Math.sin(gasTime * 0.3 + i * 0.8) * 25*s;
+        const fy = -65*s + Math.cos(gasTime * 0.25 + i * 0.6) * 20*s;
+        const fogGrad = ctx.createRadialGradient(fx, fy, 0, fx, fy, 60*s);
+        fogGrad.addColorStop(0, 'rgba(255, 50, 50, 0.648)');  // Was 0.72
+        fogGrad.addColorStop(0.3, 'rgba(220, 30, 30, 0.486)');  // Was 0.54
+        fogGrad.addColorStop(0.6, 'rgba(180, 20, 20, 0.324)');  // Was 0.36
+        fogGrad.addColorStop(1, 'rgba(140, 10, 10, 0)');
+        ctx.fillStyle = fogGrad;
+        ctx.beginPath();
+        ctx.arc(fx, fy, 60*s, 0, Math.PI * 2);
+        ctx.fill();
+    }
+    
+    // LAYER 2: Large fog banks (reduced another 10%)
+    ctx.globalAlpha = 0.2025;  // Was 0.225
+    for (let i = 0; i < 8; i++) {
+        const bx = -60*s + i * 18*s + Math.sin(gasTime * 0.5 + i * 0.5) * 18*s;
+        const by = -75*s + Math.cos(gasTime * 0.4 + i * 0.7) * 25*s;
+        const bankGrad = ctx.createRadialGradient(bx, by, 0, bx, by, 40*s);
+        bankGrad.addColorStop(0, 'rgba(255, 60, 60, 0.6075)');  // Was 0.675
+        bankGrad.addColorStop(0.4, 'rgba(210, 35, 35, 0.4455)');  // Was 0.495
+        bankGrad.addColorStop(0.7, 'rgba(170, 20, 20, 0.243)');  // Was 0.27
+        bankGrad.addColorStop(1, 'rgba(130, 10, 10, 0)');
+        ctx.fillStyle = bankGrad;
+        ctx.beginPath();
+        ctx.arc(bx, by, 40*s, 0, Math.PI * 2);
+        ctx.fill();
+    }
+    
+    // LAYER 3: Medium fog wisps (reduced another 10%)
+    ctx.globalAlpha = 0.243;  // Was 0.27
+    for (let i = 0; i < 15; i++) {
+        const wx = -55*s + i * 10*s + Math.sin(gasTime * 0.7 + i * 0.6) * 14*s;
+        const wy = -70*s + Math.cos(gasTime * 0.6 + i * 0.8) * 22*s;
+        const wispGrad = ctx.createRadialGradient(wx, wy, 0, wx, wy, 28*s);
+        wispGrad.addColorStop(0, 'rgba(255, 70, 70, 0.648)');  // Was 0.72
+        wispGrad.addColorStop(0.5, 'rgba(200, 40, 40, 0.486)');  // Was 0.54
+        wispGrad.addColorStop(1, 'rgba(150, 20, 20, 0)');
+        ctx.fillStyle = wispGrad;
+        ctx.beginPath();
+        ctx.arc(wx, wy, 28*s, 0, Math.PI * 2);
+        ctx.fill();
+    }
+    
+    // LAYER 4: Small fog details (reduced another 10%)
+    ctx.globalAlpha = 0.2835;  // Was 0.315
+    for (let i = 0; i < 20; i++) {
+        const dx = -50*s + i * 7*s + Math.sin(gasTime * 0.9 + i * 0.4) * 12*s;
+        const dy = -68*s + Math.cos(gasTime * 0.8 + i * 0.9) * 18*s;
+        const detailGrad = ctx.createRadialGradient(dx, dy, 0, dx, dy, 18*s);
+        detailGrad.addColorStop(0, 'rgba(255, 80, 80, 0.729)');  // Was 0.81
+        detailGrad.addColorStop(0.6, 'rgba(180, 35, 35, 0.405)');  // Was 0.45
+        detailGrad.addColorStop(1, 'rgba(140, 15, 15, 0)');
+        ctx.fillStyle = detailGrad;
+        ctx.beginPath();
+        ctx.arc(dx, dy, 18*s, 0, Math.PI * 2);
+        ctx.fill();
+    }
+    
+    // LAYER 5: Bright dense pockets (reduced another 10%)
+    ctx.globalAlpha = 0.324;  // Was 0.36
+    for (let i = 0; i < 7; i++) {
+        const px = -40*s + i * 15*s + Math.sin(gasTime * 1.1 + i * 0.9) * 10*s;
+        const py = -55*s + Math.cos(gasTime * 0.95 + i * 1.1) * 15*s;
+        const pocketGrad = ctx.createRadialGradient(px, py, 0, px, py, 20*s);
+        pocketGrad.addColorStop(0, 'rgba(255, 100, 100, 0.7695)');  // Was 0.855
+        pocketGrad.addColorStop(0.5, 'rgba(220, 50, 50, 0.567)');  // Was 0.63
+        pocketGrad.addColorStop(1, 'rgba(160, 25, 25, 0)');
+        ctx.fillStyle = pocketGrad;
+        ctx.beginPath();
+        ctx.arc(px, py, 20*s, 0, Math.PI * 2);
+        ctx.fill();
+    }
+    
+    // LAYER 6: Top atmospheric haze (reduced another 10%)
+    ctx.globalAlpha = 0.162;  // Was 0.18
+    const hazeGrad = ctx.createLinearGradient(0, -95*s, 0, -20*s);
+    hazeGrad.addColorStop(0, 'rgba(255, 40, 40, 0.405)');  // Was 0.45
+    hazeGrad.addColorStop(0.4, 'rgba(200, 30, 30, 0.486)');  // Was 0.54
+    hazeGrad.addColorStop(0.7, 'rgba(180, 25, 25, 0.324)');  // Was 0.36
+    hazeGrad.addColorStop(1, 'rgba(150, 15, 15, 0.162)');  // Was 0.18
+    ctx.fillStyle = hazeGrad;
+    ctx.fillRect(-70*s, -95*s, 160*s, 80*s);
+    
+    ctx.globalAlpha = 1;
+    ctx.restore();
+    
+    // Armor panel lines - REMOVED (no vertical lines)
     
     // Top armor ridge
     ctx.fillStyle = metalLight;
@@ -1771,11 +1941,16 @@ function drawMetallicTRex(x, y, width, height, legAngle, facingRight, health, ma
     ctx.ellipse(0, 0, 20*s, 12*s, 0, 0, Math.PI * 2);
     ctx.fill();
     
-    // Gun barrel
+    // Gun barrel - EXTENDED AND LARGER
     ctx.fillStyle = metalMid;
-    ctx.fillRect(10*s, -5*s, 45*s, 10*s);
+    ctx.fillRect(10*s, -7*s, 70*s, 14*s);  // Extended from 45 to 70, wider from 10 to 14
     ctx.fillStyle = metalDark;
-    ctx.fillRect(50*s, -4*s, 8*s, 8*s);
+    ctx.fillRect(75*s, -6*s, 12*s, 12*s);  // Extended muzzle
+    
+    // Barrel accent rings
+    ctx.fillStyle = metalLight;
+    ctx.fillRect(30*s, -7*s, 3*s, 14*s);
+    ctx.fillRect(55*s, -7*s, 3*s, 14*s);
     
     // Barrel glow when charging
     if (isCharging) {
@@ -1783,48 +1958,15 @@ function drawMetallicTRex(x, y, width, height, legAngle, facingRight, health, ma
         ctx.shadowColor = glowRed;
         ctx.shadowBlur = 15;
         ctx.beginPath();
-        ctx.arc(58*s, 0, 4*s, 0, Math.PI * 2);
+        ctx.arc(87*s, 0, 5*s, 0, Math.PI * 2);  // Extended position
         ctx.fill();
         ctx.shadowBlur = 0;
     }
     ctx.restore();
 
-    // === MAIN SENSOR / EYE ===
-    ctx.save();
-    const eyeX = 10*s;
-    const eyeY = -60*s;
-    
-    // Sensor housing
-    ctx.fillStyle = '#0a0a12';
-    ctx.beginPath();
-    ctx.ellipse(eyeX, eyeY, 18*s, 14*s, 0, 0, Math.PI * 2);
-    ctx.fill();
-    
-    // Red sensor glow
-    ctx.shadowColor = glowRed;
-    ctx.shadowBlur = isCharging ? 30 : 20;
-    
-    const sensorGrad = ctx.createRadialGradient(eyeX, eyeY, 0, eyeX, eyeY, 12*s);
-    sensorGrad.addColorStop(0, '#ffffff');
-    sensorGrad.addColorStop(0.2, '#ff6666');
-    sensorGrad.addColorStop(0.5, glowRed);
-    sensorGrad.addColorStop(1, '#660000');
-    ctx.fillStyle = sensorGrad;
-    ctx.beginPath();
-    ctx.ellipse(eyeX, eyeY, 12*s, 9*s, 0, 0, Math.PI * 2);
-    ctx.fill();
-    
-    // Scanning line effect
-    const scanPos = Math.sin(now * 0.005) * 8 * s;
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(eyeX - 10*s, eyeY + scanPos);
-    ctx.lineTo(eyeX + 10*s, eyeY + scanPos);
-    ctx.stroke();
-    
-    ctx.shadowBlur = 0;
-    ctx.restore();
+    // === MAIN SENSOR / EYE === REMOVED (no red windows)
+    // Sensor removed for darker, more menacing look
+
 
     // === HEALTH BAR ===
     // Turn off neon glow for clean health bar
@@ -1976,37 +2118,6 @@ function drawRocket(rocket) {
     ctx.arc(17, 0, 1.8, 0, Math.PI*2);
     ctx.fill();
     ctx.restore();
-    
-    // SECOND PLANET - Red/Orange gas giant
-    const planet2X = canvas.width * 0.75;
-    const planet2Y = canvas.height * 0.15;
-    const p2r = 50;
-    const planet2Grad = ctx.createRadialGradient(planet2X - p2r*0.3, planet2Y - p2r*0.3, p2r*0.1, planet2X, planet2Y, p2r);
-    planet2Grad.addColorStop(0, '#ffaa44');
-    planet2Grad.addColorStop(0.4, '#ff6622');
-    planet2Grad.addColorStop(0.75, '#cc2200');
-    planet2Grad.addColorStop(1, '#330000');
-    ctx.fillStyle = planet2Grad;
-    ctx.beginPath();
-    ctx.arc(planet2X, planet2Y, p2r, 0, Math.PI * 2);
-    ctx.fill();
-    
-    // Red planet bands
-    ctx.save();
-    ctx.beginPath();
-    ctx.arc(planet2X, planet2Y, p2r, 0, Math.PI*2);
-    ctx.clip();
-    ctx.globalAlpha = 0.25;
-    for (let b=0; b<8; b++){
-        const by = planet2Y - p2r + b*(p2r*0.25);
-        const band = ctx.createLinearGradient(planet2X - p2r, by, planet2X + p2r, by);
-        band.addColorStop(0, 'rgba(255,255,255,0)');
-        band.addColorStop(0.5, 'rgba(255,100,50,0.3)');
-        band.addColorStop(1, 'rgba(255,255,255,0)');
-        ctx.fillStyle = band;
-        ctx.fillRect(planet2X - p2r, by, p2r*2, p2r*0.12);
-    }
-    ctx.restore();
 
     ctx.restore();
 }
@@ -2120,10 +2231,8 @@ function drawDrone(drone) {
     ctx.ellipse(0, 200, w * 0.5, 10, 0, 0, Math.PI * 2);
     ctx.fill();
     
-    // Main body - BLACK TRIANGLE
-    ctx.fillStyle = '#0a0a0a';
-    ctx.strokeStyle = '#1a1a1a';
-    ctx.lineWidth = 2;
+    // Main body - VERY DARK BLACK TRIANGLE (no outline)
+    ctx.fillStyle = '#010101';  // Nearly pure black
     
     ctx.beginPath();
     ctx.moveTo(0, -h * 0.6);        // Top point
@@ -2131,12 +2240,12 @@ function drawDrone(drone) {
     ctx.lineTo(w * 0.5, h * 0.4);   // Bottom right
     ctx.closePath();
     ctx.fill();
-    ctx.stroke();
+    // NO STROKE - removes vertical lines
     
-    // Edge lights - soft white
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+    // Edge lights - dimmer white
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';  // Reduced from 0.6
     ctx.shadowColor = '#ffffff';
-    ctx.shadowBlur = 8;
+    ctx.shadowBlur = 6;  // Reduced from 8
     
     // Top light
     ctx.beginPath();
@@ -2255,20 +2364,20 @@ function fireRocketFromPlayerOnce() {
         aimYw = player.y - player.height * 0.35;
     }
 
-    // Fire from player's gun barrel tips - USE TOP BARREL AT (96, -4)
+    // Fire from the actual GUN BARREL (top barrel) - matches where gun visually points
     const torsoW = player.width * 0.62;
     const torsoY = -player.height * 0.34;
     
-    // Shoulder position in LOCAL player coordinates (same as drawing)
+    // Shoulder position in LOCAL player coordinates
     const shoulderX = torsoW/2 - 10;
     const shoulderY = torsoY + 18;
     
-    // TOP gun barrel muzzle position in rotated arm space
-    const muzzleX = 96;
-    const muzzleY = -4;  // TOP barrel, not center
+    // EXTENDED barrel muzzle position in rotated arm space
+    const muzzleX = 132;  // Extended barrel tip
+    const muzzleY = -4;   // TOP barrel
     
-    // Get the clamped arm angle (same as drawing code)
-    const clampedArmAngle = Math.max(-1.2, Math.min(1.2, player.armAngle));
+    // Use arm angle directly - sprite flip handles left/right orientation
+    const clampedArmAngle = Math.max(-1.57, Math.min(0.8, player.armAngle));
     
     // Apply rotation to muzzle position (standard 2D rotation)
     const rotatedMuzzleX = muzzleX * Math.cos(clampedArmAngle) - muzzleY * Math.sin(clampedArmAngle);
@@ -2278,23 +2387,23 @@ function fireRocketFromPlayerOnce() {
     const gunLocalX = shoulderX + rotatedMuzzleX;
     const gunLocalY = shoulderY + rotatedMuzzleY;
     
-    // Convert to world coordinates, accounting for sprite flip when facing left
-    let gunX, gunY;
-    if (player.facingRight) {
-        // Normal: just add to player position
-        gunX = player.x + gunLocalX;
-        gunY = player.y + gunLocalY;
-    } else {
-        // Facing left: X is flipped due to scale(-1, 1) in drawing
-        gunX = player.x - gunLocalX;
-        gunY = player.y + gunLocalY;
-    }
-    
-    // DEBUG: Store gun position for visualization
-    window.debugGunX = gunX;
-    window.debugGunY = gunY;
+    // Convert to world coordinates
+    const gunX = player.x + (player.facingRight ? gunLocalX : -gunLocalX);
+    const gunY = player.y + gunLocalY;
 
-    fireRocket(gunX, gunY, aimXw, aimYw);
+    // Fire in the EXACT direction the gun is visually pointing
+    const fireDistance = 2000;
+    let targetX, targetY;
+    
+    if (player.facingRight) {
+        targetX = gunX + Math.cos(clampedArmAngle) * fireDistance;
+        targetY = gunY + Math.sin(clampedArmAngle) * fireDistance;
+    } else {
+        targetX = gunX - Math.cos(clampedArmAngle) * fireDistance;
+        targetY = gunY + Math.sin(clampedArmAngle) * fireDistance;
+    }
+
+    fireRocket(gunX, gunY, targetX, targetY);
     lastFireTime = now;
 }
 
@@ -2325,7 +2434,6 @@ function activateShield() {
 }
 function update(deltaTime) {
     if (paused) return;
-
     if (!gameRunning) return;
     
     // Process D-pad input for movement
@@ -2412,8 +2520,14 @@ function update(deltaTime) {
     const aimWorldX = aimX + camX;
     const aimWorldY = aimY;
     
-    // Player faces direction of bullseye
-    player.facingRight = aimWorldX >= player.x;
+    // Player faces direction of bullseye - with hysteresis to prevent rapid flipping
+    const aimDiff = aimWorldX - player.x;
+    const facingThreshold = 40;  // Must be clearly different to change facing
+    
+    if (Math.abs(aimDiff) > facingThreshold) {
+        player.facingRight = aimWorldX >= player.x;
+    }
+    // If within threshold, keep current facing
     
     // Calculate arm angle to point at bullseye
     const shoulderX = player.x;
@@ -2423,16 +2537,25 @@ function update(deltaTime) {
     
     // Calculate angle - use abs(dx) since we flip the sprite for facing direction
     player.armAngle = Math.atan2(dy, Math.abs(dx));
-    // Clamp angle so gun doesn't point too far up/down
-    player.armAngle = Math.max(-1.1, Math.min(0.8, player.armAngle));
+    // Clamp angle - allow straight up (-π/2 = -1.57) and reasonable down
+    player.armAngle = Math.max(-1.57, Math.min(0.8, player.armAngle));
 
-    if (mobileMoveHeld) { player.targetX = player.x + 1200; player.targetY = canvas.height - 100; }
+    if (mobileMoveHeld) {
+        player.targetX = player.x + 1200;
+        player.targetY = canvas.height - 100;
+    }
     if (isMoving) {
         // Ground-walk only (no walking up into the air). When not flying, we move in X only.
         const dx = player.targetX - player.x;
         if (Math.abs(dx) > 6) {
             const moveSpeed = player.speed * (player.isFlying ? 2.5 : 1);
-            player.x += Math.sign(dx) * moveSpeed;
+            const movement = Math.sign(dx) * moveSpeed;
+            
+            // Cap movement to prevent teleporting on fast movement
+            const maxMovePerFrame = 20;
+            const cappedMovement = Math.max(-maxMovePerFrame, Math.min(maxMovePerFrame, movement));
+            
+            player.x += cappedMovement;
             player.isMoving = true;
         } else {
             player.isMoving = false;
@@ -2456,8 +2579,8 @@ function update(deltaTime) {
     } else player.legAngle *= 0.85;
 
     const groundY = canvas.height - 100;
-    // Keep player within camera view
-    player.x = Math.max(camX + 60, Math.min(camX + canvas.width - 60, player.x));
+    // NO POSITION CONSTRAINTS - let player move freely
+    // Camera will follow naturally
 
     if (!player.isFlying) {
         // Grounded mode: ease toward ground instead of snapping (prevents "drop to ground" when firing mid-air)
@@ -2470,9 +2593,54 @@ function update(deltaTime) {
     }
 
     
-    // Side-scroller camera: follow the player (no forced scrolling)
-    const desiredCam = Math.max(0, player.x - canvas.width * 0.35);
-    camX = camX + (desiredCam - camX) * 0.10;
+    // Side-scroller camera: LOCK to player position (no lag)
+    // Direct assignment - camera always keeps player in view
+    camX = Math.max(0, player.x - canvas.width * 0.35);
+    
+    // Don't let player go too far left (off the left edge of the world)
+    const minPlayerX = 50;
+    if (player.x < minPlayerX) {
+        player.x = minPlayerX;
+    }
+    
+    // If position becomes invalid, restore last valid position
+    if (!isFinite(player.x) || !isFinite(player.y)) {
+        console.error(`Position became invalid! Restoring last valid position`);
+        
+        if (!isFinite(player.x) && typeof window.lastValidPlayerX === 'number') {
+            player.x = window.lastValidPlayerX;
+        } else if (!isFinite(player.x)) {
+            player.x = camX + 200;
+        }
+        
+        if (!isFinite(player.y)) {
+            player.y = canvas.height - 160;
+        }
+    }
+    
+    // === SAFETY CLAMP: prevent player getting shoved off-screen during heavy collisions / fog volumes ===
+    // Keep last-known-good position when finite
+    if (isFinite(player.x) && isFinite(player.y)) {
+        window.lastValidPlayerX = player.x;
+    }
+
+    // If something pushes the player way outside the camera view, snap back into view
+    if (
+        player.x < camX - 200 ||
+        player.x > camX + canvas.width + 200 ||
+        player.y < -200 ||
+        player.y > canvas.height + 200
+    ) {
+        player.x = camX + canvas.width * 0.3;
+        player.y = canvas.height - 160;
+        player.screenShake = 0;
+    }
+
+    // Hard clamp to the current camera bounds so the player can't "exist" off-screen
+    player.x = Math.max(camX + 40, Math.min(player.x, camX + canvas.width - 40));
+    player.y = Math.max(40, Math.min(player.y, canvas.height - 40));
+
+
 if (player.isFlying && Date.now() > player.flyEndTime) { player.isFlying = false; player.targetY = canvas.height - 130; }
 
     if (isFiring) { fireOneRocket(false); }
@@ -2530,8 +2698,14 @@ if (player.isFlying && Date.now() > player.flyEndTime) { player.isFlying = false
 
             // Start telegraph if ready and not already telegraphing
             if (!enemy.telegraphUntil && (now - enemy.lastShot > enemy.shotRate)) {
-                const muzzleY = enemy.y - enemy.height * 0.58;
-                const muzzleX = enemy.x + (enemy.facingRight ? enemy.width * 0.62 : -enemy.width * 0.62);
+                // Fire from ACTUAL CANNON BARREL MUZZLE
+                const s = enemy.width / 100;  // Scale factor
+                const turretX = 60 * s;  // Turret offset from center
+                const muzzleOffset = 87 * s;  // Muzzle extends from turret
+                const totalOffset = turretX + muzzleOffset;  // Total X offset
+                
+                const muzzleX = enemy.x + (enemy.facingRight ? totalOffset : -totalOffset);
+                const muzzleY = enemy.y - 55 * s;  // Turret Y position
 
                 enemy.telegraphUntil = now + LASER_TELEGRAPH_MS;
                 enemy.telegraphData = { muzzleX, muzzleY };
@@ -2545,21 +2719,26 @@ if (player.isFlying && Date.now() > player.flyEndTime) { player.isFlying = false
             if (enemy.telegraphUntil && now >= enemy.telegraphUntil) {
                 const { muzzleX, muzzleY } = enemy.telegraphData || { muzzleX: enemy.x, muzzleY: enemy.y };
 
-                for (let k = 0; k < 2; k++) {
-                    const ox = muzzleX;
-                    const oy = muzzleY + (k === 0 ? -6 : 6);
-                    const ang = Math.atan2((player.y - player.height * 0.35) - oy, player.x - ox);
-                    const sp = 12.5;
+                // INSTANT LIGHTNING BOLT - not a projectile!
+                // Store lightning attack data for rendering
+                if (!enemy.lightningAttack) {
+                    enemy.lightningAttack = {
+                        active: true,
+                        fromX: muzzleX,
+                        fromY: muzzleY,
+                        toX: player.x,
+                        toY: player.y - player.height * 0.35,
+                        startTime: now,
+                        duration: 150  // Lightning visible for 150ms
+                    };
                     
-                    // WILD LASER BEAM - thicker, red, dangerous looking
-                    enemyLasers.push({
-                        x: ox, y: oy,
-                        vx: Math.cos(ang) * sp,
-                        vy: Math.sin(ang) * sp,
-                        life: 75,
-                        w: 6,  // MUCH THICKER than regular lasers
-                        color: '#ff0000'  // Bright red for spider tank
-                    });
+                    // Damage player immediately
+                    const dmg = 25;
+                    if (now >= player.invulnUntil) {
+                        player.health = Math.max(0, player.health - dmg);
+                        player.invulnUntil = now + 800;
+                        AudioSystem.playHit();  // Fixed: was playHurt
+                    }
                 }
 
                 enemy.lastShot = now;
@@ -2571,23 +2750,27 @@ if (player.isFlying && Date.now() > player.flyEndTime) { player.isFlying = false
                 
                 // WILD FIRING EFFECT - Multiple explosions
                 createExplosion(muzzleX, muzzleY, '#ff0000', 35);  // Main explosion
-                createExplosion(muzzleX - 15, muzzleY - 10, '#ff6600', 20);  // Side burst
-                createExplosion(muzzleX + 15, muzzleY + 10, '#ffaa00', 20);  // Side burst
+                createExplosion(player.x, player.y - player.height * 0.35, '#ff0000', 30);  // Hit explosion
                 
                 // Extra sparks for dramatic effect
-                for (let i = 0; i < 10; i++) {
+                for (let i = 0; i < 15; i++) {
                     const angle = Math.random() * Math.PI * 2;
-                    const speed = 3 + Math.random() * 5;
+                    const speed = 3 + Math.random() * 6;
                     sparks.push({
                         x: muzzleX,
                         y: muzzleY,
                         vx: Math.cos(angle) * speed,
                         vy: Math.sin(angle) * speed,
                         life: 0.8 + Math.random() * 0.4,
-                        size: 3 + Math.random() * 4,
+                        size: 3 + Math.random() * 5,
                         color: '#ff0000'
                     });
                 }
+            }
+            
+            // Clear finished lightning attacks
+            if (enemy.lightningAttack && now - enemy.lightningAttack.startTime > enemy.lightningAttack.duration) {
+                enemy.lightningAttack = null;
             }
         }
         
@@ -2747,6 +2930,23 @@ if (player.isFlying && Date.now() > player.flyEndTime) { player.isFlying = false
 
     const hint = document.getElementById('easterEggHint');
     hint.classList.toggle('show', flyCharge >= FLY_CHARGE_MAX && !player.isFlying);
+    
+    // HARD CLAMP: Force player.x to never jump more than 30px per frame
+    if (typeof window.lastValidPlayerX === 'number') {
+        const maxJump = 30;
+        const actualJump = player.x - window.lastValidPlayerX;
+        
+        if (Math.abs(actualJump) > maxJump) {
+            console.warn(`Prevented jump from ${window.lastValidPlayerX.toFixed(0)} to ${player.x.toFixed(0)} (${actualJump.toFixed(0)}px)`);
+            // Clamp to max allowed movement
+            player.x = window.lastValidPlayerX + Math.sign(actualJump) * maxJump;
+        }
+    }
+    
+    // Save valid position for next frame
+    if (isFinite(player.x)) {
+        window.lastValidPlayerX = player.x;
+    }
 }
 
 function draw() {
@@ -2858,17 +3058,7 @@ function draw() {
         ctx.fillRect(planetX - pr, by, pr*2, pr*0.10);
     }
 
-    // A few storm swirls
-    ctx.globalAlpha = 0.18;
-    ctx.strokeStyle = 'rgba(220,255,220,0.55)';
-    ctx.lineWidth = 2;
-    for (let i=0;i<6;i++){
-        const ax = planetX - pr*0.25 + i*pr*0.18;
-        const ay = planetY - pr*0.15 + Math.sin(i*2.1)*pr*0.12;
-        ctx.beginPath();
-        ctx.ellipse(ax, ay, pr*0.22, pr*0.08, 0.25, 0, Math.PI*2);
-        ctx.stroke();
-    }
+    // Storm swirls removed - cleaner look
     ctx.restore();
 
     // Ring: multi-strand with dust specks (NO atmosphere rim - removed grey C)
@@ -2899,18 +3089,7 @@ function draw() {
     ctx.ellipse(0, 0, 104, 24, 0, 0, Math.PI * 2);
     ctx.stroke();
 
-    // ring dust
-    ctx.globalAlpha = 0.30;
-    ctx.fillStyle = 'rgba(255,255,255,0.18)';
-    for (let i=0;i<70;i++){
-        const a = (i/70) * Math.PI*2;
-        const rx = Math.cos(a) * (108 + (i%9-4)*1.2);
-        const ry = Math.sin(a) * (25 + (i%7-3)*0.7);
-        ctx.beginPath();
-        ctx.arc(rx, ry, (i%5===0?1.6:1.0), 0, Math.PI*2);
-        ctx.fill();
-    }
-
+    // Ring dust circles removed for cleaner look
     ctx.restore();
     
     // Blue ringed planet in the sky
@@ -3213,12 +3392,7 @@ function draw() {
         ctx.fill();
     });
     ctx.shadowBlur = 0;
-    ctx.globalAlpha = 1;
-
-    // Rockets
-    rockets.forEach(r => drawRocket(r));
-
-    // Enemy lasers - ENHANCED VISIBILITY
+    ctx.globalAlpha = 1;    // Enemy lasers - regular projectile lasers (drones only now)
     enemyLasers.forEach(lz => {
         ctx.save();
         ctx.globalAlpha = 0.95;
@@ -3264,6 +3438,98 @@ function draw() {
         ctx.restore();
     });
 
+    // INSTANT LIGHTNING BOLTS (spider tank attacks)
+    enemies.forEach(enemy => {
+        if (enemy.lightningAttack && enemy.lightningAttack.active) {
+            const bolt = enemy.lightningAttack;
+            const age = Date.now() - bolt.startTime;
+            const fadeOut = 1.0 - (age / bolt.duration);
+            
+            if (fadeOut > 0) {
+                ctx.save();
+                
+                const dx = bolt.toX - bolt.fromX;
+                const dy = bolt.toY - bolt.fromY;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                const segments = Math.floor(dist / 15);
+                
+                // MAIN LIGHTNING BOLT
+                ctx.globalAlpha = fadeOut * 0.9;
+                ctx.strokeStyle = '#ff0000';
+                ctx.lineWidth = 8;
+                ctx.shadowColor = '#ff0000';
+                ctx.shadowBlur = 40;
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+                
+                ctx.beginPath();
+                ctx.moveTo(bolt.fromX, bolt.fromY);
+                
+                // Jagged lightning path
+                for (let i = 1; i <= segments; i++) {
+                    const t = i / segments;
+                    const baseX = bolt.fromX + dx * t;
+                    const baseY = bolt.fromY + dy * t;
+                    const perpX = -dy / dist;
+                    const perpY = dx / dist;
+                    const offset = (Math.random() - 0.5) * 25;
+                    ctx.lineTo(baseX + perpX * offset, baseY + perpY * offset);
+                }
+                ctx.lineTo(bolt.toX, bolt.toY);
+                ctx.stroke();
+                
+                // BRIGHT CORE
+                ctx.globalAlpha = fadeOut;
+                ctx.strokeStyle = '#ffaaaa';
+                ctx.lineWidth = 4;
+                ctx.shadowColor = '#ffffff';
+                ctx.shadowBlur = 20;
+                
+                ctx.beginPath();
+                ctx.moveTo(bolt.fromX, bolt.fromY);
+                for (let i = 1; i <= segments; i++) {
+                    const t = i / segments;
+                    const baseX = bolt.fromX + dx * t;
+                    const baseY = bolt.fromY + dy * t;
+                    const perpX = -dy / dist;
+                    const perpY = dx / dist;
+                    const offset = (Math.random() - 0.5) * 15;
+                    ctx.lineTo(baseX + perpX * offset, baseY + perpY * offset);
+                }
+                ctx.lineTo(bolt.toX, bolt.toY);
+                ctx.stroke();
+                
+                // SECONDARY BOLTS (branching arcs)
+                ctx.globalAlpha = fadeOut * 0.7;
+                ctx.strokeStyle = '#ff0000';
+                ctx.lineWidth = 3;
+                ctx.shadowBlur = 15;
+                
+                for (let b = 0; b < 4; b++) {
+                    const branchT = 0.3 + Math.random() * 0.4;
+                    const branchX = bolt.fromX + dx * branchT;
+                    const branchY = bolt.fromY + dy * branchT;
+                    const branchAngle = Math.random() * Math.PI * 2;
+                    const branchLen = 30 + Math.random() * 40;
+                    const branchSegs = 3;
+                    
+                    ctx.beginPath();
+                    ctx.moveTo(branchX, branchY);
+                    for (let s = 1; s <= branchSegs; s++) {
+                        const st = s / branchSegs;
+                        const sx = branchX + Math.cos(branchAngle) * branchLen * st;
+                        const sy = branchY + Math.sin(branchAngle) * branchLen * st;
+                        const soff = (Math.random() - 0.5) * 15;
+                        ctx.lineTo(sx + soff, sy + soff);
+                    }
+                    ctx.stroke();
+                }
+                
+                ctx.restore();
+            }
+        }
+    });
+
     // Enemies
     enemies.forEach(enemy => {
         if (enemy.kind === 'trex') {
@@ -3271,22 +3537,8 @@ function draw() {
         } else {
             drawHumanoidBot(enemy.x, enemy.y, enemy.width, enemy.height, enemy.legAngle, enemy.facingRight, enemy.health, enemy.maxHealth);
         }
-        // Laser warning tell
-        if (enemy.hasLaser && enemy.telegraphUntil && Date.now() < enemy.telegraphUntil) {
-            const mx = enemy.x + (enemy.facingRight ? enemy.width * 0.62 : -enemy.width * 0.62);
-            const my = enemy.y - enemy.height * 0.58;
-            ctx.save();
-            ctx.globalAlpha = 0.35;
-            ctx.strokeStyle = 'rgba(255,70,90,0.9)';
-            ctx.lineWidth = 2;
-            ctx.setLineDash([6, 10]);
-            ctx.beginPath();
-            ctx.moveTo(mx - camX, my);
-            ctx.lineTo(player.x - camX, player.y - player.height * 0.35);
-            ctx.stroke();
-            ctx.setLineDash([]);
-            ctx.restore();
-        }
+        // Laser warning tell - REMOVED (no dotted line)
+        // Warning is visual from charging barrel glow only
     });
 
     // Drones (flying enemies)
@@ -3294,9 +3546,18 @@ function draw() {
         drawDrone(drone);
     });
 
+    // Rockets (drawn AFTER enemies so shots don’t get hidden by the spider tank)
+    rockets.forEach(r => drawRocket(r));
+
+
     // Player
     if (gameRunning) {
         drawAimLine();
+
+        // Safety: ensure no prior FX (fog/alpha/shadows) leak into the player render
+        ctx.globalAlpha = 1;
+        ctx.shadowBlur = 0;
+
         drawPlayer(player.x, player.y, player.width, player.height, player.legAngle, player.isFlying, player.facingRight, player.armAngle);
         
         // DEBUG: Draw bright cyan circle at calculated gun barrel position
@@ -3413,6 +3674,17 @@ function draw() {
     }
 
     ctx.restore();
+    
+    // HARD CLAMP: Force player.x to never jump during draw
+    if (typeof window.lastValidPlayerX === 'number' && isFinite(player.x)) {
+        const maxJump = 30;
+        const actualJump = player.x - window.lastValidPlayerX;
+        
+        if (Math.abs(actualJump) > maxJump) {
+            console.warn(`Draw changed position from ${window.lastValidPlayerX.toFixed(0)} to ${player.x.toFixed(0)}, reverting`);
+            player.x = window.lastValidPlayerX;
+        }
+    }
 }
 
 function updateHUD() {
@@ -3779,13 +4051,38 @@ function doFire() {
     if (!gameRunning || paused) return;
     AudioSystem.resume();
     
-    // Fire from player's gun side toward the aim point
-    const gunX = player.x + (player.facingRight ? 45 : -45);
-    const gunY = player.y - player.height * 0.3;
+    // Fire from actual gun barrel with rotation
+    const torsoW = player.width * 0.62;
+    const torsoY = -player.height * 0.34;
+    const shoulderX = torsoW/2 - 10;
+    const shoulderY = torsoY + 18;
+    const muzzleX = 132;  // Extended barrel tip
+    const muzzleY = -4;   // Top barrel
     
-    // Shoot at aim reticle position
-    const targetX = aimX + camX;
-    const targetY = aimY;
+    // Use arm angle directly - sprite flip handles left/right orientation
+    const clampedArmAngle = Math.max(-1.57, Math.min(0.8, player.armAngle));
+    
+    const rotatedMuzzleX = muzzleX * Math.cos(clampedArmAngle) - muzzleY * Math.sin(clampedArmAngle);
+    const rotatedMuzzleY = muzzleX * Math.sin(clampedArmAngle) + muzzleY * Math.cos(clampedArmAngle);
+    
+    const gunLocalX = shoulderX + rotatedMuzzleX;
+    const gunLocalY = shoulderY + rotatedMuzzleY;
+    
+    const gunX = player.x + (player.facingRight ? gunLocalX : -gunLocalX);
+    const gunY = player.y + gunLocalY;
+    
+    // Fire in the EXACT direction the gun is visually pointing
+    const fireDistance = 2000;
+    let targetX, targetY;
+    
+    if (player.facingRight) {
+        targetX = gunX + Math.cos(clampedArmAngle) * fireDistance;
+        targetY = gunY + Math.sin(clampedArmAngle) * fireDistance;
+    } else {
+        targetX = gunX - Math.cos(clampedArmAngle) * fireDistance;
+        targetY = gunY + Math.sin(clampedArmAngle) * fireDistance;
+    }
+    
     fireRocket(gunX, gunY, targetX, targetY);
     playShoot();
 }
@@ -3897,6 +4194,60 @@ canvas.addEventListener('touchstart', (e) => {
     updateBullseye();
 });
 
+// ===== D-PAD DRAG FUNCTIONALITY =====
+(function() {
+    const dpad = document.getElementById('dpad');
+    let isDragging = false;
+    let dragOffsetX = 0;
+    let dragOffsetY = 0;
+    
+    function startDrag(e) {
+        // Don't drag if clicking on a button
+        if (e.target.classList.contains('dpad-btn')) return;
+        
+        isDragging = true;
+        const rect = dpad.getBoundingClientRect();
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+        dragOffsetX = clientX - rect.left;
+        dragOffsetY = clientY - rect.top;
+        dpad.style.transition = 'none';
+        e.preventDefault();
+    }
+    
+    function drag(e) {
+        if (!isDragging) return;
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+        
+        let newLeft = clientX - dragOffsetX;
+        let newBottom = window.innerHeight - clientY - (dpad.offsetHeight - dragOffsetY);
+        
+        // Keep within bounds
+        newLeft = Math.max(5, Math.min(window.innerWidth - dpad.offsetWidth - 5, newLeft));
+        newBottom = Math.max(5, Math.min(window.innerHeight - dpad.offsetHeight - 5, newBottom));
+        
+        dpad.style.left = newLeft + 'px';
+        dpad.style.bottom = newBottom + 'px';
+        e.preventDefault();
+    }
+    
+    function stopDrag() {
+        isDragging = false;
+        dpad.style.transition = '';
+    }
+    
+    // Mouse events
+    dpad.addEventListener('mousedown', startDrag);
+    document.addEventListener('mousemove', drag);
+    document.addEventListener('mouseup', stopDrag);
+    
+    // Touch events
+    dpad.addEventListener('touchstart', startDrag, { passive: false });
+    document.addEventListener('touchmove', drag, { passive: false });
+    document.addEventListener('touchend', stopDrag);
+})();
+
 document.getElementById('soundToggle').addEventListener('click', () => { AudioSystem.enabled = !AudioSystem.enabled; document.getElementById('soundToggle').textContent = AudioSystem.enabled ? '🔊 SOUND ON' : '🔇 SOUND OFF'; });
 document.getElementById('startBtn').addEventListener('click', startGame);
 document.getElementById('restartBtn').addEventListener('click', startGame);
@@ -3911,6 +4262,12 @@ function togglePause() {
     const pauseBtn = document.getElementById('pauseBtn');
     if (pauseBtn) {
         pauseBtn.innerHTML = paused ? '▶<br>PLAY' : '⏸<br>PAUSE';
+        // Toggle blue glow when paused
+        if (paused) {
+            pauseBtn.classList.add('paused');
+        } else {
+            pauseBtn.classList.remove('paused');
+        }
     }
     
     if (paused) {
