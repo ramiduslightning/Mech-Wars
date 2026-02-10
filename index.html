@@ -18,8 +18,17 @@
         /* Bullseye removed - gun rotation shows aiming */
         #bullseye { display: none; }
         
-        #hud { position: absolute; top: 0; left: 0; right: 0; padding: 15px 20px; display: flex; justify-content: space-between; align-items: flex-start; pointer-events: none; z-index: 10; }
-        .hud-panel { background: rgba(0, 10, 20, 0.85); border: 2px solid #00ffcc; padding: 12px 18px; box-shadow: 0 0 25px rgba(0, 255, 204, 0.4), inset 0 0 40px rgba(0, 255, 204, 0.1); clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 12px 100%, 0 calc(100% - 12px)); }
+        #hud {
+ position: absolute; top: 0; left: 0; right: 0; padding: 15px 20px; padding-right: 340px; display: flex; justify-content: flex-start; gap: 12px; align-items: flex-start; pointer-events: none; z-index: 10; }
+        
+        /* Reposition the status/fuel panel so it doesn't cover background art (e.g., the blue planet) */
+        #statusPanel{
+            position: absolute;
+            top: 15px;
+            right: 20px;
+            max-width: 300px;
+        }
+.hud-panel { background: rgba(0, 10, 20, 0.85); border: 2px solid #00ffcc; padding: 12px 18px; box-shadow: 0 0 25px rgba(0, 255, 204, 0.4), inset 0 0 40px rgba(0, 255, 204, 0.1); clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 12px 100%, 0 calc(100% - 12px)); }
         .hud-label { font-family: 'Orbitron', sans-serif; font-size: 10px; color: #00ffcc; letter-spacing: 3px; margin-bottom: 5px; text-shadow: 0 0 10px #00ffcc; }
         .hud-value { font-family: 'Orbitron', sans-serif; font-size: 28px; font-weight: 900; color: #fff; text-shadow: 0 0 15px #00ffcc, 0 0 30px #00ffcc; }
         #healthBar { width: 180px; height: 14px; background: linear-gradient(180deg, #1a1a1a, #0a0a0a); border: 2px solid #00ffcc; margin-top: 5px; overflow: hidden; }
@@ -31,8 +40,8 @@
         .mobile-btn { width: 90px; height: 90px; border-radius: 50%; border: 4px solid; font-family: 'Orbitron', sans-serif; font-weight: 700; font-size: 11px; display: flex; align-items: center; justify-content: center; text-align: center; cursor: pointer; }
 /* removed */         #moveBtn { background: rgba(0, 255, 204, 0.25); border-color: #00ffcc; color: #00ffcc; }
 /* removed */         #fireBtn { background: rgba(255, 51, 51, 0.25); border-color: #ff3333; color: #ff3333; }
-        #flyBtn { width: 55px; height: 55px; font-size: 9px; background: rgba(255, 204, 0, 0.25); border-color: #ffcc00; color: #ffcc00; position: fixed; bottom: 90px; right: 10px; }
-        #shieldBtn { width: 55px; height: 55px; font-size: 9px; background: rgba(120, 180, 255, 0.22); border-color: #66aaff; color: #66aaff; position: fixed; bottom: 155px; right: 10px; }
+        #flyBtn { width: 52px; height: 52px; font-size: 9px; background: rgba(255, 204, 0, 0.25); border-color: #ffcc00; color: #ffcc00; }
+        #shieldBtn { width: 52px; height: 52px; font-size: 9px; background: rgba(120, 180, 255, 0.22); border-color: #66aaff; color: #66aaff; }
         .mobile-btn:active, .mobile-btn.active { transform: scale(0.92); filter: brightness(1.6); }
         #soundToggle { display: none !important; }
         #startScreen, #gameOverScreen { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: radial-gradient(ellipse at center, rgba(10,20,40,0.95) 0%, rgba(0,0,0,0.98) 100%); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 100; }
@@ -40,7 +49,8 @@
         .title { font-family: 'Orbitron', sans-serif; font-size: clamp(40px, 12vw, 90px); font-weight: 900; color: #00ffcc; text-shadow: 0 0 40px #00ffcc, 0 0 80px #00aaff, 0 0 120px #0066ff; letter-spacing: 12px; margin-bottom: 5px; animation: titlePulse 2s infinite; }
         .title span { color: #ff4444; text-shadow: 0 0 40px #ff4444, 0 0 80px #ff0000; }
         @keyframes titlePulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.85; } }
-        .subtitle { font-family: 'Share Tech Mono', monospace; font-size: clamp(12px, 2.5vw, 18px); color: #888; letter-spacing: 4px; margin-bottom: 40px; }
+        .subtitle { font-family: 'Share Tech Mono', monospace; font-size: clamp(12px, 2.5vw, 18px); color: #888; letter-spacing: 4px; margin-bottom: 14px; }
+        .byline { font-family: 'Share Tech Mono', monospace; font-size: 12px; color: #6fc; letter-spacing: 2px; opacity: 0.85; margin-bottom: 26px; text-shadow: 0 0 10px rgba(0,255,204,0.35); }
         .instructions { font-family: 'Share Tech Mono', monospace; font-size: 14px; color: #aaa; text-align: center; line-height: 2.2; margin-bottom: 40px; }
         .instructions span { color: #00ffcc; text-shadow: 0 0 10px #00ffcc; }
         .instructions .warn { color: #ff6600; }
@@ -56,7 +66,8 @@
             .hud-value { font-size: 18px; } 
             #healthBar { width: 110px; height: 12px; }
             /* Hide unnecessary UI on mobile */
-            #hud { display: none !important; }
+            #hud {
+ display: none !important; }
             
             /* D-pad stays fixed positioned */
             .dpad { 
@@ -241,6 +252,19 @@
     transform: scale(0.95);
 }
 
+
+        .hud-abilities{
+            position: absolute;
+            top: 135px;
+            right: 20px;
+            display: flex;
+            gap: 10px;
+            pointer-events: auto;
+        }
+        /* keep abilities visually tied to HUD */
+
+        /* Hide touch-only HUD buttons on desktop (mouse/keyboard aiming uses cursor) */
+        body.notouch .touch-only { display: none !important; }
 </style>
 </head>
 <body>
@@ -259,8 +283,13 @@
         <div id="hud">
             <div class="hud-panel"><div class="hud-label">SCORE</div><div class="hud-value" id="scoreDisplay">0</div></div>
             <div class="hud-panel"><div class="hud-label">KILLS</div><div class="hud-value" id="killsDisplay">0</div></div>
-            <div class="hud-panel"><div class="hud-label">SUIT INTEGRITY</div><div id="healthBar"><div id="healthFill" style="width: 100%"></div></div><div class="hud-label" style="margin-top: 10px">◆ SPECIALTY FUEL ◆</div><div id="flyMeter"><div id="flyFill"></div></div></div>
-        </div>
+            <div class="hud-panel" id="statusPanel"><div class="hud-label">SUIT INTEGRITY</div><div id="healthBar"><div id="healthFill" style="width: 100%"></div></div><div class="hud-label" style="margin-top: 10px">◆ SPECIALTY FUEL ◆</div><div id="flyMeter"><div id="flyFill"></div></div></div>
+        
+            <div class="hud-abilities">
+                <div id="flyBtn" class="mobile-btn ability touch-only">✈<br>FLY</div>
+                <div id="shieldBtn" class="mobile-btn ability touch-only">🛡<br>SHIELD</div>
+            </div>
+</div>
         <div id="mobileControls">
 
   <div id="dpad" class="dpad">
@@ -270,10 +299,7 @@
     <div class="dpad-btn right" id="btnRight">▶</div>
     <div class="dpad-btn down" id="btnDown">▼</div>
   </div>
-  <div class="abilityStack">
-    <div id="flyBtn" class="mobile-btn ability hidden">✈<br>FLY</div>
-    <div id="shieldBtn" class="mobile-btn ability hidden">🛡<br>SHIELD</div>
-  </div>
+</div>
 </div>
 <div id="pauseBtn" class="mobile-btn">⏸<br>PAUSE</div>
         <div id="easterEggHint">⚡ CHARGE READY — SPACE: FLY • SHIFT: SHIELD ⚡</div>
@@ -281,6 +307,7 @@
         <div id="startScreen">
             <div class="title">MECH <span>WARS</span></div>
             <div class="subtitle">ALIEN MOON • ROBOT UPRISING</div>
+            <div class="byline">Ramidus, Inc • A Casey T. Duncan Enterprise</div>
             <div class="instructions" id="desktopInstructions">
                 <span>[MOUSE]</span> — Aim gun<br>
                 <span>[CLICK / F]</span> — Shoot<br>
@@ -517,7 +544,15 @@ const SHIELD_DURATION = 15000, SHIELD_HITS = 4;
 const LASER_TELEGRAPH_MS = 250; // Reduced for faster, more obvious attacks
 const IFRAME_MS = 800;
 
-function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+const isTouchDevice = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+if (document.body) document.body.classList.add(isTouchDevice ? "touch" : "notouch");
+
+function resize() {
+    const isSmallTouch = isTouchDevice && (window.innerWidth <= 820 || window.innerHeight <= 520);
+    const r = isSmallTouch ? 1.35 : 1;
+    canvas.width = Math.floor(window.innerWidth * r);
+    canvas.height = Math.floor(window.innerHeight * r);
+}
 resize(); 
 window.addEventListener('blur', () => { isMoving = false; isFiring = false; mobileMoveHeld = false; lastFireTime = -1e9; dpadState.up = false; dpadState.down = false; dpadState.left = false; dpadState.right = false; syncDpadVisuals && syncDpadVisuals(); });
 document.addEventListener('visibilitychange', () => { if (document.hidden) { isMoving = false; isFiring = false; mobileMoveHeld = false; lastFireTime = -1e9; dpadState.up = false; dpadState.down = false; dpadState.left = false; dpadState.right = false; } });
@@ -535,7 +570,6 @@ let lmbDownTime = 0, lmbDownX = 0, lmbDownY = 0;
 const fireRate = 320;
 
 // Detect mobile/touch device and show appropriate instructions
-const isTouchDevice = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
 
 // Mobile phone plays better when the world is slightly zoomed out (more space on screen).
 // Desktop stays exactly the same.
@@ -548,6 +582,8 @@ function getWorldOffsetY(scale) {
     // Keep the ground/bottom aligned after scaling
     return canvas.height * (1/scale - 1);
 }
+function clientToCanvasX(x){ return x * (canvas.width / window.innerWidth); }
+function clientToCanvasY(y){ return y * (canvas.height / window.innerHeight); }
 function screenToWorld(x, y) {
     const s = getWorldScale();
     const oy = getWorldOffsetY(s);
@@ -3745,8 +3781,8 @@ function startGame() {
 
     // Make sure the aim starts at the current pointer position (or center if unknown)
     if (!(typeof mouseX === 'number' && typeof mouseY === 'number')) {
-        mouseX = window.innerWidth * 0.5;
-        mouseY = window.innerHeight * 0.5;
+        mouseX = canvas.width * 0.5;
+        mouseY = canvas.height * 0.5;
     }
     updateBullseye();
 
@@ -3800,18 +3836,18 @@ function updateBullseye() { /* reticle is drawn in-canvas */ }
 
 // Initialize bullseye to screen center so it never appears "stuck" at (0,0)
 (function initBullseyeCenter(){
-    mouseX = window.innerWidth * 0.5;
-    mouseY = window.innerHeight * 0.5;
+    mouseX = canvas.width * 0.5;
+    mouseY = canvas.height * 0.5;
     aimX = mouseX;
     aimY = mouseY;
     updateBullseye();
 })();
 window.addEventListener('resize', () => {
     // keep aim reasonable on resize
-    mouseX = Math.min(Math.max(20, mouseX), window.innerWidth - 20);
-    mouseY = Math.min(Math.max(20, mouseY), window.innerHeight - 20);
-    aimX = Math.min(Math.max(20, aimX), window.innerWidth - 20);
-    aimY = Math.min(Math.max(20, aimY), window.innerHeight - 20);
+    mouseX = Math.min(Math.max(20, mouseX), canvas.width - 20);
+    mouseY = Math.min(Math.max(20, mouseY), canvas.height - 20);
+    aimX = Math.min(Math.max(20, aimX), canvas.width - 20);
+    aimY = Math.min(Math.max(20, aimY), canvas.height - 20);
     updateBullseye();
 });
 
@@ -3826,8 +3862,8 @@ let aimPointerId = null;
 const setAimFromEvent = (e) => {
     if (!e) return;
     if (typeof e.clientX === 'number' && typeof e.clientY === 'number') {
-        mouseX = e.clientX;
-        mouseY = e.clientY;
+        mouseX = clientToCanvasX(e.clientX);
+        mouseY = clientToCanvasY(e.clientY);
         // click-to-place: the reticle lives where you click/tap, independent of cursor movement
         aimX = mouseX;
         aimY = mouseY;
