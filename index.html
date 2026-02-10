@@ -40,8 +40,8 @@
         .mobile-btn { width: 90px; height: 90px; border-radius: 50%; border: 4px solid; font-family: 'Orbitron', sans-serif; font-weight: 700; font-size: 11px; display: flex; align-items: center; justify-content: center; text-align: center; cursor: pointer; }
 /* removed */         #moveBtn { background: rgba(0, 255, 204, 0.25); border-color: #00ffcc; color: #00ffcc; }
 /* removed */         #fireBtn { background: rgba(255, 51, 51, 0.25); border-color: #ff3333; color: #ff3333; }
-        #flyBtn { width: 52px; height: 52px; font-size: 9px; background: rgba(255, 204, 0, 0.25); border-color: #ffcc00; color: #ffcc00; }
-        #shieldBtn { width: 52px; height: 52px; font-size: 9px; background: rgba(120, 180, 255, 0.22); border-color: #66aaff; color: #66aaff; }
+        #flyBtn { position: fixed; bottom: 85px; right: 10px; width: 52px; height: 52px; font-size: 9px; background: rgba(255, 204, 0, 0.25); border-color: #ffcc00; color: #ffcc00; z-index: 20; }
+        #shieldBtn { position: fixed; bottom: 145px; right: 10px; width: 52px; height: 52px; font-size: 9px; background: rgba(120, 180, 255, 0.22); border-color: #66aaff; color: #66aaff; z-index: 20; }
         .mobile-btn:active, .mobile-btn.active { transform: scale(0.92); filter: brightness(1.6); }
         #soundToggle { display: none !important; }
         #startScreen, #gameOverScreen { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: radial-gradient(ellipse at center, rgba(10,20,40,0.95) 0%, rgba(0,0,0,0.98) 100%); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 100; }
@@ -175,6 +175,18 @@
   touch-action: none;
   cursor: move;
   z-index: 20;
+}
+
+/* Make D-pad smaller on phones only */
+@media (max-width: 600px) {
+  .dpad {
+    width: 100px; 
+    height: 100px; 
+    border-radius: 14px;
+    grid-template-columns: 31px 31px 31px;
+    grid-template-rows: 31px 31px 31px;
+    padding: 2px;
+  }
 }
 .dpad-btn{
   display:flex; align-items:center; justify-content:center;
@@ -651,7 +663,7 @@ function initPlayer() {
     // Spawn player further right on mobile so D-pad doesn't block view
     const spawnOffset = canvas.width < 600 ? 0.38 : 0.25;
     player.x = camX + canvas.width * spawnOffset; 
-    player.y = canvas.height - 160; 
+    player.y = canvas.height - 180;  // Raised to match ground at -120
     player.targetX = player.x; 
     player.targetY = player.y; 
     player.health = player.maxHealth; 
@@ -2217,7 +2229,7 @@ function spawnEnemy() {
     const kind = isTRex ? 'trex' : 'bot';
 
     const baseX = camX + canvas.width + 160 + Math.random()*260;
-    const groundY = canvas.height - 100;
+    const groundY = canvas.height - 120;  // Raised for mobile visibility
 
     const enemy = {
         kind,
@@ -2603,7 +2615,7 @@ function update(deltaTime) {
 
     if (mobileMoveHeld) {
         player.targetX = player.x + 1200;
-        player.targetY = canvas.height - 100;
+        player.targetY = canvas.height - 120;  // Raised ground
     }
     if (isMoving) {
         // Ground-walk only (no walking up into the air). When not flying, we move in X only.
@@ -2639,7 +2651,7 @@ function update(deltaTime) {
         if (Math.abs(player.legAngle) > 0.5) player.legDir *= -1;
     } else player.legAngle *= 0.85;
 
-    const groundY = canvas.height - 100;
+    const groundY = canvas.height - 120;  // Raised for mobile visibility
     // NO POSITION CONSTRAINTS - let player move freely
     // Camera will follow naturally
 
@@ -2675,7 +2687,7 @@ function update(deltaTime) {
         }
         
         if (!isFinite(player.y)) {
-            player.y = canvas.height - 160;
+            player.y = canvas.height - 180;  // Raised to match ground
         }
     }
     
@@ -2693,7 +2705,7 @@ function update(deltaTime) {
         player.y > canvas.height + 200
     ) {
         player.x = camX + canvas.width * 0.3;
-        player.y = canvas.height - 160;
+        player.y = canvas.height - 180;  // Raised to match ground
         player.screenShake = 0;
     }
 
@@ -4212,7 +4224,7 @@ canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 function updateMovementFromDpad(){
   const dx = (dpadState.right ? 1 : 0) - (dpadState.left ? 1 : 0);
   const dy = (dpadState.down ? 1 : 0) - (dpadState.up ? 1 : 0);
-  const groundLevel = canvas.height - 100;
+  const groundLevel = canvas.height - 120;  // Raised ground
 
   // If any direction is held, force movement like a classic pad.
   if (dx !== 0 || dy !== 0){
