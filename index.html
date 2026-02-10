@@ -273,6 +273,40 @@
             gap: 10px;
             pointer-events: auto;
         }
+        
+        /* On mobile, position ability buttons fixed on screen */
+        @media (max-width: 768px) {
+            .hud-abilities {
+                position: fixed;
+                top: auto;
+                bottom: 0;
+                right: 0;
+                flex-direction: column;
+                gap: 8px;
+                padding: 0;
+                margin: 0;
+            }
+            
+            #flyBtn, #shieldBtn {
+                position: relative !important;
+                margin: 0 !important;
+            }
+            
+            #flyBtn {
+                bottom: auto !important;
+                right: auto !important;
+                margin-bottom: 8px !important;
+                margin-right: 10px !important;
+            }
+            
+            #shieldBtn {
+                bottom: auto !important;
+                right: auto !important;
+                margin-right: 10px !important;
+                margin-bottom: 10px !important;
+            }
+        }
+        
         /* keep abilities visually tied to HUD */
 
         /* Hide touch-only HUD buttons on desktop (mouse/keyboard aiming uses cursor) */
@@ -559,6 +593,16 @@ const IFRAME_MS = 800;
 const isTouchDevice = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
 if (document.body) document.body.classList.add(isTouchDevice ? "touch" : "notouch");
 
+// Set appropriate hint text based on device type
+const hintEl = document.getElementById('easterEggHint');
+if (hintEl) {
+    if (isTouchDevice) {
+        hintEl.textContent = '⚡ CHARGE READY — TAP BUTTONS TO USE ⚡';
+    } else {
+        hintEl.textContent = '⚡ CHARGE READY — SPACE: FLY • SHIFT: SHIELD ⚡';
+    }
+}
+
 function resize() {
     const isSmallTouch = isTouchDevice && (window.innerWidth <= 820 || window.innerHeight <= 520);
     const r = isSmallTouch ? 1.35 : 1;
@@ -631,7 +675,7 @@ function fireOneRocket(force=false) {
     const muzzleY = -4;   // Top barrel
     
     // Use arm angle directly - sprite flip handles left/right orientation
-    const clampedArmAngle = Math.max(-1.57, Math.min(0.8, player.armAngle));
+    const clampedArmAngle = Math.max(-1.57, Math.min(1.57, player.armAngle));
     
     const rotatedMuzzleX = muzzleX * Math.cos(clampedArmAngle) - muzzleY * Math.sin(clampedArmAngle);
     const rotatedMuzzleY = muzzleX * Math.sin(clampedArmAngle) + muzzleY * Math.cos(clampedArmAngle);
@@ -1006,7 +1050,7 @@ function drawPlayer(x, y, width, height, legAngle, isFlying, facingRight, armAng
     // Cannon arm
     ctx.save();
     ctx.translate(shoulderX, shoulderY);
-    const aim = Math.max(-1.57, Math.min(0.8, armAngle));
+    const aim = Math.max(-1.57, Math.min(1.57, armAngle));
     ctx.rotate(aim);
 
     // Upper arm
@@ -1628,7 +1672,7 @@ function drawHumanoidBot(x, y, width, height, legAngle, facingRight, health, max
 
 
 // SPIDER TANK - Large robotic enemy with 4 legs and RED NEON GLOW
-function drawMetallicTRex(x, y, width, height, legAngle, facingRight, health, maxHealth, isCharging, telegraphUntil) {
+function drawMetallicTRex(x, y, width, height, legAngle, facingRight, health, maxHealth, isCharging, telegraphUntil, targetX, targetY) {
     ctx.save();
     ctx.translate(x, y);
     if (!facingRight) ctx.scale(-1, 1);
@@ -2003,15 +2047,34 @@ function drawMetallicTRex(x, y, width, height, legAngle, facingRight, health, ma
     ctx.fill();
     ctx.restore();
 
-    // === WEAPON TURRET ===
+    // === WEAPON TURRET (AIMS AT TARGET) ===
     ctx.save();
     ctx.translate(60*s, -55*s);
     
-    // Turret base
+    // Calculate aim angle toward target
+    let turretAngle = 0;
+    if (targetX !== undefined && targetY !== undefined) {
+        // Turret world position
+        const turretWorldX = facingRight ? x + 60*s : x - 60*s;
+        const turretWorldY = y - 55*s;
+        const aimDx = targetX - turretWorldX;
+        const aimDy = targetY - turretWorldY;
+        // In local space, x is flipped if !facingRight
+        const localDx = facingRight ? aimDx : -aimDx;
+        const localDy = aimDy;
+        turretAngle = Math.atan2(localDy, localDx);
+        // Clamp: can aim up a lot but not too far down or behind
+        turretAngle = Math.max(-Math.PI * 0.45, Math.min(Math.PI * 0.25, turretAngle));
+    }
+    
+    // Turret base (doesn't rotate)
     ctx.fillStyle = metalDark;
     ctx.beginPath();
     ctx.ellipse(0, 0, 20*s, 12*s, 0, 0, Math.PI * 2);
     ctx.fill();
+    
+    // Rotate barrel to aim at target
+    ctx.rotate(turretAngle);
     
     // Gun barrel - EXTENDED AND LARGER
     ctx.fillStyle = metalMid;
@@ -2449,7 +2512,7 @@ function fireRocketFromPlayerOnce() {
     const muzzleY = -4;   // TOP barrel
     
     // Use arm angle directly - sprite flip handles left/right orientation
-    const clampedArmAngle = Math.max(-1.57, Math.min(0.8, player.armAngle));
+    const clampedArmAngle = Math.max(-1.57, Math.min(1.57, player.armAngle));
     
     // Apply rotation to muzzle position (standard 2D rotation)
     const rotatedMuzzleX = muzzleX * Math.cos(clampedArmAngle) - muzzleY * Math.sin(clampedArmAngle);
@@ -2611,7 +2674,7 @@ function update(deltaTime) {
     // Calculate angle - use abs(dx) since we flip the sprite for facing direction
     player.armAngle = Math.atan2(dy, Math.abs(dx));
     // Clamp angle - allow straight up (-π/2 = -1.57) and reasonable down
-    player.armAngle = Math.max(-1.57, Math.min(0.8, player.armAngle));
+    player.armAngle = Math.max(-1.57, Math.min(1.57, player.armAngle));
 
     if (mobileMoveHeld) {
         player.targetX = player.x + 1200;
@@ -2771,14 +2834,23 @@ if (player.isFlying && Date.now() > player.flyEndTime) { player.isFlying = false
 
             // Start telegraph if ready and not already telegraphing
             if (!enemy.telegraphUntil && (now - enemy.lastShot > enemy.shotRate)) {
-                // Fire from ACTUAL CANNON BARREL MUZZLE
+                // Fire from ACTUAL CANNON BARREL MUZZLE (rotates to aim at player)
                 const s = enemy.width / 100;  // Scale factor
-                const turretX = 60 * s;  // Turret offset from center
-                const muzzleOffset = 87 * s;  // Muzzle extends from turret
-                const totalOffset = turretX + muzzleOffset;  // Total X offset
+                const turretBaseX = enemy.x + (enemy.facingRight ? 60 * s : -60 * s);
+                const turretBaseY = enemy.y - 55 * s;
                 
-                const muzzleX = enemy.x + (enemy.facingRight ? totalOffset : -totalOffset);
-                const muzzleY = enemy.y - 55 * s;  // Turret Y position
+                // Calculate in LOCAL space (same as drawing code)
+                const aimDx = player.x - turretBaseX;
+                const aimDy = (player.y - player.height * 0.35) - turretBaseY;
+                const localDx = enemy.facingRight ? aimDx : -aimDx;
+                let turretAngle = Math.atan2(aimDy, localDx);
+                turretAngle = Math.max(-Math.PI * 0.45, Math.min(Math.PI * 0.25, turretAngle));
+                
+                // Barrel tip in local space, then convert to world
+                const localTipX = Math.cos(turretAngle) * 87 * s;
+                const localTipY = Math.sin(turretAngle) * 87 * s;
+                const muzzleX = turretBaseX + (enemy.facingRight ? localTipX : -localTipX);
+                const muzzleY = turretBaseY + localTipY;
 
                 enemy.telegraphUntil = now + LASER_TELEGRAPH_MS;
                 enemy.telegraphData = { muzzleX, muzzleY };
@@ -3609,7 +3681,7 @@ function draw() {
     // Enemies
     enemies.forEach(enemy => {
         if (enemy.kind === 'trex') {
-            drawMetallicTRex(enemy.x, enemy.y, enemy.width, enemy.height, enemy.legAngle, enemy.facingRight, enemy.health, enemy.maxHealth, enemy.isCharging, enemy.telegraphUntil);
+            drawMetallicTRex(enemy.x, enemy.y, enemy.width, enemy.height, enemy.legAngle, enemy.facingRight, enemy.health, enemy.maxHealth, enemy.isCharging, enemy.telegraphUntil, player.x, player.y - player.height * 0.35);
         } else {
             drawHumanoidBot(enemy.x, enemy.y, enemy.width, enemy.height, enemy.legAngle, enemy.facingRight, enemy.health, enemy.maxHealth);
         }
@@ -3890,7 +3962,7 @@ window.addEventListener('pointerdown', (e) => {
     // If the user is pressing HUD/D-pad controls, don't move the aim reticle.
     // (This was causing the bullseye to "jump" onto the FIRE button and feel stuck.)
     const t = e.target;
-    if (t && t.closest && (t.closest('#dpad') || t.closest('#hud') || t.closest('#pauseOverlay'))) {
+    if (t && t.closest && (t.closest('#dpad') || t.closest('#hud') || t.closest('#pauseOverlay') || t.closest('#pauseBtn') || t.closest('.mobile-btn'))) {
         return;
     }
 
@@ -4136,7 +4208,7 @@ function doFire() {
     const muzzleY = -4;   // Top barrel
     
     // Use arm angle directly - sprite flip handles left/right orientation
-    const clampedArmAngle = Math.max(-1.57, Math.min(0.8, player.armAngle));
+    const clampedArmAngle = Math.max(-1.57, Math.min(1.57, player.armAngle));
     
     const rotatedMuzzleX = muzzleX * Math.cos(clampedArmAngle) - muzzleY * Math.sin(clampedArmAngle);
     const rotatedMuzzleY = muzzleX * Math.sin(clampedArmAngle) + muzzleY * Math.cos(clampedArmAngle);
