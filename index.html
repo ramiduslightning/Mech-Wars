@@ -331,11 +331,11 @@
             <div class="hud-panel"><div class="hud-label">KILLS</div><div class="hud-value" id="killsDisplay">0</div></div>
             <div class="hud-panel" id="statusPanel"><div class="hud-label">SUIT INTEGRITY</div><div id="healthBar"><div id="healthFill" style="width: 100%"></div></div><div class="hud-label" style="margin-top: 10px">◆ SPECIALTY FUEL ◆</div><div id="flyMeter"><div id="flyFill"></div></div></div>
         
+</div>
             <div class="hud-abilities">
                 <div id="flyBtn" class="mobile-btn ability touch-only">✈<br>FLY</div>
                 <div id="shieldBtn" class="mobile-btn ability touch-only">🛡<br>SHIELD</div>
             </div>
-</div>
         <div id="mobileControls">
 
   <div id="dpad" class="dpad">
@@ -2336,7 +2336,10 @@ let drones = [];
 
 function spawnDrone() {
     const baseX = camX + canvas.width + 100 + Math.random() * 200;
-    const baseY = 80 + Math.random() * 150; // In the sky
+    // Spread drones across a wide vertical range (high sky to mid-level)
+    const minY = 50;
+    const maxY = Math.max(250, canvas.height * 0.55);
+    const baseY = minY + Math.random() * (maxY - minY);
     
     drones.push({
         x: baseX,
@@ -2619,7 +2622,7 @@ function update(deltaTime) {
         // Respawn if too far off screen
         if (drone.x < camX - 200 || drone.x > camX + canvas.width + 200) {
             drone.x = player.x + 400 + Math.random() * 300;
-            drone.targetY = 80 + Math.random() * 150;
+            drone.targetY = 50 + Math.random() * (Math.max(250, canvas.height * 0.55) - 50);
         }
         
         // SHOOTING - drones fire at player MORE AGGRESSIVELY
