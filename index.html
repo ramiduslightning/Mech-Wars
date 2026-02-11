@@ -84,7 +84,7 @@
             .dpad { width: 105px; height: 105px; grid-template-columns: 32px 32px 32px; grid-template-rows: 32px 32px 32px; padding: 2px; bottom: 8px !important; left: 8px !important; }
             .dpad-btn { font-size: 8px; border-radius: 7px; }
             .dpad-btn.fire { font-size: 8px; }
-            .hud-abilities { bottom: 68px !important; right: 8px !important; }
+            .hud-abilities { bottom: 72px !important; right: 10px !important; }
             #flyBtn, #shieldBtn { width: 48px; height: 48px; font-size: 8px; }
             #pauseBtn { bottom: 10px; right: 10px; width: 45px; height: 45px; font-size: 8px; }
             #easterEggHint { font-size: 10px; bottom: 70px; }
@@ -95,7 +95,7 @@
             .dpad { width: 95px; height: 95px; grid-template-columns: 29px 29px 29px; grid-template-rows: 29px 29px 29px; padding: 2px; bottom: 8px !important; left: 8px !important; }
             .dpad-btn { font-size: 7px; border-radius: 6px; }
             .dpad-btn.fire { font-size: 7px; }
-            .hud-abilities { bottom: 60px !important; right: 6px !important; }
+            .hud-abilities { bottom: 62px !important; right: 8px !important; }
             #flyBtn, #shieldBtn { width: 44px; height: 44px; font-size: 7px; }
             #pauseBtn { width: 40px; height: 40px; font-size: 7px; }
         }
@@ -104,7 +104,7 @@
         @media (max-height: 500px) and (orientation: landscape) {
             .dpad { width: 100px; height: 100px; grid-template-columns: 31px 31px 31px; grid-template-rows: 31px 31px 31px; padding: 2px; bottom: 6px !important; left: 6px !important; }
             .dpad-btn { font-size: 8px; border-radius: 6px; }
-            .hud-abilities { bottom: 55px !important; right: 6px !important; gap: 6px !important; }
+            .hud-abilities { bottom: 58px !important; right: 8px !important; gap: 6px !important; }
             #flyBtn, #shieldBtn { width: 40px; height: 40px; font-size: 7px; }
             #pauseBtn { bottom: 6px; right: 6px; width: 40px; height: 40px; font-size: 7px; }
             #easterEggHint { bottom: 50px; font-size: 9px; }
@@ -279,10 +279,10 @@
             .hud-abilities {
                 position: fixed;
                 top: auto;
-                bottom: 85px;
-                right: 10px;
+                bottom: 95px;
+                right: 12px;
                 flex-direction: column-reverse;
-                gap: 10px;
+                gap: 12px;
                 padding: 0;
                 margin: 0;
                 align-items: center;
@@ -4272,15 +4272,8 @@ pauseBtn.addEventListener('pointerdown', (e) => {
     togglePause(); 
 });
 
-// Touch backup for pause button
-pauseBtn.addEventListener('touchstart', (e) => { 
-    e.preventDefault(); 
-    e.stopPropagation();
-    togglePause(); 
-});
-
 // Abilities buttons: shown only when charged (handled in updateUI). Pointerdown triggers ability.
-flyBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); AudioSystem.resume(); activateFly(); });
+flyBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); AudioSystem.resume(); activateFlight(); });
 shieldBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); AudioSystem.resume(); activateShield(); });
 
 // Disable context menu on the game so right-click doesn't steal focus (still optional)
@@ -4314,9 +4307,9 @@ function updateMovementFromDpad(){
   }
 }
 
-// Pointer events (more reliable than touch events on many phones/tablets)
-flyBtn.addEventListener('touchstart', (e) => { e.preventDefault(); activateFlight(); flyBtn.classList.add('active'); });
-shieldBtn.addEventListener('touchstart', (e) => { e.preventDefault(); activateShield(); shieldBtn.classList.add('active'); });
+// Touch visual feedback only (activation handled by pointerdown above)
+flyBtn.addEventListener('touchstart', (e) => { e.preventDefault(); flyBtn.classList.add('active'); });
+shieldBtn.addEventListener('touchstart', (e) => { e.preventDefault(); shieldBtn.classList.add('active'); });
 flyBtn.addEventListener('touchend', (e) => { e.preventDefault(); flyBtn.classList.remove('active'); });
 shieldBtn.addEventListener('touchend', (e) => { e.preventDefault(); shieldBtn.classList.remove('active'); });
 
