@@ -40,8 +40,8 @@
         .mobile-btn { width: 90px; height: 90px; border-radius: 50%; border: 4px solid; font-family: 'Orbitron', sans-serif; font-weight: 700; font-size: 11px; display: flex; align-items: center; justify-content: center; text-align: center; cursor: pointer; }
 /* removed */         #moveBtn { background: rgba(0, 255, 204, 0.25); border-color: #00ffcc; color: #00ffcc; }
 /* removed */         #fireBtn { background: rgba(255, 51, 51, 0.25); border-color: #ff3333; color: #ff3333; }
-        #flyBtn { position: fixed; bottom: 85px; right: 10px; width: 52px; height: 52px; font-size: 9px; background: rgba(255, 204, 0, 0.25); border-color: #ffcc00; color: #ffcc00; z-index: 20; }
-        #shieldBtn { position: fixed; bottom: 145px; right: 10px; width: 52px; height: 52px; font-size: 9px; background: rgba(120, 180, 255, 0.22); border-color: #66aaff; color: #66aaff; z-index: 20; }
+        #flyBtn { position: fixed; bottom: 85px; right: 10px; width: 52px; height: 52px; font-size: 9px; background: rgba(255, 204, 0, 0.25); border-color: #ffcc00; color: #ffcc00; z-index: 20; border-width: 3px; }
+        #shieldBtn { position: fixed; bottom: 145px; right: 10px; width: 52px; height: 52px; font-size: 9px; background: rgba(120, 180, 255, 0.22); border-color: #66aaff; color: #66aaff; z-index: 20; border-width: 3px; }
         .mobile-btn:active, .mobile-btn.active { transform: scale(0.92); filter: brightness(1.6); }
         #soundToggle { display: none !important; }
         #startScreen, #gameOverScreen { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: radial-gradient(ellipse at center, rgba(10,20,40,0.95) 0%, rgba(0,0,0,0.98) 100%); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 100; }
@@ -84,7 +84,8 @@
             .dpad { width: 105px; height: 105px; grid-template-columns: 32px 32px 32px; grid-template-rows: 32px 32px 32px; padding: 2px; bottom: 8px !important; left: 8px !important; }
             .dpad-btn { font-size: 8px; border-radius: 7px; }
             .dpad-btn.fire { font-size: 8px; }
-            .hud-abilities { bottom: 72px !important; right: 10px !important; }
+            .hud-abilities { bottom: 120px !important; right: 10px !important; }
+            .mobile-fuel-bar { width: 44px; }
             #flyBtn, #shieldBtn { width: 48px; height: 48px; font-size: 8px; }
             #pauseBtn { bottom: 10px; right: 10px; width: 45px; height: 45px; font-size: 8px; }
             #easterEggHint { font-size: 10px; bottom: 70px; }
@@ -95,7 +96,8 @@
             .dpad { width: 95px; height: 95px; grid-template-columns: 29px 29px 29px; grid-template-rows: 29px 29px 29px; padding: 2px; bottom: 8px !important; left: 8px !important; }
             .dpad-btn { font-size: 7px; border-radius: 6px; }
             .dpad-btn.fire { font-size: 7px; }
-            .hud-abilities { bottom: 62px !important; right: 8px !important; }
+            .hud-abilities { bottom: 105px !important; right: 8px !important; }
+            .mobile-fuel-bar { width: 40px; }
             #flyBtn, #shieldBtn { width: 44px; height: 44px; font-size: 7px; }
             #pauseBtn { width: 40px; height: 40px; font-size: 7px; }
         }
@@ -104,7 +106,7 @@
         @media (max-height: 500px) and (orientation: landscape) {
             .dpad { width: 100px; height: 100px; grid-template-columns: 31px 31px 31px; grid-template-rows: 31px 31px 31px; padding: 2px; bottom: 6px !important; left: 6px !important; }
             .dpad-btn { font-size: 8px; border-radius: 6px; }
-            .hud-abilities { bottom: 58px !important; right: 8px !important; gap: 6px !important; }
+            .hud-abilities { bottom: 90px !important; right: 8px !important; gap: 6px !important; }
             #flyBtn, #shieldBtn { width: 40px; height: 40px; font-size: 7px; }
             #pauseBtn { bottom: 6px; right: 6px; width: 40px; height: 40px; font-size: 7px; }
             #easterEggHint { bottom: 50px; font-size: 9px; }
@@ -274,15 +276,41 @@
             z-index: 25;
         }
         
-        /* On mobile, stack ability buttons vertically on right side ABOVE pause button */
+        /* Mobile fuel bar shown near ability buttons */
+        .mobile-fuel-bar {
+            display: none;
+            width: 48px;
+            height: 6px;
+            background: #1a1a1a;
+            border: 1px solid #ffcc00;
+            border-radius: 3px;
+            overflow: hidden;
+        }
+        .mobile-fuel-bar .fuel-fill {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, #ffcc00, #ff6600);
+            transition: width 0.2s;
+        }
+        .mobile-fuel-label {
+            display: none;
+            font-family: 'Orbitron', sans-serif;
+            font-size: 6px;
+            color: #ffcc00;
+            text-align: center;
+            letter-spacing: 1px;
+            text-shadow: 0 0 6px #ffcc00;
+        }
+        
+        /* On mobile, stack ability buttons vertically on right side well ABOVE pause button */
         @media (max-width: 768px) {
             .hud-abilities {
                 position: fixed;
                 top: auto;
-                bottom: 95px;
+                bottom: 145px;
                 right: 12px;
                 flex-direction: column-reverse;
-                gap: 12px;
+                gap: 10px;
                 padding: 0;
                 margin: 0;
                 align-items: center;
@@ -294,6 +322,9 @@
                 right: auto !important;
                 margin: 0 !important;
             }
+            
+            .mobile-fuel-bar, .mobile-fuel-label { display: block; }
+            #mobileFuelWrap { display: block !important; }
         }
         
         /* keep abilities visually tied to HUD */
@@ -323,6 +354,10 @@
 </div>
             <div class="hud-abilities">
                 <div id="flyBtn" class="mobile-btn ability touch-only">✈<br>FLY</div>
+                <div id="mobileFuelWrap" class="touch-only" style="display:none; text-align:center;">
+                    <div class="mobile-fuel-label">◆ FUEL ◆</div>
+                    <div class="mobile-fuel-bar"><div class="fuel-fill" id="mobileFuelFill"></div></div>
+                </div>
                 <div id="shieldBtn" class="mobile-btn ability touch-only">🛡<br>SHIELD</div>
             </div>
         <div id="mobileControls">
@@ -345,7 +380,7 @@
             <div class="byline">Ramidus, Inc • A Casey T. Duncan Enterprise</div>
             <div class="instructions" id="desktopInstructions">
                 <span>[MOUSE]</span> — Aim gun<br>
-                <span>[CLICK / F]</span> — Shoot<br>
+                <span>[LEFT MOUSE BUTTON / F]</span> — Shoot<br>
                 <span>[WASD / ARROWS]</span> — Move<br>
                 <span>[SPACE]</span> — Jetpack &nbsp; <span>[SHIFT]</span> — Shield<br>
                 <span>[ESC / P]</span> — Pause
@@ -3833,7 +3868,11 @@ function updateHUD() {
     document.getElementById('scoreDisplay').textContent = score;
     document.getElementById('killsDisplay').textContent = kills;
     document.getElementById('healthFill').style.width = Math.max(0, player.health / player.maxHealth * 100) + '%';
-    document.getElementById('flyFill').style.width = (flyCharge / FLY_CHARGE_MAX * 100) + '%';
+    const fuelPct = (flyCharge / FLY_CHARGE_MAX * 100) + '%';
+    document.getElementById('flyFill').style.width = fuelPct;
+    // Update mobile fuel bar too
+    const mf = document.getElementById('mobileFuelFill');
+    if (mf) mf.style.width = fuelPct;
 
     // Enable/disable ability buttons (mobile)
     const ready = flyCharge >= FLY_CHARGE_MAX && !player.isFlying && Date.now() > player.shieldUntil;
