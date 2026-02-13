@@ -12,8 +12,8 @@
         /* Default cursor before the game starts (helps clicking DEPLOY reliably) */
         #gameCanvas { display: block; width: 100%; height: 100%; cursor: default; }
 
-        /* During gameplay we keep a normal crosshair cursor. */
-        body.inGame #gameCanvas { cursor: crosshair; }
+        /* Small neon green crosshair cursor during gameplay */
+        body.inGame #gameCanvas { cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24'%3E%3Cline x1='12' y1='4' x2='12' y2='10' stroke='%2300ffcc' stroke-width='1.5' stroke-linecap='round'/%3E%3Cline x1='12' y1='14' x2='12' y2='20' stroke='%2300ffcc' stroke-width='1.5' stroke-linecap='round'/%3E%3Cline x1='4' y1='12' x2='10' y2='12' stroke='%2300ffcc' stroke-width='1.5' stroke-linecap='round'/%3E%3Cline x1='14' y1='12' x2='20' y2='12' stroke='%2300ffcc' stroke-width='1.5' stroke-linecap='round'/%3E%3Ccircle cx='12' cy='12' r='1.5' fill='%2300ffcc'/%3E%3C/svg%3E") 12 12, crosshair; }
         
         /* Bullseye removed - gun rotation shows aiming */
         #bullseye { display: none; }
@@ -61,7 +61,7 @@
         #easterEggHint.show { opacity: 1; animation: hintBlink 0.8s infinite; }
         @keyframes hintBlink { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
         #soundToggle { position: absolute; top: 20px; right: 20px; font-family: 'Orbitron', sans-serif; font-size: 12px; padding: 8px 15px; background: rgba(0,0,0,0.5); border: 2px solid #00ffcc; color: #00ffcc; cursor: pointer; z-index: 50; }
-        #waveAnnounce { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-family: 'Orbitron', sans-serif; font-size: clamp(24px, 6vw, 48px); color: #ff6600; text-shadow: 0 0 30px #ff6600, 0 0 60px #ff3300; opacity: 0; pointer-events: none; z-index: 30; letter-spacing: 4px; }
+        #waveAnnounce { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-family: 'Orbitron', sans-serif; font-size: clamp(18px, 4.6vw, 40px); color: #ff6600; text-shadow: 0 0 18px #ff6600, 0 0 36px #ff3300; opacity: 0; pointer-events: none; z-index: 30; letter-spacing: 2px; white-space: normal; text-align: center; width: min(92vw, 920px); line-height: 1.15; }
         @media (max-width: 600px) { 
             .hud-value { font-size: 18px; } 
             #healthBar { width: 110px; height: 12px; }
@@ -382,22 +382,23 @@
                 <span>[MOUSE]</span> — Aim gun<br>
                 <span>[LEFT MOUSE BUTTON / F]</span> — Shoot<br>
                 <span>[WASD / ARROWS]</span> — Move<br>
-                <span>[SPACE]</span> — Jetpack &nbsp; <span>[SHIFT]</span> — Shield<br>
+                <span>[←↑ · ↑↑ · ↑→]</span> — Jump &nbsp; <span>[SPACE]</span> — Jetpack &nbsp; <span>[SHIFT]</span> — Shield<br>
                 <span>[ESC / P]</span> — Pause
             </div>
             <div class="instructions" id="mobileInstructions" style="display:none;">
                 <span>[TAP SCREEN]</span> — Aim gun<br>
                 <span>[D-PAD]</span> — Move &amp; Fire<br>
+                <span>[←↑ · ↑↑ · ↑→]</span> — Jump combo<br>
                 <span>[FLY / SHIELD]</span> — Abilities (when charged)
             </div>
-            <button class="start-btn" id="startBtn">▶ DEPLOY</button>
+            <button class="start-btn" id="startBtn" onclick="try{startGame();}catch(e){console.error(e);alert('Start error: ' + (e && e.message ? e.message : e));}">▶ DEPLOY</button>
         </div>
         <div id="gameOverScreen">
             <div class="title" style="font-size: clamp(30px, 8vw, 60px);">SUIT <span>DESTROYED</span></div>
             <div class="subtitle">◆ EXTRACTION FAILED ◆</div>
             <div id="finalScore">0</div>
             <div class="instructions">TARGETS ELIMINATED</div>
-            <button class="start-btn" id="restartBtn">↻ REDEPLOY</button>
+            <button class="start-btn" id="restartBtn" onclick="try{startGame();}catch(e){console.error(e);alert("Start error: "+e.message);}">↻ REDEPLOY</button>
         </div>
     </div>
     
@@ -515,7 +516,177 @@ const AudioSystem = {
         whine.start(t);
         whine.stop(t + 0.35);
     },
-    
+
+    playCrabCharge() {
+        // Short "power-up" cue for the crab bot before it fires electricity
+        if (!this.enabled || !this.ctx) return;
+        const t = this.ctx.currentTime;
+
+        // Rising buzz
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        const filter = this.ctx.createBiquadFilter();
+
+        osc.connect(filter);
+        filter.connect(gain);
+        gain.connect(this.ctx.destination);
+
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(220, t);
+        osc.frequency.exponentialRampToValueAtTime(1100, t + 0.45);
+
+        filter.type = 'bandpass';
+        filter.frequency.setValueAtTime(600, t);
+        filter.frequency.linearRampToValueAtTime(1200, t + 0.45);
+        filter.Q.setValueAtTime(8, t);
+
+        gain.gain.setValueAtTime(0.0, t);
+        gain.gain.linearRampToValueAtTime(0.18, t + 0.08);
+        gain.gain.exponentialRampToValueAtTime(0.01, t + 0.55);
+
+        osc.start(t);
+        osc.stop(t + 0.6);
+
+        // Tiny spark click at the front
+        const clickOsc = this.ctx.createOscillator();
+        const clickGain = this.ctx.createGain();
+        clickOsc.connect(clickGain);
+        clickGain.connect(this.ctx.destination);
+        clickOsc.type = 'triangle';
+        clickOsc.frequency.setValueAtTime(1800, t);
+        clickGain.gain.setValueAtTime(0.10, t);
+        clickGain.gain.exponentialRampToValueAtTime(0.001, t + 0.06);
+        clickOsc.start(t);
+        clickOsc.stop(t + 0.06);
+    },
+
+    playSharkFire() {
+        // Muffled underwater torpedo shot — thud + bubble trail
+        if (!this.enabled || !this.ctx) return;
+        const t = this.ctx.currentTime;
+
+        // Low thud
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        const filter = this.ctx.createBiquadFilter();
+        osc.connect(filter);
+        filter.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(180, t);
+        osc.frequency.exponentialRampToValueAtTime(60, t + 0.2);
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(400, t);
+        filter.Q.setValueAtTime(2, t);
+        gain.gain.setValueAtTime(0.25, t);
+        gain.gain.exponentialRampToValueAtTime(0.01, t + 0.25);
+        osc.start(t);
+        osc.stop(t + 0.3);
+
+        // Bubble whistle overlay
+        const bub = this.ctx.createOscillator();
+        const bubGain = this.ctx.createGain();
+        bub.connect(bubGain);
+        bubGain.connect(this.ctx.destination);
+        bub.type = 'triangle';
+        bub.frequency.setValueAtTime(600, t + 0.02);
+        bub.frequency.exponentialRampToValueAtTime(200, t + 0.18);
+        bubGain.gain.setValueAtTime(0.08, t + 0.02);
+        bubGain.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
+        bub.start(t + 0.02);
+        bub.stop(t + 0.22);
+    },
+
+    playCrabFire() {
+        // Electric zap/crack when lightning bolt releases
+        if (!this.enabled || !this.ctx) return;
+        const t = this.ctx.currentTime;
+
+        // Sharp electric crack
+        const bufSize = this.ctx.sampleRate * 0.15;
+        const buf = this.ctx.createBuffer(1, bufSize, this.ctx.sampleRate);
+        const data = buf.getChannelData(0);
+        for (let i = 0; i < bufSize; i++) {
+            const env = Math.pow(1 - i / bufSize, 3);
+            data[i] = (Math.random() * 2 - 1) * env;
+        }
+        const noise = this.ctx.createBufferSource();
+        const noiseGain = this.ctx.createGain();
+        const hpf = this.ctx.createBiquadFilter();
+        noise.buffer = buf;
+        noise.connect(hpf);
+        hpf.connect(noiseGain);
+        noiseGain.connect(this.ctx.destination);
+        hpf.type = 'highpass';
+        hpf.frequency.setValueAtTime(2000, t);
+        noiseGain.gain.setValueAtTime(0.3, t);
+        noiseGain.gain.exponentialRampToValueAtTime(0.01, t + 0.15);
+        noise.start(t);
+
+        // Bass thump underneath
+        const bass = this.ctx.createOscillator();
+        const bassGain = this.ctx.createGain();
+        bass.connect(bassGain);
+        bassGain.connect(this.ctx.destination);
+        bass.type = 'sine';
+        bass.frequency.setValueAtTime(120, t);
+        bass.frequency.exponentialRampToValueAtTime(40, t + 0.12);
+        bassGain.gain.setValueAtTime(0.22, t);
+        bassGain.gain.exponentialRampToValueAtTime(0.01, t + 0.15);
+        bass.start(t);
+        bass.stop(t + 0.18);
+
+        // Electric sizzle tail
+        const sizzle = this.ctx.createOscillator();
+        const sizGain = this.ctx.createGain();
+        sizzle.connect(sizGain);
+        sizGain.connect(this.ctx.destination);
+        sizzle.type = 'sawtooth';
+        sizzle.frequency.setValueAtTime(3000, t);
+        sizzle.frequency.exponentialRampToValueAtTime(800, t + 0.2);
+        sizGain.gain.setValueAtTime(0.06, t + 0.05);
+        sizGain.gain.exponentialRampToValueAtTime(0.001, t + 0.25);
+        sizzle.start(t + 0.05);
+        sizzle.stop(t + 0.28);
+    },
+
+    playBarrelPickup() {
+        // Satisfying power-up chime
+        if (!this.enabled || !this.ctx) return;
+        const t = this.ctx.currentTime;
+        const notes = [523, 659, 784, 1047]; // C5 E5 G5 C6
+        notes.forEach((freq, i) => {
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            osc.connect(gain);
+            gain.connect(this.ctx.destination);
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(freq, t + i * 0.08);
+            gain.gain.setValueAtTime(0.15, t + i * 0.08);
+            gain.gain.exponentialRampToValueAtTime(0.01, t + i * 0.08 + 0.3);
+            osc.start(t + i * 0.08);
+            osc.stop(t + i * 0.08 + 0.35);
+        });
+    },
+
+    playJump() {
+        // Quick springy jump sound
+        if (!this.enabled || !this.ctx) return;
+        const t = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(200, t);
+        osc.frequency.exponentialRampToValueAtTime(600, t + 0.12);
+        osc.frequency.exponentialRampToValueAtTime(350, t + 0.2);
+        gain.gain.setValueAtTime(0.15, t);
+        gain.gain.exponentialRampToValueAtTime(0.01, t + 0.22);
+        osc.start(t);
+        osc.stop(t + 0.25);
+    },
+
     playExplosion(big = false) {
         if (!this.enabled || !this.ctx) return;
         const t = this.ctx.currentTime;
@@ -608,6 +779,45 @@ let autoScroll = 0; // (disabled) camera is player-follow for exploration // wor
 let gameRunning = false, score = 0, kills = 0, flyCharge = 0, wave = 1;
 // Encounter-based spawning: enemies appear as you explore forward (no camping spawns)
 let nextEncounterX = 650; // world x threshold to trigger the next group
+let jumpHintShown = false;
+
+// === UNDERWATER ZONE SYSTEM ===
+
+// Helper Y positions for the chemical pool (kept in one place so visuals + logic stay in sync)
+function getWaterSurfaceY() { return canvas.height - 90; }  // visual surface line (keep original look)
+function getPoolFloorY()   { return canvas.height - 60; }    // bottom of pool (corroded floor)
+// Underwater "depth ceiling" (where the liquid visually begins while submerged).
+// Outside (surface) view uses getWaterSurfaceY() and stays shallow-looking.
+// When the player is underwater, we treat the chemical pool as much deeper so enemies can swim high.
+function getUnderwaterTopY(){ return Math.max(80, canvas.height - 560); }
+let isUnderwater = false;
+let waterZoneUsed = false; // single special water occurrence
+let underwaterZone = null; // { startX, endX } - world coords of current water zone
+let nextWaterEdgeX = 5500; // chemical pool appears well into the run — feels like a special event
+let waterEnemies = []; // torpedo drones + crab walkers
+let waterEncounterSpawned = false; // first wave has spawned
+let waterEncounterCleared = false; // ALL waves done and all enemies dead
+let waterWaveIndex = 0;           // which wave we're on (0-based)
+let waterTotalSpawned = 0;        // total enemies spawned across all waves
+let waterTotalKills = 0;          // total enemies killed in pool
+const WATER_TOTAL_ENEMIES = 10;   // total enemies across the whole pool
+// Waves spawn as player progresses — small groups at a time
+const WATER_WAVES = [
+    { at: 0.05, torpedo: 1, crab: 1 },   // near entrance after grace period
+    { at: 0.25, torpedo: 1, crab: 1 },   // quarter way in
+    { at: 0.45, torpedo: 2, crab: 0 },   // middle
+    { at: 0.60, torpedo: 1, crab: 1 },   // past middle  
+    { at: 0.75, torpedo: 1, crab: 1 },   // approaching ramp
+];
+let waterEntryTime = 0; // timestamp when player first enters water
+let waterBarrel = null; // { x, y, collected } — power-up barrel in the pool
+// WATER_ENCOUNTER_COUNTS removed — waves defined in WATER_WAVES
+let waterBubbles = []; // ambient bubbles
+let waterTransitionAlpha = 0; // fade transition (0 = surface, 1 = underwater)
+let waterZonePassed = false; // keep ONE water zone persistent; no repeats
+const WATER_ZONE_LENGTH_MIN = 1500;
+const WATER_ZONE_LENGTH_MAX = 2300;
+const WATER_FUEL_RECHARGE = 8; // fuel per second while underwater
 
 const FLY_CHARGE_MAX = 100, FLY_DURATION = 15000;
 const SHIELD_DURATION = 15000, SHIELD_HITS = 4;
@@ -638,7 +848,7 @@ window.addEventListener('blur', () => { isMoving = false; isFiring = false; mobi
 document.addEventListener('visibilitychange', () => { if (document.hidden) { isMoving = false; isFiring = false; mobileMoveHeld = false; lastFireTime = -1e9; dpadState.up = false; dpadState.down = false; dpadState.left = false; dpadState.right = false; } });
 window.addEventListener('resize', resize);
 
-const player = { x: 0, y: 0, targetX: 0, targetY: 0, width: 50, height: 80, health: 100, maxHealth: 100, speed: 5.5, isFlying: false, flyEndTime: 0, legAngle: 0, legDir: 1, isMoving: false, facingRight: true, screenShake: 0, armAngle: 0, invulnUntil: 0, shieldUntil: 0, shieldHits: 0 };
+const player = { x: 0, y: 0, targetX: 0, targetY: 0, width: 50, height: 80, health: 100, maxHealth: 100, speed: 5.5, isFlying: false, flyEndTime: 0, legAngle: 0, legDir: 1, isMoving: false, facingRight: true, screenShake: 0, armAngle: 0, invulnUntil: 0, shieldUntil: 0, shieldHits: 0, isJumping: false, jumpVY: 0, jumpVX: 0 };
 let rockets = [], enemies = [], enemyLasers = [], particles = [], sparks = [], smokeTrails = [], debris = [], spawnTimer = 0, spawnInterval = 2500, difficulty = 1;
 // Pointer position (for reference) + separate aim reticle position (click-to-place)
 let mouseX = 400, mouseY = 400;
@@ -696,7 +906,7 @@ function fireOneRocket(force=false) {
     const shoulderX = torsoW/2 - 10;
     const shoulderY = torsoY + 18;
     const muzzleX = 132;  // Extended barrel tip
-    const muzzleY = -4;   // Top barrel
+    const muzzleY = 0;   // Single barrel center
     
     // Use arm angle directly - sprite flip handles left/right orientation
     const clampedArmAngle = Math.max(-1.57, Math.min(1.57, player.armAngle));
@@ -736,7 +946,10 @@ function initPlayer() {
     player.targetY = player.y; 
     player.health = player.maxHealth; 
     player.isFlying = false; 
-    player.screenShake = 0; 
+    player.screenShake = 0;
+    player.isJumping = false;
+    player.jumpVY = 0;
+    player.jumpVX = 0;
     nextEncounterX = player.x + 650;
     
     // Initialize position tracking for jump prevention
@@ -1053,12 +1266,16 @@ function drawPlayer(x, y, width, height, legAngle, isFlying, facingRight, armAng
 
     // Visor slit
     ctx.save();
-    ctx.shadowColor = 'rgba(255, 204, 64, 0.95)'; ctx.shadowBlur = 20;
-    ctx.fillStyle = 'rgba(255, 204, 64, 0.70)';
+    // Visor always stays gold; underwater the visor projects a focused flashlight beam
+    const visorGlow = isUnderwater ? 'rgba(255, 210, 80, 1)' : 'rgba(255, 204, 64, 0.95)';
+    const visorFill = isUnderwater ? 'rgba(255, 210, 80, 0.95)' : 'rgba(255, 204, 64, 0.70)';
+    ctx.shadowColor = visorGlow; ctx.shadowBlur = isUnderwater ? 35 : 20;
+    ctx.fillStyle = visorFill;
     ctx.beginPath();
     ctx.roundRect(-12, headY + 8, 24, 6, 6);
     ctx.fill();
     ctx.restore();
+
 
     // ===== Arms / Weapons =====
     // Right arm: cannon shroud that tracks the cursor (armAngle)
@@ -1089,30 +1306,16 @@ function drawPlayer(x, y, width, height, legAngle, isFlying, facingRight, armAng
     ctx.roundRect(18, -10, 60, 20, 8);  // Extended from 48 to 60
     ctx.fill();
 
-    // LONGER barrel pair - extended significantly
+    // Single cannon barrel - centered
     ctx.fillStyle = '#0a0f18';
     ctx.beginPath();
-    ctx.roundRect(70, -7, 60, 6, 3);  // Extended from 34 to 60, moved start from 60 to 70
-    ctx.roundRect(70, 1, 60, 6, 3);
+    ctx.roundRect(70, -5, 62, 10, 4);
     ctx.fill();
     
     // Barrel accent rings for style
     ctx.fillStyle = steelMid;
-    ctx.fillRect(85, -7, 2, 6);
-    ctx.fillRect(85, 1, 2, 6);
-    ctx.fillRect(110, -7, 2, 6);
-    ctx.fillRect(110, 1, 2, 6);
-    
-    // Muzzle glow at extended barrel tips - GOLD like visor
-    ctx.save();
-    ctx.shadowColor = 'rgba(255, 204, 64, 0.95)';
-    ctx.shadowBlur = 15;
-    ctx.fillStyle = 'rgba(255, 204, 64, 0.9)';  // Gold like visor #ffcc40
-    ctx.beginPath();
-    ctx.arc(132, -4, 3, 0, Math.PI*2);  // Top barrel tip - moved from 96 to 132
-    ctx.arc(132, 4, 3, 0, Math.PI*2);   // Bottom barrel tip
-    ctx.fill();
-    ctx.restore();
+    ctx.fillRect(85, -5, 2, 10);
+    ctx.fillRect(110, -5, 2, 10);
 
     // Ammo cable
     ctx.strokeStyle = 'rgba(140,170,255,0.22)';
@@ -1215,7 +1418,67 @@ function drawPlayer(x, y, width, height, legAngle, isFlying, facingRight, armAng
         ctx.restore();
     }
 
-    ctx.restore();
+    
+    // Underwater: visor acts as the ONLY light source — focused gold flashlight beam
+    if (isUnderwater) {
+        const dir = facingRight ? 1 : -1;
+        const aim = Math.max(-1.57, Math.min(1.57, armAngle));
+
+        // Visor slit center (local coords)
+        const visorX = dir * 12;
+        const visorY = headY + 11;
+
+        const beamLen = 420;
+        const beamNarrow = 80;  // tighter cone than before
+
+        ctx.save();
+        ctx.globalCompositeOperation = 'screen';
+        ctx.translate(visorX, visorY);
+        ctx.rotate(aim);
+
+        // Outer cone — warm gold, focused
+        const g1 = ctx.createLinearGradient(0, 0, beamLen, 0);
+        g1.addColorStop(0, 'rgba(255, 210, 95, 0.50)');
+        g1.addColorStop(0.15, 'rgba(255, 200, 80, 0.28)');
+        g1.addColorStop(0.5, 'rgba(255, 180, 60, 0.08)');
+        g1.addColorStop(1, 'rgba(200, 150, 40, 0)');
+        ctx.fillStyle = g1;
+        ctx.beginPath();
+        ctx.moveTo(0, -6);
+        ctx.lineTo(beamLen, -beamNarrow);
+        ctx.lineTo(beamLen, beamNarrow);
+        ctx.lineTo(0, 6);
+        ctx.closePath();
+        ctx.fill();
+
+        // Inner hotspot — brighter, narrower
+        const g2 = ctx.createLinearGradient(0, 0, beamLen * 0.6, 0);
+        g2.addColorStop(0, 'rgba(255, 235, 150, 0.55)');
+        g2.addColorStop(0.12, 'rgba(255, 225, 130, 0.25)');
+        g2.addColorStop(0.5, 'rgba(255, 210, 100, 0.06)');
+        g2.addColorStop(1, 'rgba(255, 200, 80, 0)');
+        ctx.fillStyle = g2;
+        ctx.beginPath();
+        ctx.moveTo(0, -3);
+        ctx.lineTo(beamLen * 0.6, -beamNarrow * 0.35);
+        ctx.lineTo(beamLen * 0.6, beamNarrow * 0.35);
+        ctx.lineTo(0, 3);
+        ctx.closePath();
+        ctx.fill();
+
+        // Visor bloom (small bright dot at source)
+        ctx.shadowColor = 'rgba(255, 210, 95, 1)';
+        ctx.shadowBlur = 14;
+        ctx.fillStyle = 'rgba(255, 210, 95, 0.9)';
+        ctx.beginPath();
+        ctx.arc(0, 0, 3.5, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.restore();
+        ctx.globalCompositeOperation = 'source-over';
+}
+
+ctx.restore();
 }
 
 
@@ -2149,7 +2412,7 @@ function drawMetallicTRex(x, y, width, height, legAngle, facingRight, health, ma
         hpGrad.addColorStop(1, '#ff4400');
         ctx.fillStyle = hpGrad;
         ctx.shadowColor = '#ff0000';
-        ctx.shadowBlur = 8;
+        ctx.shadowBlur = 5;
         ctx.fillRect(barX, barY, barW * hp, barH);
         ctx.shadowBlur = 0;
         
@@ -2301,12 +2564,19 @@ function createExplosion(x, y, color, count = 25, big = false) {
     }
 }
 
-function showWaveAnnouncement(text) {
+function showWaveAnnouncement(text, color) {
     const el = document.getElementById('waveAnnounce');
     el.textContent = text;
+    if (color) {
+        el.style.color = color;
+        el.style.textShadow = `0 0 20px ${color}, 0 0 40px ${color}`;
+    } else {
+        el.style.color = '';
+        el.style.textShadow = '';
+    }
     el.style.opacity = 1;
     setTimeout(() => { el.style.transition = 'opacity 1s'; el.style.opacity = 0; }, 2000);
-    setTimeout(() => { el.style.transition = ''; }, 3000);
+    setTimeout(() => { el.style.transition = ''; el.style.color = ''; el.style.textShadow = ''; }, 3000);
 }
 
 function spawnEnemy() {
@@ -2316,6 +2586,13 @@ function spawnEnemy() {
     const kind = isTRex ? 'trex' : 'bot';
 
     const baseX = camX + canvas.width + 160 + Math.random()*260;
+
+    // Prevent surface enemies from spawning over water zones (no "walking on water")
+    const wzStart = (underwaterZone ? underwaterZone.startX : nextWaterEdgeX);
+    const wzEnd   = (underwaterZone ? underwaterZone.endX   : (nextWaterEdgeX + WATER_ZONE_LENGTH_MAX));
+    if (!isUnderwater && baseX > (wzStart - 120) && baseX < (wzEnd + 120)) {
+        return;
+    }
     const groundY = canvas.height - 120;  // Raised for mobile visibility
 
     const enemy = {
@@ -2462,6 +2739,898 @@ function drawDrone(drone) {
     ctx.restore();
 }
 
+// === UNDERWATER ZONE SYSTEM ===
+
+function createWaterZone(startX) {
+    // Deterministic (seeded) length so the same water edge always maps to the same zone,
+    // even if we call this each frame while flying over it.
+    const seed = Math.floor(startX / 97.0) * 99991 + 1337;
+    let r = Math.sin(seed) * 10000;
+    r = r - Math.floor(r); // fract
+    const length = WATER_ZONE_LENGTH_MIN + r * (WATER_ZONE_LENGTH_MAX - WATER_ZONE_LENGTH_MIN);
+    return { startX, endX: startX + length, length };
+}
+
+function spawnWaterEnemy(kind) {
+    const groundY = canvas.height - 120;
+    const zone = underwaterZone;
+    if (!zone) return;
+    
+    // Spawn enemies ahead of the player (200-600px forward), clamped to pool bounds
+    const rampStartX = zone.endX - 300;
+    const minX = Math.max(zone.startX + 100, player.x + 200);
+    const maxX = Math.min(rampStartX - 50, player.x + 600);
+    const baseX = (minX < maxX) ? minX + Math.random() * (maxX - minX) : (zone.startX + zone.endX) / 2;
+    
+    if (kind === 'torpedo') {
+        // Spawn sharks high in the water column (near the underwater surface when submerged)
+        const surfRef = isUnderwater ? getUnderwaterTopY() : getWaterSurfaceY();
+        waterEnemies.push({
+            kind: 'torpedo',
+            x: baseX,
+            // Very high band: keep them ~near the top when underwater.
+            y: (() => { const surf = surfRef; const top = surf + 10; const bottom = surf + 60; return top + Math.random() * (bottom - top); })(),
+            targetY: (() => { const surf = surfRef; const top = surf + 10; const bottom = surf + 60; return top + Math.random() * (bottom - top); })(),
+            width: 130, height: 28,
+            health: 60 + difficulty * 12,
+            maxHealth: 60 + difficulty * 12,
+            speed: 1.6 + Math.random() * 0.6,
+            facingRight: false,
+            bobPhase: Math.random() * Math.PI * 2,
+            lastShot: 0,
+            shotRate: 5200 + Math.random() * 2200,
+            chargePhase: 0 // for charge attack
+        });
+    } else if (kind === 'crab') {
+        const poolFloorY = getPoolFloorY();
+        waterEnemies.push({
+            kind: 'crab',
+            x: baseX,
+            y: poolFloorY - (8 + Math.random() * 18),
+            width: 80, height: 55,
+            health: 120 + difficulty * 20,
+            maxHealth: 120 + difficulty * 20,
+            speed: 1.2 + Math.random() * 0.6,
+            facingRight: false,
+            legAngle: 0, legDir: 1,
+            lastShot: Date.now(),
+            shotRate: 2800 + Math.random() * 800,
+            lastAttack: Date.now(),
+            attackRate: 1500,
+            chargeProgress: 0, // 0-1, orb charges up then fires
+            isCharging: false,
+            chargeStartTime: 0
+        });
+    }
+}
+
+function drawTorpedoDrone(x, y, w, h, facingRight, health, maxHealth) {
+    ctx.save();
+    ctx.translate(x, y);
+    if (!facingRight) ctx.scale(-1, 1);
+    
+    const now = Date.now();
+    const pulse = 0.7 + Math.sin(now * 0.004) * 0.3;
+    
+    // Subtle mixed glow aura
+    ctx.shadowColor = `rgba(120, 60, 200, ${pulse * 0.35})`;
+    ctx.shadowBlur = 12;
+    
+    // Main shark body — long sleek dark metal
+    const bodyGrad = ctx.createLinearGradient(0, -h * 0.8, 0, h * 0.8);
+    bodyGrad.addColorStop(0, '#181e2a');
+    bodyGrad.addColorStop(0.35, '#0c1018');
+    bodyGrad.addColorStop(0.65, '#0a0d14');
+    bodyGrad.addColorStop(1, '#141a25');
+    ctx.fillStyle = bodyGrad;
+    
+    // Elongated shark body path
+    ctx.beginPath();
+    ctx.moveTo(w * 0.48, 0);
+    ctx.quadraticCurveTo(w * 0.38, -h * 0.38, w * 0.12, -h * 0.46);
+    ctx.quadraticCurveTo(-w * 0.08, -h * 0.4, -w * 0.28, -h * 0.2);
+    ctx.lineTo(-w * 0.46, -h * 0.05);
+    ctx.lineTo(-w * 0.46, h * 0.05);
+    ctx.lineTo(-w * 0.28, h * 0.2);
+    ctx.quadraticCurveTo(-w * 0.08, h * 0.4, w * 0.12, h * 0.46);
+    ctx.quadraticCurveTo(w * 0.38, h * 0.38, w * 0.48, 0);
+    ctx.closePath();
+    ctx.fill();
+    
+    // Dorsal fin
+    ctx.fillStyle = '#121828';
+    ctx.beginPath();
+    ctx.moveTo(w * 0.02, -h * 0.46);
+    ctx.lineTo(w * 0.1, -h * 1.2);
+    ctx.lineTo(-w * 0.08, -h * 0.46);
+    ctx.closePath();
+    ctx.fill();
+    
+    // Tail fin — forked
+    ctx.fillStyle = '#101622';
+    ctx.beginPath();
+    ctx.moveTo(-w * 0.36, -h * 0.15);
+    ctx.lineTo(-w * 0.50, -h * 0.65);
+    ctx.lineTo(-w * 0.42, 0);
+    ctx.closePath();
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(-w * 0.36, h * 0.15);
+    ctx.lineTo(-w * 0.50, h * 0.65);
+    ctx.lineTo(-w * 0.42, 0);
+    ctx.closePath();
+    ctx.fill();
+    
+    // Pectoral fins
+    ctx.fillStyle = '#131828';
+    ctx.beginPath();
+    ctx.moveTo(w * 0.0, h * 0.38);
+    ctx.lineTo(-w * 0.04, h * 0.8);
+    ctx.lineTo(-w * 0.12, h * 0.33);
+    ctx.closePath();
+    ctx.fill();
+    
+    // Second dorsal
+    ctx.fillStyle = '#111625';
+    ctx.beginPath();
+    ctx.moveTo(-w * 0.18, -h * 0.33);
+    ctx.lineTo(-w * 0.12, -h * 0.65);
+    ctx.lineTo(-w * 0.24, -h * 0.3);
+    ctx.closePath();
+    ctx.fill();
+    
+    ctx.shadowBlur = 0;
+    
+    // === ROBOTIC PANEL LINES (horizontal) ===
+    ctx.strokeStyle = 'rgba(50, 70, 110, 0.25)';
+    ctx.lineWidth = 0.8;
+    ctx.beginPath();
+    ctx.moveTo(w * 0.4, -h * 0.06);
+    ctx.lineTo(-w * 0.35, -h * 0.06);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(w * 0.35, h * 0.1);
+    ctx.lineTo(-w * 0.3, h * 0.1);
+    ctx.stroke();
+    
+    // === ROBOTIC VERTICAL SEAMS ===
+    ctx.strokeStyle = 'rgba(50, 70, 110, 0.2)';
+    ctx.lineWidth = 0.7;
+    for (let seg = 0; seg < 5; seg++) {
+        const sx = w * 0.3 - seg * w * 0.13;
+        const segH = h * (0.3 + Math.abs(Math.sin(seg * 0.8)) * 0.15);
+        ctx.beginPath();
+        ctx.moveTo(sx, -segH);
+        ctx.lineTo(sx, segH);
+        ctx.stroke();
+    }
+    
+    // === GLOWING HORIZONTAL LINES (red + blue robotic strips) ===
+    ctx.globalAlpha = 0.35 * pulse;
+    
+    // Red glow strip — center line
+    ctx.strokeStyle = 'rgba(220, 60, 40, 0.7)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(w * 0.44, 0);
+    ctx.lineTo(-w * 0.4, 0);
+    ctx.stroke();
+    
+    // Blue glow strips — above and below
+    ctx.strokeStyle = 'rgba(60, 140, 240, 0.5)';
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(w * 0.38, -h * 0.18);
+    ctx.lineTo(-w * 0.28, -h * 0.12);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(w * 0.38, h * 0.18);
+    ctx.lineTo(-w * 0.28, h * 0.12);
+    ctx.stroke();
+    
+    // === GLOWING VERTICAL SEGMENTS (robotic tech) ===
+    for (let seg = 0; seg < 3; seg++) {
+        const sx = w * 0.2 - seg * w * 0.18;
+        const segH = h * (0.2 + seg * 0.05);
+        ctx.strokeStyle = `rgba(100, 180, 255, ${0.3 + seg * 0.1})`;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(sx, -segH);
+        ctx.lineTo(sx, segH);
+        ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+    
+    // Gill slits
+    for (let g = 0; g < 3; g++) {
+        const gx = w * 0.2 - g * w * 0.05;
+        ctx.strokeStyle = 'rgba(40, 60, 100, 0.3)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(gx, -h * 0.25);
+        ctx.lineTo(gx - w*0.01, -h * 0.05);
+        ctx.stroke();
+    }
+    
+    // Red sensor eye
+    ctx.shadowColor = `rgba(255, 50, 30, ${pulse})`;
+    ctx.shadowBlur = 10;
+    ctx.fillStyle = `rgba(255, 60, 30, ${0.7 + pulse * 0.3})`;
+    ctx.beginPath();
+    ctx.ellipse(w * 0.32, -h * 0.12, 4, 2.5, -0.2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    
+    // Health bar
+    const hp = health / maxHealth;
+    const barW = 70;
+    ctx.fillStyle = 'rgba(0,0,0,0.7)';
+    ctx.fillRect(-barW/2, -h * 1.5, barW, 4);
+    ctx.fillStyle = '#ff3333';
+    ctx.fillRect(-barW/2, -h * 1.5, barW * hp, 4);
+    
+    ctx.restore();
+}
+
+function drawCrabWalker(x, y, w, h, facingRight, legAngle, health, maxHealth, chargeProgress) {
+    // UNDERWATER GROUND STRIKER — menacing biped with "head-cannon" (no head),
+    // designed to match the game's cold steel + neon tech vibe.
+    ctx.save();
+    ctx.translate(x, y);
+    if (!facingRight) ctx.scale(-1, 1);
+
+    const now = Date.now();
+    const s = w / 80;
+    const charge = Math.max(0, Math.min(1, chargeProgress || 0));
+
+    // Palette (matches other bots)
+    const steelDark = '#0a0e16';
+    const steelMid  = '#162131';
+    const steelLite = '#2a3a52';
+    const edge      = 'rgba(210,235,255,0.10)';
+
+    // Subtle underwater bob + intimidation pulse
+    const bob = Math.sin(now * 0.0026 + x * 0.01) * 1.3 * s;
+    ctx.translate(0, -bob);
+
+    // Ground shadow
+    ctx.fillStyle = 'rgba(0,0,0,0.22)';
+    ctx.beginPath();
+    ctx.ellipse(0, 28*s, 26*s, 6*s, 0, 0, Math.PI*2);
+    ctx.fill();
+
+    // ==== LEGS (hydraulic, sharp stance) ====
+    const step = (legAngle || 0) * 0.9;
+    const hipY = 8*s;
+    const legX = 14*s;
+    for (let side = -1; side <= 1; side += 2) {
+        ctx.save();
+        ctx.translate(side * legX, hipY);
+        ctx.rotate(step * side * 0.35);
+
+        // Upper leg
+        const lg = ctx.createLinearGradient(-8*s, 0, 10*s, 0);
+        lg.addColorStop(0, steelDark);
+        lg.addColorStop(0.5, steelMid);
+        lg.addColorStop(1, steelLite);
+        ctx.fillStyle = lg;
+        ctx.beginPath();
+        ctx.roundRect(-6*s, 0, 12*s, 18*s, 4*s);
+        ctx.fill();
+
+        // Knee joint
+        ctx.fillStyle = steelLite;
+        ctx.beginPath();
+        ctx.arc(0, 19*s, 4.8*s, 0, Math.PI*2);
+        ctx.fill();
+
+        // Lower leg
+        ctx.fillStyle = lg;
+        ctx.beginPath();
+        ctx.roundRect(-5.2*s, 19*s, 10.4*s, 18*s, 4*s);
+        ctx.fill();
+
+        // Foot (claw plate)
+        ctx.fillStyle = steelDark;
+        ctx.beginPath();
+        ctx.roundRect(-10*s, 35*s, 20*s, 7.5*s, 4*s);
+        ctx.fill();
+
+        // Razor toe
+        ctx.fillStyle = 'rgba(255,255,255,0.06)';
+        ctx.beginPath();
+        ctx.moveTo(6*s, 35*s);
+        ctx.lineTo(12*s, 38*s);
+        ctx.lineTo(6*s, 42.5*s);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.restore();
+    }
+
+    // ==== TORSO (armored wedge) ====
+    const torsoW = 44*s;
+    const torsoH = 28*s;
+    const torsoY = -18*s;
+
+    // Back plate / spine
+    ctx.fillStyle = steelMid;
+    ctx.beginPath();
+    ctx.roundRect(-torsoW*0.55, torsoY-6*s, torsoW*1.1, 10*s, 6*s);
+    ctx.fill();
+
+    // Main torso
+    const tg = ctx.createLinearGradient(-torsoW/2, torsoY, torsoW/2, torsoY);
+    tg.addColorStop(0, steelDark);
+    tg.addColorStop(0.5, steelMid);
+    tg.addColorStop(1, steelLite);
+    ctx.fillStyle = tg;
+    ctx.beginPath();
+    ctx.moveTo(-torsoW/2, torsoY + 6*s);
+    ctx.lineTo(-torsoW*0.30, torsoY - torsoH/2);
+    ctx.lineTo(torsoW*0.30, torsoY - torsoH/2);
+    ctx.lineTo(torsoW/2, torsoY + 6*s);
+    ctx.lineTo(torsoW*0.32, torsoY + torsoH/2);
+    ctx.lineTo(-torsoW*0.32, torsoY + torsoH/2);
+    ctx.closePath();
+    ctx.fill();
+
+    // Torso panel highlight
+    ctx.strokeStyle = edge;
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    // ==== "HEAD" CANNON (no head) ====
+    // Cannon sits where a head would be; lightning originates from its muzzle.
+    const cannonX = 22*s;
+    const cannonY = torsoY - 10*s;
+
+    // Neck mount
+    ctx.fillStyle = steelDark;
+    ctx.beginPath();
+    ctx.roundRect(-6*s, cannonY + 10*s, 12*s, 10*s, 4*s);
+    ctx.fill();
+
+    // Cannon housing
+    const cg = ctx.createLinearGradient(0, 0, 32*s, 0);
+    cg.addColorStop(0, steelMid);
+    cg.addColorStop(0.6, steelLite);
+    cg.addColorStop(1, steelDark);
+    ctx.fillStyle = cg;
+    ctx.beginPath();
+    ctx.roundRect(0, cannonY, 34*s, 14*s, 6*s);
+    ctx.fill();
+
+    // Barrel
+    ctx.fillStyle = '#070b12';
+    ctx.beginPath();
+    ctx.roundRect(26*s, cannonY + 4*s, 18*s, 6*s, 3*s);
+    ctx.fill();
+
+    // Muzzle ring
+    ctx.fillStyle = steelLite;
+    ctx.beginPath();
+    ctx.arc(44*s, cannonY + 7*s, 4*s, 0, Math.PI*2);
+    ctx.fill();
+
+    // Charging core (red) in cannon throat
+    ctx.save();
+    const glow = 0.35 + charge * 0.9;
+    ctx.shadowColor = `rgba(255,50,30,${glow})`;
+    ctx.shadowBlur = 10 + charge * 22;
+    ctx.fillStyle = `rgba(255,60,35,${0.35 + charge * 0.55})`;
+    ctx.beginPath();
+    ctx.arc(22*s, cannonY + 7*s, (2.6 + charge*3.6)*s, 0, Math.PI*2);
+    ctx.fill();
+    ctx.restore();
+
+    // Small menace "eyes" as red slits on torso (not a head)
+    ctx.save();
+    ctx.shadowColor = 'rgba(255,60,35,0.85)';
+    ctx.shadowBlur = 10;
+    ctx.fillStyle = 'rgba(255,60,35,0.65)';
+    ctx.beginPath();
+    ctx.roundRect(-10*s, torsoY - 2*s, 8*s, 2.8*s, 2*s);
+    ctx.roundRect(2*s, torsoY - 2*s, 8*s, 2.8*s, 2*s);
+    ctx.fill();
+    ctx.restore();
+
+    // Health bar (small, understated)
+    const hp = Math.max(0, health / Math.max(1, maxHealth));
+    ctx.fillStyle = 'rgba(0,0,0,0.35)';
+    ctx.fillRect(-24*s, torsoY - 26*s, 48*s, 4*s);
+    ctx.fillStyle = 'rgba(255, 30, 30, 0.90)';
+    ctx.fillRect(-24*s, torsoY - 26*s, 48*s * hp, 4*s);
+
+    ctx.restore();
+}
+
+function drawUnderwaterBackground() {
+    const now = Date.now();
+    const poolFloorY = canvas.height - 30; // floor at very bottom of screen
+    
+    // Single seamless dark teal/green chemical fill — NO visible bands
+    const chemGrad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+    chemGrad.addColorStop(0, '#010a0a');
+    chemGrad.addColorStop(0.15, '#021210');
+    chemGrad.addColorStop(0.4, '#031510');
+    chemGrad.addColorStop(0.7, '#021510');
+    chemGrad.addColorStop(0.9, '#011210');
+    chemGrad.addColorStop(1, '#010e0a');
+    ctx.fillStyle = chemGrad;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    // Faint teal light rays from surface
+    ctx.save();
+    for (let i = 0; i < 4; i++) {
+        const rayX = (i * 260 + now * 0.008 + camX * 0.04) % (canvas.width + 300) - 150;
+        const rayW = 35 + Math.sin(now * 0.001 + i) * 12;
+        const rayGrad = ctx.createLinearGradient(rayX, 0, rayX + rayW, canvas.height * 0.6);
+        rayGrad.addColorStop(0, 'rgba(40, 160, 120, 0.06)');
+        rayGrad.addColorStop(0.4, 'rgba(30, 120, 90, 0.03)');
+        rayGrad.addColorStop(1, 'rgba(15, 60, 50, 0)');
+        ctx.fillStyle = rayGrad;
+        ctx.beginPath();
+        ctx.moveTo(rayX, 0);
+        ctx.lineTo(rayX + rayW, 0);
+        ctx.lineTo(rayX + rayW + 50, canvas.height * 0.6);
+        ctx.lineTo(rayX - 30, canvas.height * 0.6);
+        ctx.closePath();
+        ctx.fill();
+    }
+    ctx.restore();
+    
+    // Chemical sediment particles floating
+    ctx.save();
+    for (let i = 0; i < 40; i++) {
+        const px = (i * 97.3 + now * 0.005 * (0.3 + (i % 5) * 0.1)) % canvas.width;
+        const py = (i * 41.7 + now * 0.002 * (0.8 + (i % 3) * 0.2)) % canvas.height;
+        const sz = 0.5 + (i % 6) * 0.2;
+        ctx.globalAlpha = 0.08 + Math.sin(now * 0.002 + i) * 0.04;
+        ctx.fillStyle = (i % 3 === 0) ? '#4a8a6a' : '#2a5a4a';
+        ctx.beginPath();
+        ctx.arc(px, py, sz, 0, Math.PI * 2);
+        ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    ctx.restore();
+    
+    // Subtle corroded metal floor — blended smoothly into liquid at very bottom
+    ctx.save();
+    const plateOffset = -((camX * 0.3) % 100);
+    
+    // Very subtle floor fade
+    ctx.globalAlpha = 0.25;
+    const floorGrad = ctx.createLinearGradient(0, poolFloorY - 30, 0, canvas.height);
+    floorGrad.addColorStop(0, 'rgba(10, 18, 16, 0)');
+    floorGrad.addColorStop(0.3, 'rgba(8, 14, 10, 0.4)');
+    floorGrad.addColorStop(1, 'rgba(4, 8, 6, 0.6)');
+    ctx.fillStyle = floorGrad;
+    ctx.fillRect(0, poolFloorY - 30, canvas.width, canvas.height - poolFloorY + 30);
+    
+    // Faint plate seams
+    ctx.strokeStyle = '#0e1a14';
+    ctx.lineWidth = 1;
+    for (let px = plateOffset; px < canvas.width + 100; px += 100) {
+        ctx.globalAlpha = 0.12;
+        ctx.beginPath();
+        ctx.moveTo(px, poolFloorY);
+        ctx.lineTo(px, canvas.height);
+        ctx.stroke();
+    }
+    
+    // Corrosion patches
+    ctx.globalAlpha = 0.08;
+    for (let i = 0; i < 8; i++) {
+        const cx = (i * 137.3 + plateOffset * 0.7) % canvas.width;
+        const cy = poolFloorY + 5 + (i % 3) * 6;
+        const cw = 15 + (i % 5) * 8;
+        const ch = 3 + (i % 3) * 2;
+        ctx.fillStyle = (i % 2 === 0) ? '#1a3020' : '#0a1810';
+        ctx.beginPath();
+        ctx.ellipse(cx, cy, cw/2, ch/2, 0, 0, Math.PI * 2);
+        ctx.fill();
+    }
+    ctx.restore();
+    
+    // Chemical haze near floor (very subtle)
+    ctx.save();
+    ctx.globalAlpha = 0.03;
+    const hazeGrad = ctx.createLinearGradient(0, poolFloorY - 50, 0, poolFloorY);
+    hazeGrad.addColorStop(0, 'rgba(40, 120, 80, 0)');
+    hazeGrad.addColorStop(1, 'rgba(40, 120, 80, 1)');
+    ctx.fillStyle = hazeGrad;
+    ctx.fillRect(0, poolFloorY - 50, canvas.width, 55);
+    ctx.restore();
+}
+
+function drawWaterEdge(edgeX) {
+    // Hard shoreline edge: water meets the moon ground the same way on BOTH sides (no diagonal/teal wedge)
+    const waterSurfaceY = isUnderwater ? getUnderwaterTopY() : getWaterSurfaceY();
+    const poolBottom = canvas.height;
+    const now = Date.now();
+    const glow = 0.6 + Math.sin(now * 0.003) * 0.2;
+
+    ctx.save();
+
+    const poolExtend = canvas.width + 700;
+
+    // === CHEMICAL LIQUID (starts exactly at edgeX; no fade into land) ===
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = '#021a1a';
+    ctx.fillRect(edgeX, waterSurfaceY, poolExtend, poolBottom - waterSurfaceY);
+
+    // Subtle "back wall" hint at the pool entry when underwater (helps depth perception)
+    if (isUnderwater) {
+        const wallW = 10;
+        const wallGrad = ctx.createLinearGradient(edgeX, 0, edgeX + wallW, 0);
+        wallGrad.addColorStop(0, 'rgba(220, 255, 245, 0.10)');
+        wallGrad.addColorStop(0.5, 'rgba(0, 0, 0, 0)');
+        wallGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        ctx.fillStyle = wallGrad;
+        ctx.fillRect(edgeX, waterSurfaceY, wallW, poolBottom - waterSurfaceY);
+    }
+
+    const liqGrad = ctx.createLinearGradient(0, waterSurfaceY, 0, poolBottom);
+    liqGrad.addColorStop(0, `rgba(0, 180, 140, ${0.85 * glow})`);
+    liqGrad.addColorStop(0.12, `rgba(0, 140, 120, ${0.70 * glow})`);
+    liqGrad.addColorStop(0.45, `rgba(0, 80, 80, ${0.50 * glow})`);
+    liqGrad.addColorStop(1, `rgba(0, 30, 40, ${0.42 * glow})`);
+    ctx.fillStyle = liqGrad;
+    ctx.fillRect(edgeX, waterSurfaceY, poolExtend, poolBottom - waterSurfaceY);
+
+    // === LAND-SIDE WALL PANEL (entry side) ===
+    // When you first drop in, show a hint of the ground wall behind you so the entrance doesn't look like open water.
+    if (isUnderwater) {
+        const wallW = 220;
+        const landWallGrad = ctx.createLinearGradient(edgeX - wallW, 0, edgeX, 0);
+        landWallGrad.addColorStop(0, 'rgba(37, 37, 48, 0.95)');
+        landWallGrad.addColorStop(0.65, 'rgba(37, 37, 48, 0.75)');
+        landWallGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = landWallGrad;
+        ctx.fillRect(edgeX - wallW, waterSurfaceY, wallW, poolBottom - waterSurfaceY);
+
+        // subtle seams
+        ctx.globalAlpha = 0.22;
+        ctx.strokeStyle = 'rgba(0,0,0,0.55)';
+        ctx.lineWidth = 2;
+        for (let i = 0; i < 7; i++) {
+            const yy = waterSurfaceY + 40 + i * 42;
+            ctx.beginPath();
+            ctx.moveTo(edgeX - wallW + 12, yy);
+            ctx.lineTo(edgeX - 10, yy);
+            ctx.stroke();
+        }
+    }
+
+    // === PIT WALL / CUT EDGE (matches the far-side look) ===
+    ctx.globalAlpha = 0.7;
+    ctx.fillStyle = '#252530';
+    ctx.fillRect(edgeX - 4, waterSurfaceY, 8, poolBottom - waterSurfaceY);
+
+    // === SURFACE RIPPLE LINE (only on the water side) ===
+    ctx.globalAlpha = 0.5;
+    ctx.strokeStyle = `rgba(0, 255, 220, ${0.22 * glow})`;
+    ctx.lineWidth = 1;
+    for (let r = 0; r < 3; r++) {
+        const y = waterSurfaceY + 2 + r * 4 + Math.sin(now * 0.002 + r) * 1.5;
+        ctx.beginPath();
+        for (let x = edgeX + 6; x <= edgeX + 170; x += 18) {
+            const yy = y + Math.sin((x * 0.02) + now * 0.004 + r) * 2;
+            if (x === edgeX + 6) ctx.moveTo(x, yy);
+            else ctx.lineTo(x, yy);
+        }
+        ctx.stroke();
+    }
+
+    // Surface glow (water side only)
+    ctx.globalAlpha = 0.08 * glow;
+    const surfGlow = ctx.createLinearGradient(0, waterSurfaceY - 30, 0, waterSurfaceY);
+    surfGlow.addColorStop(0, 'rgba(0, 255, 180, 0)');
+    surfGlow.addColorStop(1, 'rgba(0, 255, 180, 1)');
+    ctx.fillStyle = surfGlow;
+    ctx.fillRect(edgeX, waterSurfaceY - 30, poolExtend, 32);
+
+    // Edge foam (small cap at the cut)
+    ctx.globalAlpha = 0.5;
+    ctx.fillStyle = `rgba(0, 255, 200, ${0.2 * glow})`;
+    ctx.fillRect(edgeX, waterSurfaceY - 1, 6, 4);
+
+    // Bubbles rising near the edge
+    ctx.globalAlpha = 1;
+    for (let i = 0; i < 6; i++) {
+        const bx = edgeX + 30 + (i * 137.3 + now * 0.015) % 260;
+        const by = waterSurfaceY - 3 - ((now * 0.02 + i * 97) % 22);
+        const bSize = 1.5 + (i % 3);
+        const bAlpha = 1 - ((now * 0.02 + i * 97) % 22) / 22;
+        ctx.globalAlpha = bAlpha * 0.25;
+        ctx.strokeStyle = 'rgba(100, 255, 200, 0.5)';
+        ctx.lineWidth = 0.8;
+        ctx.beginPath();
+        ctx.arc(bx, by, bSize, 0, Math.PI * 2);
+        ctx.stroke();
+    }
+
+    ctx.restore();
+}
+
+
+function drawWaterZone(startX, endX) {
+    // Chemical pool pit — when viewed from above the surface
+    const groundSurfaceY = getWaterSurfaceY();
+    const poolBottom = canvas.height; // fills to screen bottom
+    const now = Date.now();
+    const glow = 0.6 + Math.sin(now * 0.003) * 0.2;
+    const w = Math.max(0, endX - startX);
+    if (w <= 0) return;
+
+    ctx.save();
+    
+    // === CHEMICAL LIQUID FILL (fills the pit from surface down) ===
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = '#021a1a';
+    // Trim: slightly overdraw the first few pixels on the LAND side to guarantee a straight vertical shoreline cut
+    // (prevents any residual diagonal/wedge from underlying ground geometry at the entrance edge)
+    ctx.fillRect(startX - 80, groundSurfaceY, 80, poolBottom - groundSurfaceY);
+    ctx.fillRect(startX, groundSurfaceY, w, poolBottom - groundSurfaceY);
+    
+    // Chemical gradient overlay
+    const liqGrad = ctx.createLinearGradient(0, groundSurfaceY, 0, poolBottom);
+    liqGrad.addColorStop(0, `rgba(0, 180, 140, ${0.8 * glow})`);
+    liqGrad.addColorStop(0.1, `rgba(0, 150, 120, ${0.5 * glow})`);
+    liqGrad.addColorStop(0.4, `rgba(0, 80, 80, ${0.3 * glow})`);
+    liqGrad.addColorStop(1, `rgba(0, 30, 40, ${0.2 * glow})`);
+    ctx.fillStyle = liqGrad;
+    // Match the trim for the gradient too
+    ctx.fillRect(startX - 80, groundSurfaceY, 80, poolBottom - groundSurfaceY);
+    ctx.fillRect(startX, groundSurfaceY, w, poolBottom - groundSurfaceY);
+    
+    // Pit edges (dark walls where ground drops away)
+    ctx.fillStyle = '#252530';
+    ctx.globalAlpha = 0.7;
+    ctx.fillRect(startX - 4, groundSurfaceY, 8, poolBottom - groundSurfaceY);
+
+// === ENTRY INCLINE / WALL PANEL (match moon ground pattern instead of flat black) ===
+// This covers the diagonal dark wedge at the pool entrance so it blends with the surface ground.
+ctx.save();
+ctx.beginPath();
+// Triangle from the entrance edge down into the pit (diagonal wall)
+ctx.moveTo(startX, poolBottom);
+ctx.lineTo(startX, groundSurfaceY);
+ctx.lineTo(startX + 220, poolBottom);
+ctx.closePath();
+ctx.clip();
+
+// Use the same metal gradient as the moon ground strip
+const entryMetal = ctx.createLinearGradient(0, canvas.height - 90, 0, canvas.height);
+entryMetal.addColorStop(0, '#2b2b36');
+    entryMetal.addColorStop(0.5, '#232330');
+    entryMetal.addColorStop(1, '#1a1a24');
+    ctx.globalAlpha = 1;
+ctx.fillStyle = entryMetal;
+ctx.fillRect(startX - 60, canvas.height - 120, 320, 220);
+
+// Subtle seams (keep rhythm with camX so it matches the ground)
+ctx.strokeStyle = '#1a1a1a';
+ctx.lineWidth = 2;
+ctx.globalAlpha = 0.22;
+for (let i = 0; i < 5; i++) {
+    const y = canvas.height - 90 + i * 18;
+    ctx.beginPath();
+    ctx.moveTo(startX - 80, y);
+    ctx.lineTo(startX + 320, y);
+    ctx.stroke();
+}
+const entryGridOffset = -((camX % 120 + 120) % 120);
+ctx.globalAlpha = 0.18;
+ctx.strokeStyle = '#151515';
+ctx.lineWidth = 3;
+for (let x = entryGridOffset; x < canvas.width + 120; x += 120) {
+    ctx.beginPath();
+    ctx.moveTo(x, canvas.height - 90);
+    ctx.lineTo(x, canvas.height);
+    ctx.stroke();
+}
+
+// Rivets
+ctx.globalAlpha = 0.65;
+ctx.fillStyle = '#0a0a0a';
+for (let x = entryGridOffset; x < canvas.width + 120; x += 60) {
+    for (let i = 0; i < 3; i++) {
+        const y = canvas.height - 84 + i * 22;
+        ctx.beginPath();
+        ctx.arc(x, y, 3, 0, Math.PI * 2);
+        ctx.fill();
+    }
+}
+
+ctx.restore();
+    
+    // Surface ripples at the top of the liquid
+    ctx.globalAlpha = 0.5;
+    ctx.strokeStyle = `rgba(0, 255, 220, ${0.22 * glow})`;
+    ctx.lineWidth = 1;
+    for (let r = 0; r < 3; r++) {
+        const y = groundSurfaceY + 2 + r * 4 + Math.sin(now * 0.002 + r) * 1.5;
+        ctx.beginPath();
+        for (let x = startX + 5; x <= endX - 5; x += 18) {
+            const yy = y + Math.sin((x * 0.02) + now * 0.004 + r) * 2;
+            if (x <= startX + 5) ctx.moveTo(x, yy);
+            else ctx.lineTo(x, yy);
+        }
+        ctx.stroke();
+    }
+    
+    // Edge glow (top of liquid surface)
+    ctx.globalAlpha = 0.08 * glow;
+    const surfGlow = ctx.createLinearGradient(0, groundSurfaceY - 30, 0, groundSurfaceY);
+    surfGlow.addColorStop(0, 'rgba(0, 255, 180, 0)');
+    surfGlow.addColorStop(1, 'rgba(0, 255, 180, 1)');
+    ctx.fillStyle = surfGlow;
+    ctx.fillRect(startX, groundSurfaceY - 30, w, 32);
+    
+    // Edge foam
+    ctx.globalAlpha = 0.5;
+    ctx.fillStyle = `rgba(0, 255, 200, ${0.2 * glow})`;
+    ctx.fillRect(startX, groundSurfaceY - 1, 6, 4);
+    ctx.fillRect(endX - 6, groundSurfaceY - 1, 6, 4);
+    
+    // === EXIT RAMP (last 300px) ===
+    // Make the ramp blend with the SAME moon-metal ground (grid + rivets), not a flat black slab.
+    const rampStartX = endX - 300;
+
+    // Ramp polygon (triangle) we will clip to.
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(rampStartX, poolBottom);
+    ctx.lineTo(endX, groundSurfaceY);
+    ctx.lineTo(endX, poolBottom);
+    ctx.closePath();
+    ctx.clip();
+
+    // Base metal ground gradient (matches surface ground strip)
+    const rampMetal = ctx.createLinearGradient(0, canvas.height - 90, 0, canvas.height);
+    rampMetal.addColorStop(0, '#2b2b36');
+    rampMetal.addColorStop(0.5, '#232330');
+    rampMetal.addColorStop(1, '#1a1a24');
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = rampMetal;
+    // Overdraw generously; clipping keeps it in the ramp.
+    ctx.fillRect(rampStartX - 80, canvas.height - 120, 460, 220);
+
+    // Panel seams (same look as moon ground)
+    ctx.save();
+    ctx.strokeStyle = '#1a1a1a';
+    ctx.lineWidth = 2;
+
+    // Horizontal seams
+    for (let i = 0; i < 6; i++) {
+        const y = canvas.height - 90 + i * 15;
+        ctx.globalAlpha = 0.3;
+        ctx.beginPath();
+        ctx.moveTo(rampStartX - 120, y);
+        ctx.lineTo(endX + 120, y);
+        ctx.stroke();
+    }
+
+    // Vertical seams (keep in-world rhythm using camX so it matches ground)
+    const gridOffset = -((camX % 120 + 120) % 120);
+    for (let x = gridOffset; x < canvas.width + 120; x += 120) {
+        ctx.globalAlpha = 0.25;
+        ctx.strokeStyle = '#151515';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(x, canvas.height - 90);
+        ctx.lineTo(canvas.width / 2 + (x - canvas.width / 2) * 1.5, canvas.height);
+        ctx.stroke();
+    }
+
+    // Rivets/bolts
+    ctx.fillStyle = '#0a0a0a';
+    for (let x = gridOffset; x < canvas.width + 120; x += 60) {
+        for (let i = 0; i < 4; i++) {
+            const y = canvas.height - 85 + i * 20;
+            ctx.globalAlpha = 0.8;
+            ctx.beginPath();
+            ctx.arc(x, y, 3, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.fillStyle = '#2a2a2a';
+            ctx.globalAlpha = 0.2;
+            ctx.beginPath();
+            ctx.arc(x - 1, y - 1, 1.5, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.fillStyle = '#0a0a0a';
+        }
+    }
+
+    ctx.restore();
+
+    // Ramp slope line (very subtle, matches ground tone)
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = 'rgba(220, 220, 230, 0.06)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(rampStartX, poolBottom);
+    ctx.lineTo(endX, groundSurfaceY);
+    ctx.stroke();
+
+    // Metal grip lines on ramp (subtle)
+    ctx.strokeStyle = 'rgba(220, 220, 230, 0.035)';
+    ctx.lineWidth = 1;
+    for (let i = 0; i < 8; i++) {
+        const t = (i + 1) / 9;
+        const rx = rampStartX + 300 * t;
+        const ry = poolBottom + (groundSurfaceY - poolBottom) * t;
+        ctx.beginPath();
+        ctx.moveTo(rx - 10, ry + 5);
+        ctx.lineTo(rx + 10, ry - 5);
+        ctx.stroke();
+    }
+
+    ctx.restore();
+}
+
+function updateWaterBubbles() {
+    if (!isUnderwater) { waterBubbles = []; return; }
+    
+    // Spawn ambient bubbles
+    if (Math.random() < 0.15) {
+        waterBubbles.push({
+            x: camX + Math.random() * canvas.width,
+            y: canvas.height - 100 - Math.random() * 30,
+            size: 1.5 + Math.random() * 4,
+            vy: -0.4 - Math.random() * 0.8,
+            vx: (Math.random() - 0.5) * 0.3,
+            life: 1.0,
+            decay: 0.004 + Math.random() * 0.004
+        });
+    }
+    
+    // Player bubbles from visor
+    if (Math.random() < 0.2) {
+        waterBubbles.push({
+            x: player.x + (Math.random() - 0.5) * 20,
+            y: player.y - player.height * 0.6,
+            size: 1 + Math.random() * 2.5,
+            vy: -0.8 - Math.random() * 1.2,
+            vx: (Math.random() - 0.5) * 0.5,
+            life: 1.0,
+            decay: 0.01 + Math.random() * 0.008
+        });
+    }
+    
+    for (let i = waterBubbles.length - 1; i >= 0; i--) {
+        const b = waterBubbles[i];
+        b.y += b.vy;
+        b.x += b.vx;
+        b.life -= b.decay;
+        if (b.life <= 0 || b.y < 0) waterBubbles.splice(i, 1);
+    }
+}
+
+function drawWaterBubbles() {
+    waterBubbles.forEach(b => {
+        ctx.save();
+        ctx.globalAlpha = b.life * 0.5;
+        ctx.strokeStyle = `rgba(80, 220, 160, ${b.life * 0.6})`;
+        ctx.lineWidth = 0.8;
+        ctx.fillStyle = `rgba(60, 200, 140, ${b.life * 0.1})`;
+        ctx.beginPath();
+        ctx.arc(b.x, b.y, b.size, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = `rgba(150, 255, 220, ${b.life * 0.4})`;
+        ctx.beginPath();
+        ctx.arc(b.x - b.size * 0.3, b.y - b.size * 0.3, b.size * 0.2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+    });
+}
+
+
 function fireRocket(fromX, fromY, toX, toY) {
     const angle = Math.atan2(toY - fromY, toX - fromX);
     const speed = 14;
@@ -2536,7 +3705,7 @@ function fireRocketFromPlayerOnce() {
     
     // EXTENDED barrel muzzle position in rotated arm space
     const muzzleX = 132;  // Extended barrel tip
-    const muzzleY = -4;   // TOP barrel
+    const muzzleY = 0;   // Single barrel center
     
     // Use arm angle directly - sprite flip handles left/right orientation
     const clampedArmAngle = Math.max(-1.57, Math.min(1.57, player.armAngle));
@@ -2614,7 +3783,18 @@ function update(deltaTime) {
     if (newWave > wave) { wave = newWave; showWaveAnnouncement('⚠ WAVE ' + wave + ' ⚠'); }
     
     // Spawn only when the player pushes into new territory (exploration)
-    if (player.x > nextEncounterX) {
+    // If we're above a water zone (flying over), treat it as "no-land-spawn" territory
+const isOverWaterSurface = (underwaterZone && player.x >= underwaterZone.startX && player.x < underwaterZone.endX && !isUnderwater);
+
+// Cull any surface enemies/drones that would appear to "walk on water"
+if (isOverWaterSurface && underwaterZone) {
+    const sx0 = underwaterZone.startX - 140;
+    const sx1 = underwaterZone.endX + 140;
+    enemies = enemies.filter(e => e.x < sx0 || e.x > sx1);
+    drones = drones.filter(d => d.x < sx0 || d.x > sx1);
+}
+
+if (!isUnderwater && !isOverWaterSurface && player.x > nextEncounterX) {
         const count = 2 + Math.floor(Math.random()*2) + Math.floor(difficulty*0.25);
         for (let i=0;i<count;i++) spawnEnemy();
         // Spawn drones occasionally (30% chance per encounter)
@@ -2624,6 +3804,309 @@ function update(deltaTime) {
         }
         nextEncounterX += 650 + Math.random()*650;
     }
+    
+    // Show jump hint once after first encounter
+    if (!jumpHintShown && player.x > 900) {
+        jumpHintShown = true;
+        const isMobile = canvas.width < 600;
+        const msg = isMobile ? '←↑ · ↑↑ · ↑→ = JUMP' : '←↑ · ↑↑ · ↑→ = JUMP';
+        showWaveAnnouncement(msg, '#00ffcc');
+    }
+    
+    // === SINGLE SPECIAL WATER ZONE (ONE-OFF EVENT) ===
+    // We create exactly ONE water zone in the whole run (a special occurrence).
+    // Water behaves like real water: you can rocket straight UP to be ABOVE the surface,
+    // and drop back down to re-enter the water while still over the zone.
+
+    // Lazily create the zone when the player first reaches the edge (whether flying or grounded)
+    if (!waterZoneUsed && !underwaterZone && player.x >= nextWaterEdgeX) {
+        underwaterZone = createWaterZone(nextWaterEdgeX);
+        waterZoneUsed = true;
+        // Clear surface enemies right at the shoreline
+        enemies = [];
+        drones = [];
+        // Spawn a power-up barrel somewhere in the middle of the pool
+        const barrelX = underwaterZone.startX + (underwaterZone.endX - underwaterZone.startX) * (0.3 + Math.random() * 0.35);
+        waterBarrel = { x: barrelX, y: getPoolFloorY() - 20, collected: false };
+        // Record entry time — enemies will spawn after a grace period
+        waterEntryTime = Date.now();
+        // Position player AT the water surface so they visibly float down
+        if (!player.isFlying) {
+            player.y = getWaterSurfaceY() - 70; // start ABOVE the water surface line
+            isUnderwater = true; // force underwater immediately
+            showWaveAnnouncement('⚠ VISOR LIGHT ON — BRACE FOR CHEMICAL BATH ⚠', '#00ffaa');
+        }
+    }
+
+    // If the zone exists, compute whether the player is below the water surface (UNDERWATER)
+    const zoneActive = (underwaterZone && player.x >= underwaterZone.startX && player.x < underwaterZone.endX);
+    const waterSurfaceY = getWaterSurfaceY(); // matches drawWaterEdge()
+    const playerFeetY = player.y + player.height * 0.55;
+
+    // Underwater is based on WHERE you are (below the surface), not whether you're flying.
+    // This prevents the "press fly -> instantly snap to land" bug.
+    // Add a little hysteresis so you don't flicker when you're right at the surface.
+    if (zoneActive) {
+        const enterThresh = waterSurfaceY - 6;
+        const exitThresh  = waterSurfaceY - 22; // must rise a bit more to exit
+        const wasUnderwater = isUnderwater;
+        if (!isUnderwater) {
+            isUnderwater = (playerFeetY > enterThresh);
+        } else {
+            isUnderwater = (playerFeetY > exitThresh);
+        }
+        
+        // Just entered water — record time, start at surface
+        if (isUnderwater && !wasUnderwater) {
+            if (!waterEntryTime) waterEntryTime = Date.now();
+            // Don't snap Y - let them sink naturally from wherever they are
+        }
+
+        
+        // LEFT WALL: the first entrance has NO incline, so you cannot walk out of the pool on that side.
+        // Clamp the player to stay inside the water zone when they're at/under the surface and not flying.
+        const leftWallX = underwaterZone.startX + 12;
+        const inWaterBand = (playerFeetY > (waterSurfaceY - 40)); // surface + underwater band
+        if (!player.isFlying && inWaterBand && player.x < leftWallX) {
+            player.x = leftWallX;
+            // Keep underwater state stable to avoid transition distortion flicker
+            if (playerFeetY > (waterSurfaceY - 10)) isUnderwater = true;
+        }
+// While over the water zone (surface OR underwater), prevent land spawns and cull land enemies
+        const sx0 = underwaterZone.startX - 160;
+        const sx1 = underwaterZone.endX + 160;
+        enemies = enemies.filter(e => e.x < sx0 || e.x > sx1);
+        drones  = drones.filter(d => d.x < sx0 || d.x > sx1);
+
+        // Spawn enemies in waves as the player moves through the pool
+        if (isUnderwater && !waterEncounterCleared) {
+            const timeSinceEntry = Date.now() - waterEntryTime;
+            if (timeSinceEntry > 4000 && underwaterZone) {
+                // Calculate player progress through pool (0 = start, 1 = ramp)
+                const poolStart = underwaterZone.startX;
+                const poolEnd = underwaterZone.endX - 300; // exclude ramp
+                const progress = Math.max(0, Math.min(1, (player.x - poolStart) / (poolEnd - poolStart)));
+                
+                // Check if player has reached the next wave trigger point
+                if (waterWaveIndex < WATER_WAVES.length) {
+                    const wave = WATER_WAVES[waterWaveIndex];
+                    if (progress >= wave.at || (waterWaveIndex === 0 && timeSinceEntry > 4000)) {
+                        // Spawn this wave ahead of the player
+                        for (let i = 0; i < wave.torpedo; i++) spawnWaterEnemy('torpedo');
+                        for (let i = 0; i < wave.crab; i++) spawnWaterEnemy('crab');
+                        waterTotalSpawned += wave.torpedo + wave.crab;
+                        waterWaveIndex++;
+                        
+                        if (!waterEncounterSpawned) {
+                            waterEncounterSpawned = true;
+                            showWaveAnnouncement('⚠ HOSTILES DETECTED ⚠', '#ff4444');
+                        }
+                    }
+                }
+            }
+        }
+    } else {
+        // Not over the zone: ensure underwater is off
+        isUnderwater = false;
+    }
+
+    // One water zone only (no repeats): once it's created, we never spawn another.
+    // IMPORTANT: The pool itself stays in the world so you can cross it and come back later.
+    if (underwaterZone && !waterZonePassed && player.x >= underwaterZone.endX) {
+        waterZonePassed = true;
+        // Do NOT delete the pool or its enemies: this is a special location you can return to.
+        // We simply announce the far shore.
+        showWaveAnnouncement('☀ FAR SHORE REACHED ☀', '#00ffaa');
+    }
+
+    // Underwater-specific updates
+    if (isUnderwater) {
+        // Recharge specialty fuel slowly
+        flyCharge = Math.min(FLY_CHARGE_MAX, flyCharge + WATER_FUEL_RECHARGE * (deltaTime / 1000));
+        updateHUD();
+        
+        // Check barrel pickup
+        if (waterBarrel && !waterBarrel.collected) {
+            const bdx = player.x - waterBarrel.x;
+            const bdy = (player.y - player.height * 0.3) - waterBarrel.y;
+            if (Math.abs(bdx) < 40 && Math.abs(bdy) < 40) {
+                waterBarrel.collected = true;
+                player.health = player.maxHealth;
+                flyCharge = FLY_CHARGE_MAX;
+                updateHUD();
+                createExplosion(waterBarrel.x, waterBarrel.y, '#00ff88', 35);
+                AudioSystem.playBarrelPickup();
+                showWaveAnnouncement('⚡ FULL CHARGE + FULL HEALTH ⚡', '#00ff88');
+            }
+        }
+
+        // Update water enemies
+        const wNow = Date.now();
+        waterEnemies.forEach(we => {
+            // Keep water enemies isolated inside the pool so they never appear to come from land
+            if (underwaterZone) {
+                const minX = underwaterZone.startX + 90;
+                const maxX = underwaterZone.endX - 90;
+                if (we.x < minX) we.x = minX;
+                if (we.x > maxX) we.x = maxX;
+            }
+
+            we.facingRight = player.x > we.x;
+            
+            if (we.kind === 'torpedo') {
+                // Torpedo drones drift toward player slowly, keeping distance
+                const tdx = player.x - we.x;
+                const tdy = (player.y - player.height * 0.3) - we.y;
+                const tDist = Math.hypot(tdx, tdy);
+                
+                if (tDist > 250) {
+                    we.x += (tdx / tDist) * we.speed;
+                    we.y += (tdy / tDist) * we.speed * 0.3;
+                } else if (tDist < 180) {
+                    // Back off if too close
+                    we.x -= (tdx / tDist) * we.speed * 0.4;
+                }
+                we.bobPhase += 0.025;
+                we.y += Math.sin(we.bobPhase) * 0.4;
+                
+                // Clamp Y — shark bots stay WAY up in the water column while submerged
+                const surfY = isUnderwater ? getUnderwaterTopY() : getWaterSurfaceY();
+                const topClamp = surfY + 10;
+                const bottomClamp = surfY + 70;
+                we.y = Math.max(topClamp, Math.min(bottomClamp, we.y));
+                
+                // Shoot at player (use horizontal range so sharks can fire down from above)
+                if (Math.abs(tdx) < 750 && wNow - we.lastShot > we.shotRate) {
+                    const ang = Math.atan2(tdy, tdx);
+                    enemyLasers.push({
+                        x: we.x + (we.facingRight ? 40 : -40),
+                        y: we.y,
+                        vx: Math.cos(ang) * 10,
+                        vy: Math.sin(ang) * 10,
+                        life: 160,
+                        w: 5,
+                        color: '#ff3b30',
+                        glow: 1,
+                        waterShot: 1
+                    });
+                    we.lastShot = wNow;
+                    createExplosion(we.x + (we.facingRight ? 40 : -40), we.y, '#ff3b30', 12);
+                    AudioSystem.playSharkFire();
+                }
+            } else if (we.kind === 'crab') {
+                // Crab walks toward player on sea floor
+                const cdx = player.x - we.x;
+                if (Math.abs(cdx) > 80 && !we.isCharging) {
+                    we.x += Math.sign(cdx) * we.speed;
+                }
+                we.legAngle += we.speed * 0.08;
+                
+                // Energy orb charging and shooting
+                const cDist = Math.hypot(cdx, player.y - we.y);
+                
+                if (!we.isCharging && cDist < 650 && wNow - we.lastShot > we.shotRate) {
+                    // Start charging
+                    we.isCharging = true;
+                    we.chargeStartTime = wNow;
+                    we.chargeProgress = 0;
+                    AudioSystem.playCrabCharge();
+                }
+                
+                if (we.isCharging) {
+                    const chargeTime = 1500; // 1.5s charge
+                    we.chargeProgress = Math.min(1, (wNow - we.chargeStartTime) / chargeTime);
+                    
+                    // Fire when fully charged — red lightning bolt
+                    if (we.chargeProgress >= 1) {
+                        const s = we.width / 80;
+                        const fireX = we.x + (we.facingRight ? 1 : -1) * 44 * s;
+                        const fireY = we.y - 21 * s;
+                        const targetX = player.x;
+                        const targetY = player.y - player.height * 0.3;
+                        
+                        // Generate jagged lightning path
+                        const segments = [];
+                        const dx = targetX - fireX;
+                        const dy = targetY - fireY;
+                        const dist = Math.sqrt(dx*dx + dy*dy);
+                        const numSegs = Math.max(6, Math.floor(dist / 25));
+                        for (let seg = 0; seg <= numSegs; seg++) {
+                            const t = seg / numSegs;
+                            const bx = fireX + dx * t;
+                            const by = fireY + dy * t;
+                            const jitter = (seg > 0 && seg < numSegs) ? (Math.random() - 0.5) * 30 : 0;
+                            const perpX = -dy / dist * jitter;
+                            const perpY = dx / dist * jitter;
+                            segments.push({ x: bx + perpX, y: by + perpY });
+                        }
+                        
+                        // Store lightning bolt for rendering
+                        if (!window.waterLightningBolts) window.waterLightningBolts = [];
+                        window.waterLightningBolts.push({
+                            segments: segments,
+                            life: 1.0,
+                            startTime: wNow,
+                            duration: 350,
+                            damageDealt: false,
+                            targetX: targetX,
+                            targetY: targetY
+                        });
+                        
+                        // Damage player if in range
+                        if (dist < 500) {
+                            player.health -= 12 + difficulty * 2;
+                            createExplosion(targetX, targetY, '#ff3322', 18);
+                        }
+                        
+                        we.lastShot = wNow;
+                        we.isCharging = false;
+                        we.chargeProgress = 0;
+                        createExplosion(fireX, fireY, '#ff4422', 15);
+                        AudioSystem.playCrabFire();
+                    }
+                } else {
+                    // Idle weapon port glow
+                    we.chargeProgress = 0.15 + Math.sin(wNow * 0.003) * 0.1;
+                }
+                
+                // Melee attack
+                if (Math.abs(cdx) < 60 && Math.abs(player.y - we.y) < 70) {
+                    if (wNow - we.lastAttack > we.attackRate) {
+                        if (wNow >= player.invulnUntil) {
+                            const shielded = wNow < player.shieldUntil && player.shieldHits > 0;
+                            if (shielded) { player.shieldHits--; }
+                            else { player.health = Math.max(0, player.health - 18); player.invulnUntil = wNow + IFRAME_MS; }
+                            player.screenShake = 6;
+                        }
+                        we.lastAttack = wNow;
+                    }
+                }
+            }
+        });
+        
+        // Remove dead water enemies
+        for (let i = waterEnemies.length - 1; i >= 0; i--) {
+            if (waterEnemies[i].health <= 0) {
+                const we = waterEnemies[i];
+                createExplosion(we.x, we.y, '#ff6600', 30, true);
+                score += we.kind === 'torpedo' ? 100 : 150;
+                kills++;
+                flyCharge = Math.min(FLY_CHARGE_MAX, flyCharge + (we.kind === 'crab' ? 35 : 20));
+                waterEnemies.splice(i, 1);
+                AudioSystem.playExplosion();
+                updateHUD();
+            }
+        }
+
+
+        // If the pool encounter was spawned and all water enemies are dead, keep the pool empty forever.
+        if (waterEncounterSpawned && !waterEncounterCleared && waterEnemies.length === 0 && waterWaveIndex >= WATER_WAVES.length) {
+            waterEncounterCleared = true;
+            showWaveAnnouncement('✓ POOL CLEARED — EXPLORE FREELY ✓', '#00ffaa');
+        }
+    }
+    
+    updateWaterBubbles();
     
     // Update drones
     drones.forEach(drone => {
@@ -2670,7 +4153,7 @@ function update(deltaTime) {
             drone.lastShot = now;
             
             // Flash effect for visibility
-            createExplosion(drone.x, drone.y + 10, '#ff3333', 12);
+            createExplosion(drone.x, drone.y + 10, '#ff3333', 6);
             
             // Play laser sound
             AudioSystem.playHit();
@@ -2713,7 +4196,9 @@ function update(deltaTime) {
         // Ground-walk only (no walking up into the air). When not flying, we move in X only.
         const dx = player.targetX - player.x;
         if (Math.abs(dx) > 6) {
-            const moveSpeed = player.speed * (player.isFlying ? 2.5 : 1);
+            // Slow down slightly when underwater
+            const wadeMultiplier = (isUnderwater && !player.isFlying) ? 0.7 : 1;
+            const moveSpeed = player.speed * (player.isFlying ? 2.5 : 1) * wadeMultiplier;
             const movement = Math.sign(dx) * moveSpeed;
             
             // Cap movement to prevent teleporting on fast movement
@@ -2748,14 +4233,45 @@ function update(deltaTime) {
     // Camera will follow naturally
 
     if (!player.isFlying) {
-        // Grounded mode: ease toward ground instead of snapping (prevents "drop to ground" when firing mid-air)
-        player.targetY = groundY;
-        player.y += (groundY - player.y) * 0.18;
-        if (Math.abs(groundY - player.y) < 0.6) player.y = groundY;
+        // Jump physics
+        if (player.isJumping) {
+            player.jumpVY += 0.6; // gravity
+            player.y += player.jumpVY;
+            player.x += player.jumpVX;
+            player.jumpVX *= 0.98; // air friction
+            
+            const groundY = canvas.height - 120;
+            // Check for landing
+            if (player.y >= groundY) {
+                player.y = groundY;
+                player.isJumping = false;
+                player.jumpVY = 0;
+                player.jumpVX = 0;
+            }
+        } else if (isUnderwater && underwaterZone) {
+            // Pool floor — player sinks slowly through chemical to the bottom
+            const poolFloorY = getPoolFloorY(); // match the visual floor
+            
+            // Exit ramp (last 300px of pool) — floor rises back to ground level
+            const rampStartX = underwaterZone.endX - 300;
+            let targetFloorY = poolFloorY;
+            if (player.x > rampStartX) {
+                const rampProgress = Math.min(1, (player.x - rampStartX) / 300);
+                targetFloorY = poolFloorY + (groundY - poolFloorY) * rampProgress;
+            }
+            player.targetY = targetFloorY;
+            // Slow sinking — feels like floating down through thick liquid
+            const onRamp = player.x > rampStartX;
+            const sinkSpeed = onRamp ? 0.10 : 0.018;
+            player.y += (targetFloorY - player.y) * sinkSpeed;
+        } else {
+            player.targetY = groundY;
+            player.y += (groundY - player.y) * 0.18;
+            if (Math.abs(groundY - player.y) < 0.6) player.y = groundY;
+        }
     } else {
         // Flying: allow full vertical range - can go way up!
-        player.y = Math.max(60, Math.min(groundY - 20, player.y));
-    }
+        player.y = Math.max(60, Math.min(canvas.height - 40, player.y));}
 
     
     // Side-scroller camera: LOCK to player position (no lag)
@@ -2823,6 +4339,43 @@ if (player.isFlying && Date.now() > player.flyEndTime) { player.isFlying = false
     }
 
     enemies.forEach((enemy) => {
+        // Water-zone safety: keep LAND enemies out of the chemical pool (both when above it and when you're underwater)
+        const wzStart = (underwaterZone ? underwaterZone.startX : nextWaterEdgeX);
+        const wzEnd   = (underwaterZone ? underwaterZone.endX   : (nextWaterEdgeX + WATER_ZONE_LENGTH_MAX));
+
+        // When ABOVE the pool, keep LAND enemies from "walking on water" by holding them at the nearest shoreline
+        // (prevents bots from popping/disappearing when they reach the edges).
+        if (!isUnderwater) {
+            const nearShore = wzStart - 36;
+            const farShore  = wzEnd + 36;
+
+            // Only intervene if the enemy is actually inside the pool span (not just near it)
+            if (enemy.x > wzStart && enemy.x < wzEnd) {
+                const mid = (wzStart + wzEnd) * 0.5;
+
+                // If the player is clearly on one side, hold enemies at that side's shore
+                if (player.x < wzStart) {
+                    enemy.x = nearShore;
+                    enemy.targetX = nearShore;
+                } else if (player.x > wzEnd) {
+                    enemy.x = farShore;
+                    enemy.targetX = farShore;
+                } else {
+                    // Player is at/over the pool surface — choose by which half the enemy was in
+                    if (enemy.x < mid) { enemy.x = nearShore; enemy.targetX = nearShore; }
+                    else { enemy.x = farShore; enemy.targetX = farShore; }
+                }
+            }
+        } else {
+            // When you're UNDERWATER, stop land enemies from following you into the liquid
+            // (they should bunch up at the shoreline instead of walking into the pool)
+            const shoreX = wzStart - 36;
+            if (enemy.x > shoreX) {
+                enemy.x = shoreX;
+                enemy.targetX = shoreX;
+            }
+            enemy.targetY = canvas.height - 120 - Math.random() * 20;
+        }
         const dx = enemy.targetX - enemy.x, dy = enemy.targetY - enemy.y, dist = Math.sqrt(dx * dx + dy * dy);
         const distToPlayer = Math.hypot(enemy.x - player.x, enemy.y - player.y);
         
@@ -2989,6 +4542,9 @@ if (player.isFlying && Date.now() > player.flyEndTime) { player.isFlying = false
 
     });
 
+    // Remove any surface enemies culled for being over water zones
+    enemies = enemies.filter(e => !e._cullWater);
+
     rockets = rockets.filter(rocket => {
         // Spinning motion
         // rocket spin removed (missiles should not rotate like throwing stars)
@@ -3051,6 +4607,20 @@ if (player.isFlying && Date.now() > player.flyEndTime) { player.isFlying = false
             }
         }
         
+        // Water enemy collision
+        for (let i = waterEnemies.length - 1; i >= 0; i--) {
+            const we = waterEnemies[i];
+            const hitW = we.kind === 'crab' ? 40 : 40;
+            const hitH = we.kind === 'crab' ? 35 : 14;
+            const hitY = we.kind === 'crab' ? we.y - we.height * 0.3 : we.y;
+            if (Math.abs(rocket.x - we.x) < hitW && Math.abs(rocket.y - hitY) < hitH) {
+                we.health -= 30;
+                createExplosion(rocket.x, rocket.y, '#00ccff', 20);
+                AudioSystem.playHit();
+                return false;
+            }
+        }
+        
         return rocket.life > 0 && rocket.x > (camX - 50) && rocket.x < (camX + canvas.width + 50) && rocket.y > -50 && rocket.y < canvas.height + 50;
     });
 
@@ -3093,6 +4663,18 @@ if (player.isFlying && Date.now() > player.flyEndTime) { player.isFlying = false
             return false;
         }
 
+        // Contain water-enemy projectiles inside the pool
+        if (underwaterZone) {
+            const waterSurfY = (isUnderwater ? getUnderwaterTopY() : getWaterSurfaceY());
+            const inPoolX = lz.x >= underwaterZone.startX && lz.x <= underwaterZone.endX;
+            // If projectile originated from inside pool area but is now above surface, kill it
+            if (lz.y < waterSurfY - 10 && inPoolX) return false;
+            // If projectile left pool X bounds, kill it
+            if (lz.x < underwaterZone.startX - 50 || lz.x > underwaterZone.endX + 50) {
+                if (lz.y > waterSurfY) return false; // was in pool depth, now escaped horizontally
+            }
+        }
+
         return lz.life > 0 && lz.x > camX - 80 && lz.x < camX + canvas.width + 80 && lz.y > -80 && lz.y < canvas.height + 80;
     });
 
@@ -3129,6 +4711,11 @@ function draw() {
 
     // Space sky (upgraded)
     const t = Date.now() * 0.00005;
+
+    if (isUnderwater) {
+        // === UNDERWATER BACKGROUND ===
+        drawUnderwaterBackground();
+    } else {
 
     // Pure black space
     ctx.fillStyle = '#000000';
@@ -3505,6 +5092,7 @@ function draw() {
     
     ctx.restore();
     ctx.globalAlpha = 1;
+    } // end surface background else block
     // World-space entities
     ctx.save();
     const __worldScale = getWorldScale();
@@ -3512,6 +5100,28 @@ function draw() {
     if (__worldScale !== 1) ctx.scale(__worldScale, __worldScale);
     ctx.translate(-camX, __worldOffsetY);
 
+    // === WATER EDGE / CHEMICAL POOL (single special occurrence) ===
+    // Preview shoreline before discovery; once created, render the FULL pool segment between startX and endX,
+    // so it never "vanishes" when you traverse past the far edge and come back.
+    if (underwaterZone) {
+        const z0 = underwaterZone.startX;
+        const z1 = underwaterZone.endX;
+        // If ANY part of the pool is within a generous view window, draw it.
+        if (z1 > camX - 600 && z0 < camX + canvas.width + 1200) {
+            if (isUnderwater) {
+                // When INSIDE the pool, don't draw any surface line — the underwater BG covers everything
+                // (drawing a surface line here creates a visible color seam)
+            } else {
+                // When ABOVE the pool (surface view), draw the full pool visual
+                drawWaterZone(z0, z1);
+            }
+        }
+    } else {
+        const poolEdgeX = nextWaterEdgeX;
+        if (poolEdgeX > camX - 600 && poolEdgeX < camX + canvas.width + 1200) {
+            drawWaterEdge(poolEdgeX);
+        }
+    }
 
     // Smoke trails (streaks only — no big bubble circles)
     smokeTrails.forEach(s => {
@@ -3562,7 +5172,7 @@ function draw() {
     sparks.forEach(s => {
         ctx.fillStyle = s.color;
         ctx.shadowColor = s.color;
-        ctx.shadowBlur = 8;
+        ctx.shadowBlur = 5;
         ctx.globalAlpha = s.life;
         ctx.beginPath();
         ctx.arc(s.x, s.y, s.size * s.life, 0, Math.PI * 2);
@@ -3572,6 +5182,10 @@ function draw() {
     ctx.globalAlpha = 1;    // Enemy lasers - regular projectile lasers (drones only now)
     enemyLasers.forEach(lz => {
         ctx.save();
+        // Make underwater shark shots punch through the chemical haze
+        if (lz.waterShot) {
+            ctx.globalCompositeOperation = 'lighter';
+        }
         ctx.globalAlpha = 0.95;
         const laserColor = lz.color || '#ff3355';
         
@@ -3723,6 +5337,117 @@ function draw() {
         drawDrone(drone);
     });
 
+    // Water enemies (torpedo drones + crab walkers)
+    if (isUnderwater) {
+        // Draw power-up barrel
+        if (waterBarrel && !waterBarrel.collected) {
+            const bx = waterBarrel.x;
+            const by = waterBarrel.y;
+            const now = Date.now();
+            const bob = Math.sin(now * 0.003) * 3;
+            const pulse = 0.7 + Math.sin(now * 0.005) * 0.3;
+            
+            ctx.save();
+            ctx.translate(bx, by + bob);
+            
+            // Glow aura
+            ctx.shadowColor = `rgba(0, 255, 120, ${pulse * 0.6})`;
+            ctx.shadowBlur = 15 + pulse * 10;
+            
+            // Barrel body
+            const bw = 22, bh = 30;
+            ctx.fillStyle = '#1a3520';
+            ctx.beginPath();
+            ctx.roundRect(-bw/2, -bh/2, bw, bh, 4);
+            ctx.fill();
+            
+            // Metal bands
+            ctx.fillStyle = '#2a5a35';
+            ctx.fillRect(-bw/2, -bh/2 + 4, bw, 3);
+            ctx.fillRect(-bw/2, bh/2 - 7, bw, 3);
+            
+            // Center cross/plus symbol (health)
+            ctx.fillStyle = `rgba(0, 255, 120, ${0.7 + pulse * 0.3})`;
+            ctx.fillRect(-2, -8, 4, 16);
+            ctx.fillRect(-8, -2, 16, 4);
+            
+            // Highlight
+            ctx.fillStyle = 'rgba(100, 255, 180, 0.15)';
+            ctx.fillRect(-bw/2 + 2, -bh/2 + 2, bw/3, bh - 4);
+            
+            ctx.shadowBlur = 0;
+            ctx.restore();
+        }
+        
+        waterEnemies.forEach(we => {
+            if (we.kind === 'torpedo') {
+                drawTorpedoDrone(we.x, we.y, we.width, we.height, we.facingRight, we.health, we.maxHealth);
+            } else if (we.kind === 'crab') {
+                drawCrabWalker(we.x, we.y, we.width, we.height, we.facingRight, we.legAngle, we.health, we.maxHealth, we.chargeProgress);
+            }
+        });
+        drawWaterBubbles();
+        
+        // Draw lightning bolts
+        if (window.waterLightningBolts && window.waterLightningBolts.length > 0) {
+            const lNow = Date.now();
+            window.waterLightningBolts = window.waterLightningBolts.filter(bolt => {
+                const elapsed = lNow - bolt.startTime;
+                if (elapsed > bolt.duration) return false;
+                
+                const life = 1 - elapsed / bolt.duration;
+                const flash = life > 0.7 ? 1 : life / 0.7;
+                
+                ctx.save();
+                // Main bolt — thick bright red
+                ctx.globalAlpha = flash * 0.9;
+                ctx.strokeStyle = `rgba(255, ${60 + flash * 80}, ${20 + flash * 40}, ${flash})`;
+                ctx.lineWidth = 0.7 + flash * 0.6;
+                ctx.shadowColor = `rgba(255, 40, 20, ${flash})`;
+                ctx.shadowBlur = 6 + flash * 8;
+                ctx.lineJoin = 'bevel';
+                ctx.beginPath();
+                bolt.segments.forEach((s, i) => {
+                    if (i === 0) ctx.moveTo(s.x, s.y);
+                    else ctx.lineTo(s.x, s.y);
+                });
+                ctx.stroke();
+                
+                // Hot white core
+                ctx.globalAlpha = flash * 0.6;
+                ctx.strokeStyle = `rgba(255, ${200 + flash * 55}, ${150 + flash * 80}, ${flash})`;
+                ctx.lineWidth = 0.75 + flash * 0.65;
+                ctx.shadowBlur = 5;
+                ctx.beginPath();
+                bolt.segments.forEach((s, i) => {
+                    if (i === 0) ctx.moveTo(s.x, s.y);
+                    else ctx.lineTo(s.x, s.y);
+                });
+                ctx.stroke();
+                
+                // Branching arcs (smaller jagged offshoots)
+                if (flash > 0.5) {
+                    ctx.globalAlpha = (flash - 0.5) * 1.2;
+                    ctx.strokeStyle = `rgba(255, 80, 40, ${flash * 0.5})`;
+                    ctx.lineWidth = 1.5;
+                    ctx.shadowBlur = 6;
+                    for (let b = 0; b < 3; b++) {
+                        const si = Math.floor(Math.random() * (bolt.segments.length - 1)) + 1;
+                        const sp = bolt.segments[si];
+                        ctx.beginPath();
+                        ctx.moveTo(sp.x, sp.y);
+                        ctx.lineTo(sp.x + (Math.random()-0.5) * 30, sp.y + (Math.random()-0.5) * 30);
+                        ctx.lineTo(sp.x + (Math.random()-0.5) * 45, sp.y + (Math.random()-0.5) * 45);
+                        ctx.stroke();
+                    }
+                }
+                
+                ctx.restore();
+                return true;
+            });
+        }
+    }
+
     // Rockets (drawn AFTER enemies so shots don’t get hidden by the spider tank)
     rockets.forEach(r => drawRocket(r));
 
@@ -3736,7 +5461,6 @@ function draw() {
         ctx.shadowBlur = 0;
 
         drawPlayer(player.x, player.y, player.width, player.height, player.legAngle, player.isFlying, player.facingRight, player.armAngle);
-        
         // DEBUG: Draw bright cyan circle at calculated gun barrel position
         if (window.debugGunX && window.debugGunY) {
             ctx.save();
@@ -3845,6 +5569,28 @@ function draw() {
         }
     }    ctx.restore();
 
+    // Underwater blue tint overlay (screen-space, over everything)
+    if (isUnderwater || waterTransitionAlpha > 0.01) {
+        // Smooth transition
+        const targetAlpha = isUnderwater ? 1 : 0;
+        waterTransitionAlpha += (targetAlpha - waterTransitionAlpha) * 0.06;
+        
+        ctx.save();
+        ctx.globalAlpha = waterTransitionAlpha * 0.10;
+        ctx.fillStyle = '#003828';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        // Subtle caustic/wavy effect at top
+        ctx.globalAlpha = waterTransitionAlpha * 0.05;
+        const now = Date.now();
+        for (let i = 0; i < 3; i++) {
+            const waveY = 10 + Math.sin(now * 0.002 + i * 2) * 5;
+            ctx.fillStyle = `rgba(60, 180, 120, ${0.12 + Math.sin(now * 0.003 + i) * 0.04})`;
+            ctx.fillRect(0, waveY + i * 4, canvas.width, 2);
+        }
+        ctx.restore();
+    }
+
     // Move hint (after clearing the local area)
     if (gameRunning && enemies.length === 0) {
         drawMoveArrowHint();
@@ -3906,12 +5652,15 @@ function startGame() {
     camX = 0;
     score = 0; kills = 0; flyCharge = 0; wave = 1;
     enemies = []; rockets = []; enemyLasers = []; particles = []; sparks = []; smokeTrails = []; debris = []; drones = [];
+    waterEnemies = []; waterBubbles = []; isUnderwater = false; waterZoneUsed = false; underwaterZone = null; nextWaterEdgeX = 5500; waterTransitionAlpha = 0; window.waterLightningBolts = []; waterEntryTime = 0; waterBarrel = null;
+    waterEncounterSpawned = false; waterEncounterCleared = false; waterZonePassed = false; waterWaveIndex = 0; waterTotalSpawned = 0; waterTotalKills = 0;
     spawnTimer = 0; difficulty = 1; spawnInterval = 2800;
 
     initPlayer(); updateHUD();
 
     // First encounter starts immediately (no empty opening)
     nextEncounterX = player.x + 220;
+    jumpHintShown = false;
     spawnEnemy();
 
     document.getElementById('startScreen').style.display = 'none';
@@ -4070,7 +5819,33 @@ document.addEventListener('keydown', (e) => {
     if (e.code === 'Space') { e.preventDefault(); activateFlight(); }
     if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') { e.preventDefault(); activateShield(); }
     // WASD movement
-    if (e.code === 'KeyW' || e.code === 'ArrowUp') { e.preventDefault(); dpadState.up = true; }
+    if (e.code === 'KeyW' || e.code === 'ArrowUp') { 
+        e.preventDefault(); 
+        dpadState.up = true;
+        // Jump if on ground (not flying, not already jumping, not underwater)
+        if (!player.isFlying && !player.isJumping && !isUnderwater) {
+            const groundY = canvas.height - 120;
+            if (Math.abs(player.y - groundY) < 8) {
+                if (dpadState.right || dpadState.left) {
+                    // Directional jump
+                    player.isJumping = true;
+                    player.jumpVY = -12;
+                    player.jumpVX = dpadState.right ? 6 : -6;
+                    AudioSystem.playJump();
+                } else {
+                    // Double-tap up for straight jump
+                    const now = Date.now();
+                    if ((now - dpadState.lastUpTap) < 300) {
+                        player.isJumping = true;
+                        player.jumpVY = -11;
+                        player.jumpVX = 0;
+                        AudioSystem.playJump();
+                    }
+                    dpadState.lastUpTap = now;
+                }
+            }
+        }
+    }
     if (e.code === 'KeyS' || e.code === 'ArrowDown') { e.preventDefault(); dpadState.down = true; }
     if (e.code === 'KeyA' || e.code === 'ArrowLeft') { e.preventDefault(); dpadState.left = true; }
     if (e.code === 'KeyD' || e.code === 'ArrowRight') { e.preventDefault(); dpadState.right = true; }
@@ -4097,7 +5872,7 @@ const flyBtn = document.getElementById('flyBtn');
 const shieldBtn = document.getElementById('shieldBtn');
 const pauseBtn = document.getElementById('pauseBtn');
 
-const dpadState = { up:false, down:false, left:false, right:false };
+const dpadState = { up:false, down:false, left:false, right:false, upTime:0, leftTime:0, rightTime:0, lastUpTap:0 };
 
 function setBtnOn(el, on){ if(!el) return; el.classList.toggle('on', !!on); }
 
@@ -4183,10 +5958,52 @@ function syncDpadVisuals(){
   setBtnOn(btnFire, isFiring && !paused);
 }
 
-hold(btnUp,   ()=>dpadState.up=true,    ()=>dpadState.up=false);
+hold(btnUp,   ()=>{ 
+    const now = Date.now();
+    const wasDoubleTap = (now - dpadState.lastUpTap) < 300;
+    dpadState.lastUpTap = now;
+    dpadState.up=true; dpadState.upTime=now; 
+    if (wasDoubleTap) { doStraightJump(); } else { checkDpadJump(); }
+},    ()=>dpadState.up=false);
 hold(btnDown, ()=>dpadState.down=true,  ()=>dpadState.down=false);
-hold(btnLeft, ()=>dpadState.left=true,  ()=>dpadState.left=false);
-hold(btnRight,()=>dpadState.right=true, ()=>dpadState.right=false);
+hold(btnLeft, ()=>{ dpadState.left=true; dpadState.leftTime=Date.now(); checkDpadJump(); },  ()=>dpadState.left=false);
+hold(btnRight,()=>{ dpadState.right=true; dpadState.rightTime=Date.now(); checkDpadJump(); }, ()=>dpadState.right=false);
+
+// Combo jump: if Up + Left/Right pressed within 250ms of each other, jump
+function checkDpadJump() {
+    if (player.isFlying || player.isJumping || isUnderwater) return;
+    const now = Date.now();
+    const comboWindow = 250; // ms
+    const gY = canvas.height - 120;
+    if (Math.abs(player.y - gY) > 8) return; // not on ground
+    
+    const upRecent = (now - dpadState.upTime) < comboWindow;
+    const leftRecent = (now - dpadState.leftTime) < comboWindow;
+    const rightRecent = (now - dpadState.rightTime) < comboWindow;
+    
+    if (upRecent && rightRecent) {
+        player.isJumping = true;
+        player.jumpVY = -12;
+        player.jumpVX = 6;
+        AudioSystem.playJump();
+    } else if (upRecent && leftRecent) {
+        player.isJumping = true;
+        player.jumpVY = -12;
+        player.jumpVX = -6;
+        AudioSystem.playJump();
+    }
+    // Straight-up jump handled by double-tap up (doStraightJump)
+}
+
+function doStraightJump() {
+    if (player.isFlying || player.isJumping || isUnderwater) return;
+    const gY = canvas.height - 120;
+    if (Math.abs(player.y - gY) > 8) return;
+    player.isJumping = true;
+    player.jumpVY = -11;
+    player.jumpVX = 0;
+    AudioSystem.playJump();
+}
 
 // FIRE BUTTON - Auto-aim: ground = shoot at nearest enemy or forward, flying = shoot downward
 function getAutoAimTarget() {
@@ -4238,7 +6055,7 @@ function doFire() {
     const shoulderX = torsoW/2 - 10;
     const shoulderY = torsoY + 18;
     const muzzleX = 132;  // Extended barrel tip
-    const muzzleY = -4;   // Top barrel
+    const muzzleY = 0;   // Single barrel center
     
     // Use arm angle directly - sprite flip handles left/right orientation
     const clampedArmAngle = Math.max(-1.57, Math.min(1.57, player.armAngle));
@@ -4328,13 +6145,17 @@ function updateMovementFromDpad(){
   if (dx !== 0 || dy !== 0){
     isMoving = true;
 
-    // Push target ahead in world coords so the existing movement system keeps walking.
     const pushX = 420;
 
-    player.targetX = player.x + dx * pushX;
+    // During jump, don't override X (jump physics handles it)
+    if (!player.isJumping) {
+        player.targetX = player.x + dx * pushX;
+    }
     
-    // Keep on ground unless flying
-    if (!player.isFlying){
+    // Keep on ground unless flying or jumping
+    if (player.isJumping) {
+        // Jump physics handles Y - don't override
+    } else if (!player.isFlying){
       player.targetY = groundLevel;
     } else {
       // When flying, allow much more vertical movement
@@ -4342,8 +6163,10 @@ function updateMovementFromDpad(){
     }
   } else {
     // If D-pad not held, stop moving
-    isMoving = false;
+    if (!player.isJumping) isMoving = false;
   }
+  
+  // Mobile jump handled by checkDpadJump() combo detector
 }
 
 // Touch visual feedback only (activation handled by pointerdown above)
@@ -4423,8 +6246,8 @@ canvas.addEventListener('touchstart', (e) => {
 })();
 
 document.getElementById('soundToggle').addEventListener('click', () => { AudioSystem.enabled = !AudioSystem.enabled; document.getElementById('soundToggle').textContent = AudioSystem.enabled ? '🔊 SOUND ON' : '🔇 SOUND OFF'; });
-document.getElementById('startBtn').addEventListener('click', startGame);
-document.getElementById('restartBtn').addEventListener('click', startGame);
+document.getElementById('startBtn').addEventListener('click', () => { try { startGame(); } catch(e){ console.error(e); alert('Start error: ' + (e && e.message ? e.message : e)); } });
+document.getElementById('restartBtn').addEventListener('click', () => { try { startGame(); } catch(e){ console.error(e); alert('Start error: ' + (e && e.message ? e.message : e)); } });
 
 let pauseStartTime = 0;
 
