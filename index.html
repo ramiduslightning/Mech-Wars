@@ -32,7 +32,7 @@
         .hud-label { font-family: 'Orbitron', sans-serif; font-size: 10px; color: #00ffcc; letter-spacing: 3px; margin-bottom: 5px; text-shadow: 0 0 10px #00ffcc; }
         .hud-value { font-family: 'Orbitron', sans-serif; font-size: 28px; font-weight: 900; color: #fff; text-shadow: 0 0 15px #00ffcc, 0 0 30px #00ffcc; }
         #healthBar { width: 180px; height: 14px; background: linear-gradient(180deg, #1a1a1a, #0a0a0a); border: 2px solid #00ffcc; margin-top: 5px; overflow: hidden; }
-        #healthFill { height: 100%; background: linear-gradient(90deg, #ff0000, #ff6600, #00ff66); transition: width 0.3s; }
+        #healthFill { height: 100%; background: linear-gradient(90deg, #ff0000, #ff6600, #00ffcc); transition: width 0.3s; }
         #flyMeter { width: 120px; height: 10px; background: #1a1a1a; border: 2px solid #ffcc00; margin-top: 8px; overflow: hidden; }
         #flyFill { height: 100%; width: 0%; background: linear-gradient(90deg, #ffcc00, #ff6600, #ff3300); transition: width 0.2s; }
         #mobileControls { display: block; position: relative; pointer-events: none; }
@@ -376,7 +376,7 @@
         <div id="waveAnnounce"></div>
         <div id="startScreen">
             <div class="title">MECH <span>WARS</span></div>
-            <div class="subtitle">ALIEN MOON • ROBOT UPRISING</div>
+            <div class="subtitle">DISTANT MOON • ROBOT UPRISING</div>
             <div class="byline">Ramidus, Inc • A Casey T. Duncan Enterprise</div>
             <div class="instructions" id="desktopInstructions">
                 <span>[MOUSE]</span> — Aim gun<br>
@@ -395,7 +395,7 @@
         </div>
         <div id="gameOverScreen">
             <div class="title" style="font-size: clamp(30px, 8vw, 60px);">SUIT <span>DESTROYED</span></div>
-            <div class="subtitle">◆ EXTRACTION FAILED ◆</div>
+            <div class="subtitle">◆ MISSION FAILED ◆</div>
             <div id="finalScore">0</div>
             <div class="instructions">TARGETS ELIMINATED</div>
             <button class="start-btn" id="restartBtn" onclick="try{startGame();}catch(e){console.error(e);alert("Start error: "+e.message);}">↻ REDEPLOY</button>
@@ -2565,6 +2565,8 @@ function createExplosion(x, y, color, count = 25, big = false) {
 }
 
 function showWaveAnnouncement(text, color) {
+    // Never show announcements during intro cinematic
+    if (typeof introRunning !== 'undefined' && introRunning) return;
     const el = document.getElementById('waveAnnounce');
     el.textContent = text;
     if (color) {
@@ -3370,9 +3372,6 @@ function drawWaterZone(startX, endX) {
     // === CHEMICAL LIQUID FILL (fills the pit from surface down) ===
     ctx.globalAlpha = 1;
     ctx.fillStyle = '#021a1a';
-    // Trim: slightly overdraw the first few pixels on the LAND side to guarantee a straight vertical shoreline cut
-    // (prevents any residual diagonal/wedge from underlying ground geometry at the entrance edge)
-    ctx.fillRect(startX - 80, groundSurfaceY, 80, poolBottom - groundSurfaceY);
     ctx.fillRect(startX, groundSurfaceY, w, poolBottom - groundSurfaceY);
     
     // Chemical gradient overlay
@@ -3382,8 +3381,6 @@ function drawWaterZone(startX, endX) {
     liqGrad.addColorStop(0.4, `rgba(0, 80, 80, ${0.3 * glow})`);
     liqGrad.addColorStop(1, `rgba(0, 30, 40, ${0.2 * glow})`);
     ctx.fillStyle = liqGrad;
-    // Match the trim for the gradient too
-    ctx.fillRect(startX - 80, groundSurfaceY, 80, poolBottom - groundSurfaceY);
     ctx.fillRect(startX, groundSurfaceY, w, poolBottom - groundSurfaceY);
     
     // Pit edges (dark walls where ground drops away)
@@ -3391,59 +3388,43 @@ function drawWaterZone(startX, endX) {
     ctx.globalAlpha = 0.7;
     ctx.fillRect(startX - 4, groundSurfaceY, 8, poolBottom - groundSurfaceY);
 
-// === ENTRY INCLINE / WALL PANEL (match moon ground pattern instead of flat black) ===
-// This covers the diagonal dark wedge at the pool entrance so it blends with the surface ground.
+// === ENTRY WALL (straight vertical drop — player falls in, no incline) ===
 ctx.save();
-ctx.beginPath();
-// Triangle from the entrance edge down into the pit (diagonal wall)
-ctx.moveTo(startX, poolBottom);
-ctx.lineTo(startX, groundSurfaceY);
-ctx.lineTo(startX + 220, poolBottom);
-ctx.closePath();
-ctx.clip();
+ctx.globalAlpha = 1;
+// Vertical wall face on entry side (thin metal strip going straight down)
+const entryWallMetal = ctx.createLinearGradient(startX - 12, 0, startX + 4, 0);
+entryWallMetal.addColorStop(0, '#2b2b36');
+entryWallMetal.addColorStop(0.5, '#1e1e28');
+entryWallMetal.addColorStop(1, '#151520');
+ctx.fillStyle = entryWallMetal;
+ctx.fillRect(startX - 8, groundSurfaceY, 12, poolBottom - groundSurfaceY);
 
-// Use the same metal gradient as the moon ground strip
-const entryMetal = ctx.createLinearGradient(0, canvas.height - 90, 0, canvas.height);
-entryMetal.addColorStop(0, '#2b2b36');
-    entryMetal.addColorStop(0.5, '#232330');
-    entryMetal.addColorStop(1, '#1a1a24');
-    ctx.globalAlpha = 1;
-ctx.fillStyle = entryMetal;
-ctx.fillRect(startX - 60, canvas.height - 120, 320, 220);
-
-// Subtle seams (keep rhythm with camX so it matches the ground)
-ctx.strokeStyle = '#1a1a1a';
-ctx.lineWidth = 2;
-ctx.globalAlpha = 0.22;
-for (let i = 0; i < 5; i++) {
-    const y = canvas.height - 90 + i * 18;
+// Horizontal seams on wall face
+ctx.strokeStyle = '#0f0f18';
+ctx.lineWidth = 1.5;
+ctx.globalAlpha = 0.30;
+for (let i = 0; i < 8; i++) {
+    const y = groundSurfaceY + 20 + i * 28;
     ctx.beginPath();
-    ctx.moveTo(startX - 80, y);
-    ctx.lineTo(startX + 320, y);
-    ctx.stroke();
-}
-const entryGridOffset = -((camX % 120 + 120) % 120);
-ctx.globalAlpha = 0.18;
-ctx.strokeStyle = '#151515';
-ctx.lineWidth = 3;
-for (let x = entryGridOffset; x < canvas.width + 120; x += 120) {
-    ctx.beginPath();
-    ctx.moveTo(x, canvas.height - 90);
-    ctx.lineTo(x, canvas.height);
+    ctx.moveTo(startX - 8, y);
+    ctx.lineTo(startX + 4, y);
     ctx.stroke();
 }
 
-// Rivets
-ctx.globalAlpha = 0.65;
-ctx.fillStyle = '#0a0a0a';
-for (let x = entryGridOffset; x < canvas.width + 120; x += 60) {
-    for (let i = 0; i < 3; i++) {
-        const y = canvas.height - 84 + i * 22;
-        ctx.beginPath();
-        ctx.arc(x, y, 3, 0, Math.PI * 2);
-        ctx.fill();
-    }
+// Rivets along wall edge
+ctx.globalAlpha = 0.55;
+ctx.fillStyle = '#0a0a12';
+for (let i = 0; i < 6; i++) {
+    const y = groundSurfaceY + 30 + i * 36;
+    ctx.beginPath();
+    ctx.arc(startX - 2, y, 2.5, 0, Math.PI * 2);
+    ctx.fill();
 }
+
+// Subtle highlight on the lip edge (where ground meets the drop)
+ctx.globalAlpha = 0.15;
+ctx.fillStyle = '#6a7a8a';
+ctx.fillRect(startX - 10, groundSurfaceY - 2, 14, 3);
 
 ctx.restore();
     
@@ -5636,9 +5617,31 @@ function gameOver() {
     document.getElementById('gameOverScreen').style.display = 'flex';
 }
 
+let introPlayed = false;
+let introRunning = false;
+
 function startGame() {
     AudioSystem.resume();
 
+    // Hide start screen immediately
+    document.getElementById('startScreen').style.display = 'none';
+    document.getElementById('gameOverScreen').style.display = 'none';
+
+    if (!introPlayed) {
+        introPlayed = true;
+        introRunning = true;
+        // Run the intro cinematic, then start gameplay
+        playIntroCinematic(() => {
+            introRunning = false;
+            actualStartGame();
+        });
+    } else {
+        // REDEPLOY — skip intro
+        actualStartGame();
+    }
+}
+
+function actualStartGame() {
     // Switch to in-game cursor mode (hide OS cursor, show bullseye)
     document.body.classList.add('inGame');
 
@@ -5663,14 +5666,641 @@ function startGame() {
     jumpHintShown = false;
     spawnEnemy();
 
-    document.getElementById('startScreen').style.display = 'none';
-    document.getElementById('gameOverScreen').style.display = 'none';
     gameRunning = true;
-    showWaveAnnouncement('⚠ WAVE 1 ⚠');
+    // Restore wave announce element and delay Wave 1 so it doesn't overlap intro end
+    const _wa = document.getElementById('waveAnnounce');
+    if (_wa) { _wa.style.display = ''; _wa.style.opacity = '0'; }
+    setTimeout(() => { showWaveAnnouncement('⚠ WAVE 1 ⚠'); }, 600);
+}
+
+// === DEPLOY INTRO CINEMATIC ===
+function playIntroCinematic(onComplete) {
+    const W = canvas.width, H = canvas.height;
+    const startTime = Date.now();
+    const TOTAL_MS = 22000;
+    let skipRequested = false;
+
+    // Hide any lingering wave announcement
+    const waveEl = document.getElementById('waveAnnounce');
+    if (waveEl) { waveEl.style.display = 'none'; waveEl.style.opacity = '0'; waveEl.textContent = ''; }
+
+    // === INTRO AUDIO (Web Audio API) ===
+    let introNodes = [];
+    function scheduleIntroAudio() {
+        const ac = AudioSystem.ctx;
+        if (!ac || !AudioSystem.enabled) return;
+        const t0 = ac.currentTime;
+
+        // 1) Deep space drone
+        const drone = ac.createOscillator();
+        const droneGain = ac.createGain();
+        const droneLFO = ac.createOscillator();
+        const droneLFOGain = ac.createGain();
+        drone.type = 'sawtooth';
+        drone.frequency.setValueAtTime(55, t0);
+        drone.frequency.linearRampToValueAtTime(48, t0 + 10);
+        droneLFO.type = 'sine';
+        droneLFO.frequency.setValueAtTime(0.3, t0);
+        droneLFOGain.gain.setValueAtTime(8, t0);
+        droneLFO.connect(droneLFOGain);
+        droneLFOGain.connect(drone.frequency);
+        const droneFilter = ac.createBiquadFilter();
+        droneFilter.type = 'lowpass';
+        droneFilter.frequency.setValueAtTime(200, t0);
+        droneFilter.frequency.linearRampToValueAtTime(120, t0 + 10);
+        drone.connect(droneFilter);
+        droneFilter.connect(droneGain);
+        droneGain.connect(ac.destination);
+        droneGain.gain.setValueAtTime(0, t0);
+        droneGain.gain.linearRampToValueAtTime(0.12, t0 + 2);
+        droneGain.gain.setValueAtTime(0.12, t0 + 14);
+        droneGain.gain.linearRampToValueAtTime(0, t0 + 20);
+        drone.start(t0); droneLFO.start(t0);
+        drone.stop(t0 + 21); droneLFO.stop(t0 + 21);
+        introNodes.push(drone, droneLFO);
+
+        // 2) Sub bass hit at "They rebelled" (~9.8s)
+        const sub = ac.createOscillator();
+        const subGain = ac.createGain();
+        sub.type = 'sine';
+        sub.frequency.setValueAtTime(35, t0 + 9.8);
+        sub.connect(subGain); subGain.connect(ac.destination);
+        subGain.gain.setValueAtTime(0, t0);
+        subGain.gain.setValueAtTime(0.25, t0 + 9.8);
+        subGain.gain.exponentialRampToValueAtTime(0.01, t0 + 11.5);
+        sub.start(t0 + 9.8); sub.stop(t0 + 12);
+        introNodes.push(sub);
+
+        // 3) Engine rumble (~5s onward)
+        const eng = ac.createOscillator();
+        const engGain = ac.createGain();
+        eng.type = 'triangle';
+        eng.frequency.setValueAtTime(80, t0 + 5);
+        eng.frequency.linearRampToValueAtTime(50, t0 + 18);
+        eng.connect(engGain); engGain.connect(ac.destination);
+        engGain.gain.setValueAtTime(0, t0);
+        engGain.gain.linearRampToValueAtTime(0.06, t0 + 7);
+        engGain.gain.setValueAtTime(0.06, t0 + 16);
+        engGain.gain.linearRampToValueAtTime(0, t0 + 19);
+        eng.start(t0 + 5); eng.stop(t0 + 20);
+        introNodes.push(eng);
+        // Engine noise texture
+        const noiseBuf = ac.createBuffer(1, ac.sampleRate * 15, ac.sampleRate);
+        const nd = noiseBuf.getChannelData(0);
+        for (let i = 0; i < nd.length; i++) nd[i] = (Math.random() * 2 - 1);
+        const engNoise = ac.createBufferSource();
+        engNoise.buffer = noiseBuf;
+        const engFilter = ac.createBiquadFilter();
+        engFilter.type = 'bandpass';
+        engFilter.frequency.setValueAtTime(150, t0);
+        engFilter.Q.setValueAtTime(2, t0);
+        const engNoiseGain = ac.createGain();
+        engNoise.connect(engFilter); engFilter.connect(engNoiseGain);
+        engNoiseGain.connect(ac.destination);
+        engNoiseGain.gain.setValueAtTime(0, t0);
+        engNoiseGain.gain.linearRampToValueAtTime(0.04, t0 + 8);
+        engNoiseGain.gain.setValueAtTime(0.04, t0 + 16);
+        engNoiseGain.gain.linearRampToValueAtTime(0, t0 + 19);
+        engNoise.start(t0 + 5); engNoise.stop(t0 + 20);
+        introNodes.push(engNoise);
+
+        // 4) Landing thud (~19s)
+        const thudOsc = ac.createOscillator();
+        const thudGain = ac.createGain();
+        thudOsc.type = 'sine';
+        thudOsc.frequency.setValueAtTime(60, t0 + 19);
+        thudOsc.frequency.exponentialRampToValueAtTime(25, t0 + 19.6);
+        thudOsc.connect(thudGain); thudGain.connect(ac.destination);
+        thudGain.gain.setValueAtTime(0, t0);
+        thudGain.gain.setValueAtTime(0.3, t0 + 19);
+        thudGain.gain.exponentialRampToValueAtTime(0.01, t0 + 19.8);
+        thudOsc.start(t0 + 19); thudOsc.stop(t0 + 20);
+        introNodes.push(thudOsc);
+        // Thud noise burst
+        const thudNBuf = ac.createBuffer(1, ac.sampleRate * 0.5, ac.sampleRate);
+        const tnd = thudNBuf.getChannelData(0);
+        for (let i = 0; i < tnd.length; i++) tnd[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / tnd.length, 3);
+        const thudNoise = ac.createBufferSource();
+        thudNoise.buffer = thudNBuf;
+        const thudNGain = ac.createGain();
+        const thudNFilter = ac.createBiquadFilter();
+        thudNFilter.type = 'lowpass';
+        thudNFilter.frequency.setValueAtTime(300, t0 + 19);
+        thudNoise.connect(thudNFilter); thudNFilter.connect(thudNGain);
+        thudNGain.connect(ac.destination);
+        thudNGain.gain.setValueAtTime(0.15, t0 + 19);
+        thudNGain.gain.exponentialRampToValueAtTime(0.01, t0 + 19.6);
+        thudNoise.start(t0 + 19);
+        introNodes.push(thudNoise);
+
+        // 5) Text reveal shimmer at each story beat
+        [0.9, 4.2, 8.2, 9.8, 12.4, 17.5].forEach(beat => {
+            const sw = ac.createOscillator();
+            const swGain = ac.createGain();
+            sw.type = 'sine';
+            sw.frequency.setValueAtTime(3200, t0 + beat);
+            sw.frequency.exponentialRampToValueAtTime(1200, t0 + beat + 0.3);
+            sw.connect(swGain); swGain.connect(ac.destination);
+            swGain.gain.setValueAtTime(0.03, t0 + beat);
+            swGain.gain.exponentialRampToValueAtTime(0.001, t0 + beat + 0.4);
+            sw.start(t0 + beat); sw.stop(t0 + beat + 0.5);
+            introNodes.push(sw);
+        });
+    }
+
+    function stopIntroAudio() {
+        introNodes.forEach(n => { try { n.stop(); } catch(e) {} });
+        introNodes = [];
+    }
+
+    scheduleIntroAudio();
+
+    const storyLines = [
+        { t: 900,   text: "YEAR 2187",                                   size: 34, y: 0.16, fade: 1600, color: "#00ffcc" },
+        { t: 4200,  text: "Humanity built machines of supreme intelligence…", size: 18, y: 0.34, fade: 1400 },
+        { t: 6200,  text: "They learned. They evolved.",                 size: 18, y: 0.40, fade: 1200 },
+        { t: 8200,  text: "They became sentient.",                       size: 22, y: 0.34, fade: 1200 },
+        { t: 9800,  text: "They rebelled.",                              size: 22, y: 0.40, fade: 1200, color: "#ff4444" },
+        { t: 12400, text: "From a fortress moon in a distant galaxy, they struck Earth.", size: 18, y: 0.34, fade: 1400 },
+        { t: 14400, text: "Civilization fell. The colonies are all that remain.",  size: 18, y: 0.40, fade: 1400 },
+        { t: 17500, text: "YOU ARE HUMANITY'S LAST OFFENSIVE.",          size: 22, y: 0.50, fade: 1800 },
+    ];
+
+
+    // Stars (persistent)
+    const stars = [];
+    for (let i = 0; i < 200; i++) {
+        stars.push({ x: Math.random() * W, y: Math.random() * H * 0.85, s: 0.5 + Math.random() * 1.8, b: Math.random() });
+    }
+
+    // Allow skip
+    function onSkip() { skipRequested = true; }
+    document.addEventListener('keydown', onSkip, { once: true });
+    canvas.addEventListener('click', onSkip, { once: true });
+
+    function drawFrame() {
+        const elapsed = Date.now() - startTime;
+        const t = Math.min(elapsed / TOTAL_MS, 1);
+
+        if (skipRequested || t >= 1) {
+            document.removeEventListener('keydown', onSkip);
+            canvas.removeEventListener('click', onSkip);
+            stopIntroAudio();
+            onComplete();
+            return;
+        }
+
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+
+        // Black space background
+        ctx.fillStyle = '#020408';
+        ctx.fillRect(0, 0, W, H);
+
+        // Stars (twinkle)
+        const now = Date.now();
+        for (const st of stars) {
+            const twinkle = 0.3 + 0.7 * (0.5 + 0.5 * Math.sin(now * 0.003 + st.b * 20));
+            ctx.globalAlpha = twinkle * 0.8;
+            ctx.fillStyle = '#d0e8ff';
+            ctx.beginPath();
+            ctx.arc(st.x, st.y, st.s, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+
+        // Moon surface — matches gameplay black metallic ground
+        const moonReveal = Math.min(1, Math.max(0, (elapsed - 2000) / 6000));
+        const moonH = 40 + moonReveal * (H * 0.18);
+        const moonY = H - moonH;
+
+        // Black metallic base (same as gameplay ground)
+        const groundGrad = ctx.createLinearGradient(0, moonY, 0, H);
+        groundGrad.addColorStop(0, '#0a0a0a');
+        groundGrad.addColorStop(0.5, '#050505');
+        groundGrad.addColorStop(1, '#000000');
+        ctx.fillStyle = groundGrad;
+        ctx.fillRect(0, moonY, W, moonH);
+
+        // Metal panel seams (horizontal)
+        ctx.save();
+        ctx.strokeStyle = '#1a1a1a';
+        ctx.lineWidth = 2;
+        for (let i = 0; i < 6; i++) {
+            const y = moonY + i * 15;
+            if (y > H) break;
+            ctx.globalAlpha = 0.3 * moonReveal;
+            ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+        }
+        // Vertical panel seams
+        ctx.globalAlpha = 0.25 * moonReveal;
+        ctx.strokeStyle = '#151515';
+        ctx.lineWidth = 3;
+        for (let x = 0; x < W + 120; x += 120) {
+            ctx.beginPath();
+            ctx.moveTo(x, moonY);
+            ctx.lineTo(W / 2 + (x - W / 2) * 1.5, H);
+            ctx.stroke();
+        }
+        ctx.restore();
+
+        // Wispy fog
+        if (moonReveal > 0.3) {
+            ctx.save();
+            const fogTime = now * 0.0004;
+            ctx.globalAlpha = 0.06 * moonReveal;
+            for (let i = 0; i < 15; i++) {
+                const wispX = (i * 97.3 + fogTime * (50 + i * 3)) % (W + 200) - 100;
+                const wispY = moonY + 10 + Math.sin(fogTime * 1.2 + i * 0.9) * 12;
+                const wispSize = 50 + (i % 7) * 20;
+                const wispGrad = ctx.createRadialGradient(wispX, wispY, 0, wispX, wispY, wispSize);
+                wispGrad.addColorStop(0, 'rgba(160, 160, 180, 0.3)');
+                wispGrad.addColorStop(0.5, 'rgba(130, 130, 150, 0.15)');
+                wispGrad.addColorStop(1, 'rgba(100, 100, 120, 0)');
+                ctx.fillStyle = wispGrad;
+                ctx.beginPath(); ctx.arc(wispX, wispY, wispSize, 0, Math.PI * 2); ctx.fill();
+            }
+            ctx.restore();
+        }
+
+        // Metal rivets
+        ctx.globalAlpha = moonReveal;
+        ctx.fillStyle = '#0a0a0a';
+        for (let x = 30; x < W; x += 60) {
+            for (let i = 0; i < 3; i++) {
+                const y = moonY + 5 + i * 20;
+                if (y > H) break;
+                ctx.globalAlpha = 0.7 * moonReveal;
+                ctx.beginPath(); ctx.arc(x, y, 2.5, 0, Math.PI * 2); ctx.fill();
+                ctx.fillStyle = '#2a2a2a';
+                ctx.globalAlpha = 0.15 * moonReveal;
+                ctx.beginPath(); ctx.arc(x - 0.8, y - 0.8, 1.2, 0, Math.PI * 2); ctx.fill();
+                ctx.fillStyle = '#0a0a0a';
+            }
+        }
+        ctx.globalAlpha = 1;
+
+        // === WARSHIP (cinematic heavy assault cruiser) ===
+        const landPhase = Math.min(1, Math.max(0, (elapsed - 5000) / 14000));
+        const eased = landPhase * landPhase * (3 - 2 * landPhase);
+        const shipX = W * 0.5;
+        const shipTopY = -120;
+        const shipLandY = moonY - 52;
+        const shipY = shipTopY + (shipLandY - shipTopY) * eased;
+        const shipScale = (0.7 + 0.3 * eased) * 1.8;
+        const engineGlow = Math.max(0, 1 - landPhase * 1.2);
+        const bankAngle = engineGlow > 0.05 ? Math.sin(now * 0.0006) * 0.02 * (1 - landPhase) : 0;
+
+        ctx.save();
+        ctx.translate(shipX, shipY);
+        ctx.rotate(bankAngle);
+        ctx.scale(shipScale, shipScale);
+
+        // -- ATMOSPHERIC ENTRY GLOW --
+        if (engineGlow > 0.2) {
+            ctx.globalAlpha = engineGlow * 0.04;
+            const atmoGrad = ctx.createRadialGradient(0, 0, 20, 0, 0, 160);
+            atmoGrad.addColorStop(0, 'rgba(140, 200, 255, 0.3)');
+            atmoGrad.addColorStop(0.5, 'rgba(60, 120, 200, 0.1)');
+            atmoGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+            ctx.fillStyle = atmoGrad;
+            ctx.fillRect(-170, -100, 340, 250);
+            ctx.globalAlpha = 1;
+        }
+
+        // -- ENGINE EXHAUST --
+        if (engineGlow > 0.05) {
+            ctx.globalAlpha = engineGlow * 0.45;
+            const cGrad = ctx.createRadialGradient(0, 52, 1, 0, 78, 35 + engineGlow * 22);
+            cGrad.addColorStop(0, 'rgba(220, 245, 255, 0.9)');
+            cGrad.addColorStop(0.12, 'rgba(120, 200, 255, 0.6)');
+            cGrad.addColorStop(0.4, 'rgba(30, 100, 220, 0.2)');
+            cGrad.addColorStop(1, 'rgba(0,0,0,0)');
+            ctx.fillStyle = cGrad;
+            ctx.fillRect(-18, 48, 36, 80 + engineGlow * 35);
+
+            for (const sx of [-58, 58]) {
+                const g = ctx.createRadialGradient(sx, 38, 1, sx, 56, 18 + engineGlow * 12);
+                g.addColorStop(0, 'rgba(180, 240, 255, 0.7)');
+                g.addColorStop(0.3, 'rgba(40, 160, 220, 0.3)');
+                g.addColorStop(1, 'rgba(0,0,0,0)');
+                ctx.fillStyle = g;
+                ctx.fillRect(sx - 12, 34, 24, 55 + engineGlow * 20);
+            }
+
+            // Under-hull engine light cast
+            ctx.globalAlpha = engineGlow * 0.12;
+            const bellyCast = ctx.createLinearGradient(0, 30, 0, -10);
+            bellyCast.addColorStop(0, 'rgba(100, 180, 255, 0.5)');
+            bellyCast.addColorStop(1, 'rgba(0,0,0,0)');
+            ctx.fillStyle = bellyCast;
+            ctx.fillRect(-80, -10, 160, 50);
+            ctx.globalAlpha = 1;
+        }
+
+        // -- GROUND SHADOW --
+        if (landPhase > 0.3) {
+            ctx.globalAlpha = Math.min(0.25, (landPhase - 0.3) * 0.5);
+            const shadowY = shipLandY - shipY + 60;
+            const shadowGrad = ctx.createRadialGradient(0, shadowY, 5, 0, shadowY, 80);
+            shadowGrad.addColorStop(0, 'rgba(0,0,0,0.4)');
+            shadowGrad.addColorStop(1, 'rgba(0,0,0,0)');
+            ctx.fillStyle = shadowGrad;
+            ctx.fillRect(-100, shadowY - 10, 200, 25);
+            ctx.globalAlpha = 1;
+        }
+
+        // -- WINGS (wide, aggressive forward-swept) --
+        // Under-wing shadow layer
+        ctx.fillStyle = '#060a10';
+        ctx.beginPath();
+        ctx.moveTo(-14, -6); ctx.lineTo(-148, 22); ctx.lineTo(-118, 62); ctx.lineTo(-26, 28);
+        ctx.closePath(); ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(14, -6); ctx.lineTo(148, 22); ctx.lineTo(118, 62); ctx.lineTo(26, 28);
+        ctx.closePath(); ctx.fill();
+
+        // Main wing surface
+        const wingGrad = ctx.createLinearGradient(-140, 0, 0, 50);
+        wingGrad.addColorStop(0, '#101a28');
+        wingGrad.addColorStop(0.3, '#1a2a3c');
+        wingGrad.addColorStop(0.7, '#142030');
+        wingGrad.addColorStop(1, '#0c1420');
+        ctx.fillStyle = wingGrad;
+        ctx.beginPath();
+        ctx.moveTo(-12, -8); ctx.lineTo(-145, 20); ctx.lineTo(-115, 58); ctx.lineTo(-26, 26);
+        ctx.closePath(); ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(12, -8); ctx.lineTo(145, 20); ctx.lineTo(115, 58); ctx.lineTo(26, 26);
+        ctx.closePath(); ctx.fill();
+
+        // Wing top specular
+        ctx.globalAlpha = 0.06;
+        const wingSpec = ctx.createLinearGradient(0, -10, 0, 40);
+        wingSpec.addColorStop(0, '#ffffff');
+        wingSpec.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = wingSpec;
+        ctx.beginPath();
+        ctx.moveTo(-12, -8); ctx.lineTo(-145, 20); ctx.lineTo(-130, 32); ctx.lineTo(-20, 6);
+        ctx.closePath(); ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(12, -8); ctx.lineTo(145, 20); ctx.lineTo(130, 32); ctx.lineTo(20, 6);
+        ctx.closePath(); ctx.fill();
+        ctx.globalAlpha = 1;
+
+        // Wing leading-edge rim light
+        ctx.strokeStyle = 'rgba(160, 210, 255, 0.14)';
+        ctx.lineWidth = 1.2;
+        ctx.beginPath(); ctx.moveTo(-12, -8); ctx.lineTo(-145, 20); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(12, -8); ctx.lineTo(145, 20); ctx.stroke();
+
+        // Wing panel lines
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.35)';
+        ctx.lineWidth = 0.6;
+        ctx.beginPath(); ctx.moveTo(-30, -2); ctx.lineTo(-120, 28); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(-38, 12); ctx.lineTo(-108, 42); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(-70, 14); ctx.lineTo(-72, 50); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(30, -2); ctx.lineTo(120, 28); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(38, 12); ctx.lineTo(108, 42); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(70, 14); ctx.lineTo(72, 50); ctx.stroke();
+
+        // Wing-tip weapon pods
+        for (const side of [-1, 1]) {
+            const tipX = side * 140;
+            const tipY = 22;
+            ctx.fillStyle = '#0a0e16';
+            ctx.beginPath();
+            ctx.moveTo(tipX - side * 8, tipY - 5);
+            ctx.lineTo(tipX + side * 4, tipY - 3);
+            ctx.lineTo(tipX + side * 6, tipY + 8);
+            ctx.lineTo(tipX - side * 10, tipY + 6);
+            ctx.closePath(); ctx.fill();
+            const wpulse = 0.3 + Math.sin(now * 0.004 + side) * 0.2;
+            ctx.shadowColor = 'rgba(255, 40, 20, 0.5)';
+            ctx.shadowBlur = 6;
+            ctx.fillStyle = `rgba(255, 50, 30, ${wpulse})`;
+            ctx.beginPath(); ctx.arc(tipX, tipY + 1, 2, 0, Math.PI * 2); ctx.fill();
+            ctx.shadowBlur = 0;
+        }
+
+        // -- NACELLE PYLONS + ENGINE PODS --
+        for (const side of [-1, 1]) {
+            const px = side * 56;
+            ctx.fillStyle = '#0e1520';
+            ctx.beginPath();
+            ctx.moveTo(side * 22, 14); ctx.lineTo(px - side * 4, 22);
+            ctx.lineTo(px + side * 2, 40); ctx.lineTo(side * 24, 32);
+            ctx.closePath(); ctx.fill();
+
+            const nacGrad = ctx.createLinearGradient(px - 8, 18, px + 8, 38);
+            nacGrad.addColorStop(0, '#1c2a3a');
+            nacGrad.addColorStop(0.5, '#12202e');
+            nacGrad.addColorStop(1, '#0a1420');
+            ctx.fillStyle = nacGrad;
+            ctx.fillRect(px - 8, 18, 16, 22);
+
+            ctx.strokeStyle = `rgba(80, 200, 240, ${0.2 + engineGlow * 0.35})`;
+            ctx.lineWidth = 1.2;
+            ctx.beginPath(); ctx.arc(px, 29, 6, 0, Math.PI * 2); ctx.stroke();
+            ctx.fillStyle = `rgba(80, 200, 240, ${0.08 + engineGlow * 0.25})`;
+            ctx.beginPath(); ctx.arc(px, 29, 3.5, 0, Math.PI * 2); ctx.fill();
+
+            ctx.globalAlpha = 0.08;
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(px - 6, 18, 12, 4);
+            ctx.globalAlpha = 1;
+        }
+
+        // -- MAIN HULL (layered fuselage with depth) --
+        ctx.fillStyle = '#050910';
+        ctx.beginPath();
+        ctx.moveTo(0, -88); ctx.lineTo(-18, -64); ctx.lineTo(-34, -18);
+        ctx.lineTo(-32, 22); ctx.lineTo(-20, 50); ctx.lineTo(20, 50);
+        ctx.lineTo(32, 22); ctx.lineTo(34, -18); ctx.lineTo(18, -64);
+        ctx.closePath(); ctx.fill();
+
+        const hullGrad = ctx.createLinearGradient(-30, -80, 30, 50);
+        hullGrad.addColorStop(0, '#2c3a4c');
+        hullGrad.addColorStop(0.2, '#1e2c3c');
+        hullGrad.addColorStop(0.5, '#162436');
+        hullGrad.addColorStop(0.8, '#0e1a28');
+        hullGrad.addColorStop(1, '#0a1018');
+        ctx.fillStyle = hullGrad;
+        ctx.beginPath();
+        ctx.moveTo(0, -86); ctx.lineTo(-16, -62); ctx.lineTo(-30, -16);
+        ctx.lineTo(-28, 20); ctx.lineTo(-18, 46); ctx.lineTo(18, 46);
+        ctx.lineTo(28, 20); ctx.lineTo(30, -16); ctx.lineTo(16, -62);
+        ctx.closePath(); ctx.fill();
+
+        // Hull upper specular
+        ctx.globalAlpha = 0.07;
+        const hullSpec = ctx.createLinearGradient(0, -86, 0, 0);
+        hullSpec.addColorStop(0, '#ffffff');
+        hullSpec.addColorStop(0.4, 'rgba(200,220,255,0.5)');
+        hullSpec.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = hullSpec;
+        ctx.beginPath();
+        ctx.moveTo(0, -86); ctx.lineTo(-14, -62); ctx.lineTo(-20, -20);
+        ctx.lineTo(20, -20); ctx.lineTo(14, -62);
+        ctx.closePath(); ctx.fill();
+        ctx.globalAlpha = 1;
+
+        // Raised center spine
+        const spineGrad = ctx.createLinearGradient(-6, 0, 6, 0);
+        spineGrad.addColorStop(0, 'rgba(255,255,255,0)');
+        spineGrad.addColorStop(0.3, 'rgba(255,255,255,0.04)');
+        spineGrad.addColorStop(0.5, 'rgba(255,255,255,0.07)');
+        spineGrad.addColorStop(0.7, 'rgba(255,255,255,0.04)');
+        spineGrad.addColorStop(1, 'rgba(255,255,255,0)');
+        ctx.fillStyle = spineGrad;
+        ctx.fillRect(-8, -80, 16, 120);
+
+        // Hull panel lines
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.4)';
+        ctx.lineWidth = 0.7;
+        ctx.beginPath(); ctx.moveTo(-16, -44); ctx.lineTo(16, -44); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(-24, -14); ctx.lineTo(24, -14); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(-26, 10); ctx.lineTo(26, 10); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(-22, 30); ctx.lineTo(22, 30); ctx.stroke();
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.25)';
+        ctx.beginPath(); ctx.moveTo(0, -84); ctx.lineTo(0, 44); ctx.stroke();
+
+        // Hull edge rim light
+        ctx.strokeStyle = 'rgba(180, 220, 255, 0.08)';
+        ctx.lineWidth = 0.8;
+        ctx.beginPath();
+        ctx.moveTo(-16, -62); ctx.lineTo(-30, -16); ctx.lineTo(-28, 20); ctx.lineTo(-18, 46);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(16, -62); ctx.lineTo(30, -16); ctx.lineTo(28, 20); ctx.lineTo(18, 46);
+        ctx.stroke();
+
+        // -- WEATHERING / BATTLE SCARRING --
+        ctx.globalAlpha = 0.06;
+        ctx.fillStyle = '#000000';
+        ctx.fillRect(-12, -30, 8, 2);
+        ctx.fillRect(6, -18, 10, 1.5);
+        ctx.fillRect(-8, 16, 6, 1.5);
+        ctx.globalAlpha = 0.03;
+        ctx.fillRect(-20, -50, 3, 40);
+        ctx.fillRect(14, -40, 2, 35);
+        ctx.fillRect(-6, 8, 2, 28);
+        ctx.globalAlpha = 1;
+
+        // -- BRIDGE VIEWPORT (menacing red slit) --
+        ctx.save();
+        ctx.shadowColor = 'rgba(255, 50, 30, 0.7)';
+        ctx.shadowBlur = 14;
+        ctx.fillStyle = '#040810';
+        ctx.fillRect(-14, -74, 28, 8);
+        const vpPulse = 0.7 + Math.sin(now * 0.003) * 0.15;
+        const vpGrad = ctx.createLinearGradient(-10, -72, 10, -72);
+        vpGrad.addColorStop(0, `rgba(255, 40, 20, ${vpPulse * 0.2})`);
+        vpGrad.addColorStop(0.3, `rgba(255, 60, 30, ${vpPulse * 0.85})`);
+        vpGrad.addColorStop(0.5, `rgba(255, 80, 40, ${vpPulse * 0.95})`);
+        vpGrad.addColorStop(0.7, `rgba(255, 60, 30, ${vpPulse * 0.85})`);
+        vpGrad.addColorStop(1, `rgba(255, 40, 20, ${vpPulse * 0.2})`);
+        ctx.fillStyle = vpGrad;
+        ctx.fillRect(-10, -73, 20, 5);
+        ctx.restore();
+
+        // -- NAV & RUNNING LIGHTS --
+        const navPulse = 0.5 + Math.sin(now * 0.005) * 0.3;
+        ctx.shadowColor = 'rgba(255, 30, 20, 0.5)';
+        ctx.shadowBlur = 5;
+        ctx.fillStyle = `rgba(255, 40, 30, ${navPulse + 0.15})`;
+        ctx.beginPath(); ctx.arc(-142, 22, 1.8, 0, Math.PI * 2); ctx.fill();
+        ctx.shadowColor = 'rgba(30, 255, 60, 0.5)';
+        ctx.fillStyle = `rgba(40, 255, 70, ${navPulse + 0.15})`;
+        ctx.beginPath(); ctx.arc(142, 22, 1.8, 0, Math.PI * 2); ctx.fill();
+        ctx.shadowBlur = 0;
+        const strobe = Math.sin(now * 0.008) > 0.85 ? 0.6 : 0;
+        if (strobe > 0) {
+            ctx.fillStyle = `rgba(255, 255, 255, ${strobe})`;
+            ctx.beginPath(); ctx.arc(0, 46, 1.5, 0, Math.PI * 2); ctx.fill();
+            ctx.beginPath(); ctx.arc(-22, 38, 1, 0, Math.PI * 2); ctx.fill();
+            ctx.beginPath(); ctx.arc(22, 38, 1, 0, Math.PI * 2); ctx.fill();
+        }
+        ctx.fillStyle = `rgba(60, 160, 255, ${0.2 + navPulse * 0.15})`;
+        ctx.beginPath(); ctx.arc(-18, 18, 1.2, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(18, 18, 1.2, 0, Math.PI * 2); ctx.fill();
+
+        // -- AFT ENGINE HOUSING --
+        ctx.fillStyle = '#080e18';
+        ctx.fillRect(-16, 42, 32, 8);
+        for (let en = -1; en <= 1; en++) {
+            ctx.fillStyle = '#040810';
+            ctx.beginPath(); ctx.arc(en * 9, 48, 4.5, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = `rgba(120, 200, 255, ${engineGlow * (0.3 + Math.sin(now * 0.009 + en) * 0.1)})`;
+            ctx.beginPath(); ctx.arc(en * 9, 48, 3, 0, Math.PI * 2); ctx.fill();
+        }
+
+        // -- LANDING GEAR --
+        if (landPhase > 0.6) {
+            const gearExt = Math.min(1, (landPhase - 0.6) * 3.5);
+            ctx.globalAlpha = gearExt;
+            ctx.strokeStyle = '#3a4450';
+            ctx.lineWidth = 1.8;
+            for (const gx of [-14, 0, 14]) {
+                const gy = gx === 0 ? 50 : 46;
+                ctx.beginPath(); ctx.moveTo(gx, gy); ctx.lineTo(gx + (gx < 0 ? -3 : gx > 0 ? 3 : 0), gy + gearExt * 14); ctx.stroke();
+                ctx.fillStyle = '#4a5568';
+                ctx.fillRect(gx - 4 + (gx < 0 ? -2 : gx > 0 ? 2 : 0), gy + gearExt * 12, 8, 2.5);
+            }
+            ctx.globalAlpha = 1;
+        }
+
+        ctx.restore();
+
+
+        // === STORY TEXT ===
+        ctx.textAlign = 'center';
+        for (const line of storyLines) {
+            const lineElapsed = elapsed - line.t;
+            if (lineElapsed < 0) continue;
+            // Fade in over 400ms, hold, then fade out
+            const holdDuration = line.fade || 1200;
+            const fadeIn = Math.min(1, lineElapsed / 400);
+            const fadeOut = Math.max(0, 1 - Math.max(0, lineElapsed - holdDuration - 1500) / 600);
+            const alpha = fadeIn * fadeOut;
+            if (alpha <= 0) continue;
+
+            ctx.globalAlpha = alpha;
+            const baseColor = line.color || (line.size > 22 ? '#50c8ff' : '#c0e8ff');
+            ctx.fillStyle = baseColor;
+            ctx.font = `${line.size > 22 ? '800' : '400'} ${line.size}px system-ui, -apple-system, Arial`;
+            if (line.size > 22) {
+                ctx.shadowColor = line.color ? 'rgba(255, 80, 80, 0.6)' : 'rgba(60, 180, 255, 0.6)';
+                ctx.shadowBlur = 20;
+            }
+            ctx.fillText(line.text, W * 0.5, H * line.y);
+            ctx.shadowBlur = 0;
+        }
+
+        // "Press any key to skip" hint after 2s
+        if (elapsed > 2000) {
+            ctx.globalAlpha = 0.3 + Math.sin(now * 0.003) * 0.1;
+            ctx.fillStyle = '#6a8a9a';
+            ctx.font = '13px system-ui, Arial';
+            ctx.fillText('Press any key or click to skip', W * 0.5, H * 0.94);
+        }
+
+        ctx.globalAlpha = 1;
+        ctx.textAlign = 'left';
+
+        requestAnimationFrame(drawFrame);
+    }
+
+    requestAnimationFrame(drawFrame);
 }
 
 let lastTime = 0;
 function gameLoop(timestamp) {
+  // Don't run game logic or draw during intro cinematic
+  if (introRunning) {
+    lastTime = timestamp;
+    requestAnimationFrame(gameLoop);
+    return;
+  }
   try {
     const deltaTime = timestamp - lastTime;
     lastTime = timestamp;
