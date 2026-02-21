@@ -3980,14 +3980,6 @@ if (!isUnderwater && !isOverWaterSurface && player.x > nextEncounterX) {
         nextEncounterX += 650 + Math.random()*650;
     }
     
-    // Show jump hint once after first encounter
-    if (!jumpHintShown && player.x > 900) {
-        jumpHintShown = true;
-        const isMobile = canvas.width < 600;
-        const msg = isMobile ? '←↑ · ↑↑ · ↑→ = JUMP' : '←↑ · ↑↑ · ↑→ = JUMP';
-        showWaveAnnouncement(msg, '#00ffcc');
-    }
-    
     // === SINGLE SPECIAL WATER ZONE (ONE-OFF EVENT) ===
     // We create exactly ONE water zone in the whole run (a special occurrence).
     // Water behaves like real water: you can rocket straight UP to be ABOVE the surface,
@@ -5766,11 +5758,6 @@ function draw() {
         ctx.restore();
     }
 
-    // Move hint (after clearing the local area)
-    if (gameRunning && enemies.length === 0) {
-        drawMoveArrowHint();
-    }
-
     ctx.restore();
     
     // HARD CLAMP: Force player.x to never jump during draw
@@ -5871,6 +5858,11 @@ function actualStartGame() {
     spawnEnemy();
 
     gameRunning = true;
+    // Reset timing to prevent first-frame lag
+    lastTime = performance.now();
+    // Clear any stale input state
+    isFiring = false;
+    lastFireTime = 0;
     const _wa = document.getElementById('waveAnnounce');
     if (_wa) { _wa.style.display = ''; _wa.style.opacity = '0'; }
     setTimeout(() => { showWaveAnnouncement('⚠ WAVE 1 ⚠'); }, 600);
@@ -6114,7 +6106,7 @@ function showCharacterSelect(onComplete) {
 
         ctx.font = '400 clamp(11px, 1.8vw, 14px) system-ui, Arial';
         ctx.fillStyle = 'rgba(180, 210, 240, 0.5)';
-        ctx.fillText('Choose your mech suit configuration', W / 2, H * 0.17);
+        ctx.fillText('Choose your mech suit', W / 2, H * 0.17);
 
         // Draw character cards
         for (let i = 0; i < CHARACTERS.length; i++) {
@@ -6122,72 +6114,78 @@ function showCharacterSelect(onComplete) {
             const r = getCardRect(i);
             const isSelected = (i === selectedCharIndex);
             const isHovered = (i === hoveredIdx);
+            // When hovering a different card, suppress the selected card's highlight
+            const hoveringOtherCard = (hoveredIdx >= 0 && hoveredIdx < CHARACTERS.length && hoveredIdx !== selectedCharIndex);
+            const showActive = isHovered || (isSelected && !hoveringOtherCard);
 
             // Card background
             ctx.save();
-            if (isSelected) {
+            if (showActive) {
                 ctx.shadowColor = ch.trim;
-                ctx.shadowBlur = 20;
+                ctx.shadowBlur = 18;
             }
-            ctx.fillStyle = isSelected ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.03)';
+            ctx.fillStyle = showActive ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.03)';
             ctx.beginPath(); ctx.roundRect(r.x, r.y, r.w, r.h, 10); ctx.fill();
 
-            // Border
-            ctx.strokeStyle = isSelected ? ch.trim : (isHovered ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.06)');
-            ctx.lineWidth = isSelected ? 2 : 1;
+            // Border — active card shows its color
+            ctx.strokeStyle = showActive ? ch.trim : 'rgba(255,255,255,0.06)';
+            ctx.lineWidth = showActive ? 2 : 1;
             ctx.beginPath(); ctx.roundRect(r.x, r.y, r.w, r.h, 10); ctx.stroke();
             ctx.restore();
 
-            // Character preview
-            const previewScale = Math.min(cardW / 140, 0.85);
-            drawMiniMech(r.x + r.w / 2, r.y + r.h * 0.38, ch, previewScale);
+            // Character preview — use actual drawPlayer for accurate look
+            const prevIdx = selectedCharIndex;
+            selectedCharIndex = i;
+            ctx.save();
+            // Clip to card to prevent glow bleed
+            ctx.beginPath();
+            ctx.roundRect(r.x + 1, r.y + 1, r.w - 2, r.h - 2, 9);
+            ctx.clip();
+            const previewScale = Math.min(cardW / 120, 0.75);
+            const prevX = r.x + r.w / 2;
+            const prevY = r.y + r.h * 0.48;
+            const idleAngle = Math.sin(Date.now() * 0.002 + i * 1.5) * 0.12;
+            ctx.scale(previewScale, previewScale);
+            drawPlayer(prevX / previewScale, prevY / previewScale, 50, 80, idleAngle, false, true, 0.2);
+            ctx.restore();
+            selectedCharIndex = prevIdx;
 
             // Name
             ctx.textAlign = 'center';
-            ctx.fillStyle = isSelected ? ch.trim : '#a0b8d0';
+            ctx.fillStyle = showActive ? ch.trim : '#a0b8d0';
             ctx.font = `700 ${Math.max(10, cardW * 0.1)}px system-ui, Arial`;
-            ctx.fillText(ch.name, r.x + r.w / 2, r.y + r.h * 0.78);
+            ctx.fillText(ch.name, r.x + r.w / 2, r.y + r.h * 0.82);
 
-            // Role
-            ctx.fillStyle = 'rgba(160, 190, 220, 0.5)';
-            ctx.font = `400 ${Math.max(8, cardW * 0.075)}px system-ui, Arial`;
-            ctx.fillText(ch.role, r.x + r.w / 2, r.y + r.h * 0.86);
-
-            // Selected indicator
-            if (isSelected) {
-                ctx.fillStyle = ch.trim;
-                ctx.font = `700 ${Math.max(9, cardW * 0.08)}px system-ui, Arial`;
-                ctx.fillText('▼ SELECTED', r.x + r.w / 2, r.y + r.h * 0.95);
-            }
         }
 
-        // DEPLOY button at bottom
-        const btnW = Math.min(220, W * 0.35);
-        const btnH = 44;
+        // DEPLOY button — large, easy to hit
+        const btnW = Math.min(300, W * 0.5);
+        const btnH = 56;
         const btnX = (W - btnW) / 2;
-        const btnY = H * 0.82;
-        const selCh = CHARACTERS[selectedCharIndex];
+        const btnY = H * 0.78;
+        const activeIdx = (hoveredIdx >= 0 && hoveredIdx < CHARACTERS.length) ? hoveredIdx : selectedCharIndex;
+        const activeCh = CHARACTERS[activeIdx];
         const btnHover = (hoveredIdx === -2);
 
         ctx.save();
-        ctx.shadowColor = selCh.trim;
-        ctx.shadowBlur = btnHover ? 18 : 10;
-        ctx.fillStyle = btnHover ? `rgba(${selCh.trimRGB}, 0.25)` : `rgba(${selCh.trimRGB}, 0.12)`;
-        ctx.beginPath(); ctx.roundRect(btnX, btnY, btnW, btnH, 8); ctx.fill();
-        ctx.strokeStyle = selCh.trim;
-        ctx.lineWidth = 1.5;
-        ctx.beginPath(); ctx.roundRect(btnX, btnY, btnW, btnH, 8); ctx.stroke();
+        ctx.shadowColor = activeCh.trim;
+        ctx.shadowBlur = btnHover ? 24 : 14;
+        ctx.fillStyle = btnHover ? `rgba(${activeCh.trimRGB}, 0.3)` : `rgba(${activeCh.trimRGB}, 0.15)`;
+        ctx.beginPath(); ctx.roundRect(btnX, btnY, btnW, btnH, 10); ctx.fill();
+        ctx.strokeStyle = activeCh.trim;
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.roundRect(btnX, btnY, btnW, btnH, 10); ctx.stroke();
         ctx.restore();
 
         ctx.textAlign = 'center';
-        ctx.fillStyle = selCh.trim;
-        ctx.font = '800 18px system-ui, Arial';
-        ctx.fillText('▶ DEPLOY', W / 2, btnY + 28);
+        ctx.fillStyle = activeCh.trim;
+        ctx.font = '800 22px system-ui, Arial';
+        ctx.fillText('▶ DEPLOY', W / 2, btnY + 36);
 
         // Hint
         ctx.fillStyle = 'rgba(140, 170, 200, 0.35)';
         ctx.font = '400 12px system-ui, Arial';
-        ctx.fillText('Select a suit, then tap again or hit DEPLOY', W / 2, H * 0.94);
+        ctx.fillText('Select a suit, then hit DEPLOY or press Enter', W / 2, H * 0.92);
         ctx.textAlign = 'left';
 
         requestAnimationFrame(drawFrame);
@@ -6195,17 +6193,18 @@ function showCharacterSelect(onComplete) {
 
     // Hit testing
     function getHit(ex, ey) {
+        // Check deploy button FIRST (priority over cards if overlap)
+        const btnW = Math.min(300, W * 0.5);
+        const btnH = 56;
+        const btnX = (W - btnW) / 2;
+        const btnY = H * 0.78;
+        const pad = 12;
+        if (ex >= btnX - pad && ex <= btnX + btnW + pad && ey >= btnY - pad && ey <= btnY + btnH + pad) return { type: 'deploy' };
         // Check cards
         for (let i = 0; i < CHARACTERS.length; i++) {
             const r = getCardRect(i);
             if (ex >= r.x && ex <= r.x + r.w && ey >= r.y && ey <= r.y + r.h) return { type: 'card', idx: i };
         }
-        // Check deploy button
-        const btnW = Math.min(220, W * 0.35);
-        const btnH = 44;
-        const btnX = (W - btnW) / 2;
-        const btnY = H * 0.82;
-        if (ex >= btnX && ex <= btnX + btnW && ey >= btnY && ey <= btnY + btnH) return { type: 'deploy' };
         return null;
     }
 
@@ -6233,12 +6232,7 @@ function showCharacterSelect(onComplete) {
         const ey = (cy - rect.top) * scaleY;
         const hit = getHit(ex, ey);
         if (hit && hit.type === 'card') {
-            if (selectedCharIndex === hit.idx) {
-                // Already selected — deploy immediately
-                doDeploy();
-            } else {
-                selectedCharIndex = hit.idx;
-            }
+            selectedCharIndex = hit.idx;
         } else if (hit && hit.type === 'deploy') {
             doDeploy();
         }
@@ -6250,14 +6244,28 @@ function showCharacterSelect(onComplete) {
         canvas.removeEventListener('mousemove', onMove);
         canvas.removeEventListener('click', onClick);
         canvas.removeEventListener('touchend', onClick);
+        document.removeEventListener('keydown', onKey);
         canvas.style.cursor = '';
         charSelectRunning = false;
         onComplete();
     }
 
+    function onKey(e) {
+        if (confirmed) return;
+        if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            doDeploy();
+        } else if (e.key === 'ArrowLeft' || e.key === 'a') {
+            selectedCharIndex = (selectedCharIndex - 1 + CHARACTERS.length) % CHARACTERS.length;
+        } else if (e.key === 'ArrowRight' || e.key === 'd') {
+            selectedCharIndex = (selectedCharIndex + 1) % CHARACTERS.length;
+        }
+    }
+
     canvas.addEventListener('mousemove', onMove);
     canvas.addEventListener('click', onClick);
     canvas.addEventListener('touchend', onClick);
+    document.addEventListener('keydown', onKey);
 
     requestAnimationFrame(drawFrame);
 }
