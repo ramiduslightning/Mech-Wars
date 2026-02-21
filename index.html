@@ -805,6 +805,9 @@ function getChar() { return CHARACTERS[selectedCharIndex]; }
 let gameRunning = false, score = 0, kills = 0, flyCharge = 0, wave = 1;
 // Encounter-based spawning: enemies appear as you explore forward (no camping spawns)
 let nextEncounterX = 650; // world x threshold to trigger the next group
+let techPlatforms = [];   // floating platforms to jump on
+let healthPickups = [];   // collectible health crates
+let nextPlatformX = 1200;  // world x for next platform spawn
 let jumpHintShown = false;
 
 // === UNDERWATER ZONE SYSTEM ===
@@ -976,6 +979,7 @@ function initPlayer() {
     player.isJumping = false;
     player.jumpVY = 0;
     player.jumpVX = 0;
+    player._onPlatform = null;
     nextEncounterX = player.x + 650;
     
     // Initialize position tracking for jump prevention
@@ -2831,6 +2835,232 @@ function spawnEnemy() {
 // Flying drones array
 let drones = [];
 
+// === TECH PLATFORMS, GROUND OBSTACLES & PICKUPS ===
+function spawnPlatformsAndObstacles() {
+    const groundY = canvas.height - 120;
+    const worldX = nextPlatformX;
+    
+    // Random choice: jumpable platform or platform with health pickup (rare)
+    const roll = Math.random();
+    
+    if (roll < 0.85) {
+        // Floating tech platform — reachable by jump (max jump ~120px, stand offset 62)
+        const platY = groundY - (35 + Math.random() * 20);
+        const platW = 70 + Math.random() * 40;
+        techPlatforms.push({
+            x: worldX, y: platY, w: platW, h: 18,
+            bobPhase: Math.random() * Math.PI * 2
+        });
+    } else {
+        // Platform WITH health pickup on top (rare ~15%)
+        const platY = groundY - (35 + Math.random() * 18);
+        const platW = 80 + Math.random() * 30;
+        techPlatforms.push({
+            x: worldX, y: platY, w: platW, h: 18,
+            bobPhase: Math.random() * Math.PI * 2
+        });
+        healthPickups.push({
+            x: worldX + platW / 2, y: platY - 28,
+            collected: false, bobPhase: Math.random() * Math.PI * 2
+        });
+    }
+    
+    nextPlatformX += 900 + Math.random() * 1200;
+}
+
+function drawGroundObstacle(obs) {
+    const sx = obs.x;
+    if (sx < camX - 100 || sx > camX + canvas.width + 100) return;
+    const baseY = obs.y;
+    
+    ctx.save();
+    // Dark tech barrier body
+    const g = ctx.createLinearGradient(sx, baseY - obs.h, sx, baseY);
+    g.addColorStop(0, '#1a2030');
+    g.addColorStop(0.5, '#0e1520');
+    g.addColorStop(1, '#080c14');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.roundRect(sx - obs.w / 2, baseY - obs.h, obs.w, obs.h, 4);
+    ctx.fill();
+    
+    // Metal edge highlight
+    ctx.strokeStyle = 'rgba(100, 140, 180, 0.25)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.roundRect(sx - obs.w / 2, baseY - obs.h, obs.w, obs.h, 4);
+    ctx.stroke();
+    
+    // Hazard stripes (angled)
+    ctx.save();
+    ctx.beginPath();
+    ctx.roundRect(sx - obs.w / 2, baseY - obs.h, obs.w, obs.h, 4);
+    ctx.clip();
+    ctx.globalAlpha = 0.12;
+    ctx.strokeStyle = '#ff6600';
+    ctx.lineWidth = 3;
+    for (let i = -obs.w; i < obs.w * 2; i += 12) {
+        ctx.beginPath();
+        ctx.moveTo(sx - obs.w / 2 + i, baseY);
+        ctx.lineTo(sx - obs.w / 2 + i + obs.h, baseY - obs.h);
+        ctx.stroke();
+    }
+    ctx.restore();
+    
+    // Glowing red top edge (danger indicator)
+    ctx.shadowColor = 'rgba(255, 60, 30, 0.5)';
+    ctx.shadowBlur = 6;
+    ctx.strokeStyle = 'rgba(255, 60, 30, 0.5)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(sx - obs.w / 2 + 4, baseY - obs.h);
+    ctx.lineTo(sx + obs.w / 2 - 4, baseY - obs.h);
+    ctx.stroke();
+    
+    // Rivets
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = '#2a3040';
+    const rivY1 = baseY - obs.h + 6;
+    const rivY2 = baseY - 6;
+    ctx.beginPath();
+    ctx.arc(sx - obs.w / 2 + 6, rivY1, 2, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath();
+    ctx.arc(sx + obs.w / 2 - 6, rivY1, 2, 0, Math.PI * 2); ctx.fill();
+    if (obs.h > 40) {
+        ctx.beginPath();
+        ctx.arc(sx - obs.w / 2 + 6, rivY2, 2, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath();
+        ctx.arc(sx + obs.w / 2 - 6, rivY2, 2, 0, Math.PI * 2); ctx.fill();
+    }
+    
+    ctx.restore();
+}
+
+function drawTechPlatform(plat) {
+    const sx = plat.x;
+    if (sx < camX - 150 || sx > camX + canvas.width + 150) return;
+    const now = Date.now();
+    const bob = Math.sin(now * 0.002 + plat.bobPhase) * 3;
+    const py = plat.y + bob;
+    const occupied = (player._onPlatform === plat);
+    const glowStr = occupied ? 1.0 : 0.0;
+    
+    ctx.save();
+    
+    // Platform shadow on ground
+    ctx.globalAlpha = 0.12;
+    ctx.fillStyle = '#000';
+    const shadowScale = 1 - (canvas.height - 120 - py) / 300;
+    ctx.beginPath();
+    ctx.ellipse(sx + plat.w / 2, canvas.height - 118, plat.w * 0.4 * Math.max(0.3, shadowScale), 4, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    
+    // Silver glow underneath — brighter when occupied
+    ctx.shadowColor = occupied ? 'rgba(220, 225, 235, 0.5)' : 'rgba(180, 190, 200, 0.2)';
+    ctx.shadowBlur = occupied ? 18 : 8;
+    
+    // Main platform body
+    const pg = ctx.createLinearGradient(sx, py - 4, sx, py + plat.h);
+    if (occupied) {
+        pg.addColorStop(0, '#2e3238');
+        pg.addColorStop(0.3, '#22262c');
+        pg.addColorStop(1, '#141618');
+    } else {
+        pg.addColorStop(0, '#22262c');
+        pg.addColorStop(0.3, '#181c22');
+        pg.addColorStop(1, '#0c0e12');
+    }
+    ctx.fillStyle = pg;
+    ctx.beginPath();
+    ctx.roundRect(sx, py, plat.w, plat.h, 3);
+    ctx.fill();
+    
+    // Top surface highlight (silver, brighter when occupied)
+    ctx.fillStyle = occupied ? 'rgba(220, 225, 235, 0.2)' : 'rgba(200, 210, 220, 0.1)';
+    ctx.fillRect(sx + 2, py, plat.w - 4, 3);
+    
+    // Side panel lines
+    ctx.strokeStyle = occupied ? 'rgba(200, 210, 220, 0.15)' : 'rgba(160, 170, 180, 0.1)';
+    ctx.lineWidth = 1;
+    const panelW = plat.w / 4;
+    for (let i = 1; i < 4; i++) {
+        ctx.beginPath();
+        ctx.moveTo(sx + i * panelW, py + 2);
+        ctx.lineTo(sx + i * panelW, py + plat.h - 2);
+        ctx.stroke();
+    }
+    
+    // Edge glow (silver, brighter when occupied)
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = occupied ? 'rgba(220, 230, 240, 0.35)' : 'rgba(180, 190, 205, 0.18)';
+    ctx.lineWidth = occupied ? 1.5 : 1;
+    ctx.beginPath();
+    ctx.roundRect(sx, py, plat.w, plat.h, 3);
+    ctx.stroke();
+    
+    // Hover emitters (silver dots underneath, brighter when occupied)
+    const pulse = occupied 
+        ? 0.5 + Math.sin(now * 0.006 + plat.bobPhase) * 0.2
+        : 0.25 + Math.sin(now * 0.006 + plat.bobPhase) * 0.15;
+    ctx.fillStyle = `rgba(${occupied ? '220, 230, 240' : '180, 190, 210'}, ${pulse})`;
+    ctx.shadowColor = `rgba(220, 230, 240, ${occupied ? 0.5 : 0.3})`;
+    ctx.shadowBlur = occupied ? 8 : 4;
+    const emitterCount = Math.floor(plat.w / 25);
+    for (let i = 0; i < emitterCount; i++) {
+        const ex = sx + (i + 0.5) * (plat.w / emitterCount);
+        ctx.beginPath();
+        ctx.arc(ex, py + plat.h + 2, occupied ? 2 : 1.5, 0, Math.PI * 2);
+        ctx.fill();
+    }
+    ctx.shadowBlur = 0;
+    
+    ctx.restore();
+}
+
+function drawHealthPickup(hp) {
+    if (hp.collected) return;
+    const sx = hp.x;
+    if (sx < camX - 50 || sx > camX + canvas.width + 50) return;
+    const now = Date.now();
+    const bob = Math.sin(now * 0.003 + hp.bobPhase) * 4;
+    const pulse = 0.6 + Math.sin(now * 0.005) * 0.3;
+    const py = hp.y + bob;
+    
+    ctx.save();
+    ctx.translate(sx, py);
+    
+    // Glow
+    ctx.shadowColor = `rgba(0, 255, 120, ${pulse * 0.7})`;
+    ctx.shadowBlur = 14 + pulse * 8;
+    
+    // Crate body
+    const cw = 20, ch = 20;
+    const cg = ctx.createLinearGradient(-cw/2, -ch/2, cw/2, ch/2);
+    cg.addColorStop(0, '#1a3a22');
+    cg.addColorStop(0.5, '#0e2a16');
+    cg.addColorStop(1, '#081a0e');
+    ctx.fillStyle = cg;
+    ctx.beginPath();
+    ctx.roundRect(-cw/2, -ch/2, cw, ch, 3);
+    ctx.fill();
+    
+    // Edge
+    ctx.strokeStyle = `rgba(0, 255, 120, ${0.3 + pulse * 0.2})`;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.roundRect(-cw/2, -ch/2, cw, ch, 3);
+    ctx.stroke();
+    
+    // Health cross
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = `rgba(0, 255, 120, ${0.6 + pulse * 0.3})`;
+    ctx.fillRect(-2, -7, 4, 14);
+    ctx.fillRect(-7, -2, 14, 4);
+    
+    ctx.restore();
+}
+
 function spawnDrone() {
     const baseX = camX + canvas.width + 100 + Math.random() * 200;
     // Keep drones in the sky - well above ground (canvas.height - 120)
@@ -3917,6 +4147,7 @@ function fireRocketFromPlayerOnce() {
 function activateFlight() {
     if (flyCharge >= FLY_CHARGE_MAX && !player.isFlying) {
         player.isFlying = true;
+        player._onPlatform = null;
         player.flyEndTime = Date.now() + FLY_DURATION;
         flyCharge = 0;
         updateHUD();
@@ -3979,6 +4210,22 @@ if (!isUnderwater && !isOverWaterSurface && player.x > nextEncounterX) {
         }
         nextEncounterX += 650 + Math.random()*650;
     }
+    
+    // Spawn platforms and obstacles as player progresses (not in water)
+    if (!isUnderwater && !isOverWaterSurface && player.x > nextPlatformX - 600) {
+        // Skip if next platform would be in water zone
+        const inWater = underwaterZone && nextPlatformX >= underwaterZone.startX - 200 && nextPlatformX <= underwaterZone.endX + 200;
+        if (!inWater) {
+            spawnPlatformsAndObstacles();
+        } else {
+            nextPlatformX += 300; // skip past water
+        }
+    }
+    
+    // Cull far-behind platforms/obstacles/pickups
+    const cullX = camX - 400;
+    techPlatforms = techPlatforms.filter(p => p.x + p.w > cullX);
+    healthPickups = healthPickups.filter(hp => !hp.collected && hp.x > cullX);
     
     // === SINGLE SPECIAL WATER ZONE (ONE-OFF EVENT) ===
     // We create exactly ONE water zone in the whole run (a special occurrence).
@@ -4408,11 +4655,50 @@ if (!isUnderwater && !isOverWaterSurface && player.x > nextEncounterX) {
             player.jumpVX *= 0.98; // air friction
             
             const groundY = canvas.height - 120;
-            // Check for landing
+            
+            // Check for landing on tech platforms (only when falling)
+            // Foot bottom is ~67px below player.y (hipY + upperH + lowerH + foot = 68 * 0.98 scale)
+            // On ground, feet sink 37px into thick ground band (hidden by fog). 
+            // For thin platforms, offset 62 puts feet just barely into the 18px platform.
+            const platStandOffset = 62;
+            if (player.jumpVY > 0) {
+                const now = Date.now();
+                for (const plat of techPlatforms) {
+                    const bob = Math.sin(now * 0.002 + plat.bobPhase) * 3;
+                    const platTop = plat.y + bob;
+                    const playerFeetY = player.y + platStandOffset;
+                    if (player.x > plat.x - 10 && player.x < plat.x + plat.w + 10 &&
+                        playerFeetY >= platTop - 8 && playerFeetY <= platTop + 24 &&
+                        player.jumpVY > 0) {
+                        player.y = platTop - platStandOffset;
+                        player.isJumping = false;
+                        player.jumpVY = 0;
+                        player.jumpVX = 0;
+                        player._onPlatform = plat;
+                        break;
+                    }
+                }
+            }
+            
+            // Check for landing on ground
             if (player.y >= groundY) {
                 player.y = groundY;
                 player.isJumping = false;
                 player.jumpVY = 0;
+                player.jumpVX = 0;
+                player._onPlatform = null;
+            }
+        } else if (player._onPlatform) {
+            // Standing on a platform — follow its bob, maintain same offset as ground
+            const plat = player._onPlatform;
+            const now = Date.now();
+            const bob = Math.sin(now * 0.002 + plat.bobPhase) * 3;
+            player.y = plat.y + bob - 62; // match platStandOffset
+            // Walk off edge?
+            if (player.x < plat.x - 15 || player.x > plat.x + plat.w + 15) {
+                player._onPlatform = null;
+                player.isJumping = true;
+                player.jumpVY = 1; // gentle fall
                 player.jumpVX = 0;
             }
         } else if (isUnderwater && underwaterZone) {
@@ -4440,6 +4726,26 @@ if (!isUnderwater && !isOverWaterSurface && player.x > nextEncounterX) {
         // Flying: allow full vertical range - can go way up!
         player.y = Math.max(60, Math.min(canvas.height - 40, player.y));}
 
+    
+    // === HEALTH PICKUP COLLECTION ===
+    for (const hp of healthPickups) {
+        if (hp.collected) continue;
+        const now = Date.now();
+        const bob = Math.sin(now * 0.003 + hp.bobPhase) * 4;
+        const hdx = player.x - hp.x;
+        // Check distance from player body center (player.y is head area, feet at +62)
+        const playerCenterY = player.y + 30; // mid-body
+        const hdy = playerCenterY - (hp.y + bob);
+        if (Math.abs(hdx) < 40 && Math.abs(hdy) < 50) {
+            hp.collected = true;
+            const healAmt = Math.floor(player.maxHealth * 0.35);
+            player.health = Math.min(player.maxHealth, player.health + healAmt);
+            updateHUD();
+            createExplosion(hp.x, hp.y, '#00ff88', 25);
+            AudioSystem.playBarrelPickup();
+            showWaveAnnouncement('⚡ +35% HEALTH ⚡', '#00ff88');
+        }
+    }
     
     // Side-scroller camera: LOCK to player position (no lag)
     // Direct assignment - camera always keeps player in view
@@ -4489,7 +4795,7 @@ if (!isUnderwater && !isOverWaterSurface && player.x > nextEncounterX) {
     player.y = Math.max(40, Math.min(player.y, canvas.height - 40));
 
 
-if (player.isFlying && Date.now() > player.flyEndTime) { player.isFlying = false; player.targetY = canvas.height - 130; }
+if (player.isFlying && Date.now() > player.flyEndTime) { player.isFlying = false; player.isJumping = true; player.jumpVY = 2; player.jumpVX = 0; player._onPlatform = null; }
 
     if (isFiring) { fireOneRocket(false); }
     
@@ -5488,6 +5794,10 @@ function draw() {
         }
     });
 
+    // === TECH PLATFORMS & HEALTH PICKUPS ===
+    techPlatforms.forEach(plat => drawTechPlatform(plat));
+    healthPickups.forEach(hp => drawHealthPickup(hp));
+
     // Enemies
     enemies.forEach(enemy => {
         if (enemy.kind === 'trex') {
@@ -5848,6 +6158,7 @@ function actualStartGame() {
     enemies = []; rockets = []; enemyLasers = []; particles = []; sparks = []; smokeTrails = []; debris = []; drones = [];
     waterEnemies = []; waterBubbles = []; isUnderwater = false; waterZoneUsed = false; underwaterZone = null; nextWaterEdgeX = 5500; waterTransitionAlpha = 0; window.waterLightningBolts = []; waterEntryTime = 0; waterBarrel = null;
     waterEncounterSpawned = false; waterEncounterCleared = false; waterZonePassed = false; waterWaveIndex = 0; waterTotalSpawned = 0; waterTotalKills = 0;
+    techPlatforms = []; healthPickups = []; nextPlatformX = 1200;
     spawnTimer = 0; difficulty = 1; spawnInterval = 2800;
 
     initPlayer(); updateHUD();
@@ -5878,15 +6189,27 @@ function showCharacterSelect(onComplete) {
     let hoveredIdx = -1;
     let confirmed = false;
 
-    // Card layout
-    const cardW = Math.min(140, (W - 80) / 4 - 12);
-    const cardH = cardW * 1.6;
-    const totalW = CHARACTERS.length * (cardW + 12) - 12;
+    // Card layout — 2x2 grid on small screens, 1x4 on wide screens
+    const isMobile = W < 500;
+    const cols = isMobile ? 2 : 4;
+    const rows = isMobile ? 2 : 1;
+    const cardW = isMobile ? Math.min(140, (W - 50) / 2 - 10) : Math.min(140, (W - 80) / 4 - 12);
+    const cardH = cardW * 1.5;
+    const gapX = isMobile ? 14 : 12;
+    const gapY = isMobile ? 14 : 0;
+    const totalW = cols * cardW + (cols - 1) * gapX;
+    const totalH = rows * cardH + (rows - 1) * gapY;
     const startX = (W - totalW) / 2;
-    const cardY = H * 0.28;
+    const cardStartY = isMobile ? H * 0.12 : H * 0.22;
 
     function getCardRect(i) {
-        return { x: startX + i * (cardW + 12), y: cardY, w: cardW, h: cardH };
+        const col = i % cols;
+        const row = Math.floor(i / cols);
+        return { 
+            x: startX + col * (cardW + gapX), 
+            y: cardStartY + row * (cardH + gapY), 
+            w: cardW, h: cardH 
+        };
     }
 
     // Draw a mini mech preview for each character
@@ -6101,12 +6424,12 @@ function showCharacterSelect(onComplete) {
         // Title
         ctx.textAlign = 'center';
         ctx.fillStyle = '#c0e8ff';
-        ctx.font = '800 clamp(18px, 3.5vw, 30px) system-ui, -apple-system, Arial';
-        ctx.fillText('SELECT OPERATIVE', W / 2, H * 0.12);
+        ctx.font = `800 ${isMobile ? 16 : 24}px system-ui, -apple-system, Arial`;
+        ctx.fillText('SELECT OPERATIVE', W / 2, isMobile ? H * 0.06 : H * 0.12);
 
-        ctx.font = '400 clamp(11px, 1.8vw, 14px) system-ui, Arial';
+        ctx.font = `400 ${isMobile ? 10 : 13}px system-ui, Arial`;
         ctx.fillStyle = 'rgba(180, 210, 240, 0.5)';
-        ctx.fillText('Choose your mech suit', W / 2, H * 0.17);
+        ctx.fillText('Choose your mech suit', W / 2, isMobile ? H * 0.095 : H * 0.17);
 
         // Draw character cards
         for (let i = 0; i < CHARACTERS.length; i++) {
@@ -6159,10 +6482,13 @@ function showCharacterSelect(onComplete) {
         }
 
         // DEPLOY button — large, easy to hit
-        const btnW = Math.min(300, W * 0.5);
-        const btnH = 56;
+        const btnW = isMobile ? Math.min(260, W * 0.65) : Math.min(300, W * 0.5);
+        const btnH = isMobile ? 50 : 56;
         const btnX = (W - btnW) / 2;
-        const btnY = H * 0.78;
+        const lastCardBottom = getCardRect(CHARACTERS.length - 1);
+        const btnY = isMobile 
+            ? Math.min(lastCardBottom.y + lastCardBottom.h + 16, H * 0.82) 
+            : H * 0.78;
         const activeIdx = (hoveredIdx >= 0 && hoveredIdx < CHARACTERS.length) ? hoveredIdx : selectedCharIndex;
         const activeCh = CHARACTERS[activeIdx];
         const btnHover = (hoveredIdx === -2);
@@ -6179,13 +6505,13 @@ function showCharacterSelect(onComplete) {
 
         ctx.textAlign = 'center';
         ctx.fillStyle = activeCh.trim;
-        ctx.font = '800 22px system-ui, Arial';
-        ctx.fillText('▶ DEPLOY', W / 2, btnY + 36);
+        ctx.font = `800 ${isMobile ? 18 : 22}px system-ui, Arial`;
+        ctx.fillText('▶ DEPLOY', W / 2, btnY + (isMobile ? 32 : 36));
 
         // Hint
         ctx.fillStyle = 'rgba(140, 170, 200, 0.35)';
-        ctx.font = '400 12px system-ui, Arial';
-        ctx.fillText('Select a suit, then hit DEPLOY or press Enter', W / 2, H * 0.92);
+        ctx.font = `400 ${isMobile ? 10 : 12}px system-ui, Arial`;
+        ctx.fillText(isMobile ? 'Tap a suit, then tap DEPLOY' : 'Select a suit, then hit DEPLOY or press Enter', W / 2, btnY + btnH + 20);
         ctx.textAlign = 'left';
 
         requestAnimationFrame(drawFrame);
@@ -6194,16 +6520,20 @@ function showCharacterSelect(onComplete) {
     // Hit testing
     function getHit(ex, ey) {
         // Check deploy button FIRST (priority over cards if overlap)
-        const btnW = Math.min(300, W * 0.5);
-        const btnH = 56;
+        const btnW = isMobile ? Math.min(260, W * 0.65) : Math.min(300, W * 0.5);
+        const btnH = isMobile ? 50 : 56;
         const btnX = (W - btnW) / 2;
-        const btnY = H * 0.78;
-        const pad = 12;
+        const lastCardBottom = getCardRect(CHARACTERS.length - 1);
+        const btnY = isMobile 
+            ? Math.min(lastCardBottom.y + lastCardBottom.h + 16, H * 0.82)
+            : H * 0.78;
+        const pad = isMobile ? 18 : 12;
         if (ex >= btnX - pad && ex <= btnX + btnW + pad && ey >= btnY - pad && ey <= btnY + btnH + pad) return { type: 'deploy' };
-        // Check cards
+        // Check cards (with touch padding on mobile)
+        const cardPad = isMobile ? 6 : 0;
         for (let i = 0; i < CHARACTERS.length; i++) {
             const r = getCardRect(i);
-            if (ex >= r.x && ex <= r.x + r.w && ey >= r.y && ey <= r.y + r.h) return { type: 'card', idx: i };
+            if (ex >= r.x - cardPad && ex <= r.x + r.w + cardPad && ey >= r.y - cardPad && ey <= r.y + r.h + cardPad) return { type: 'card', idx: i };
         }
         return null;
     }
@@ -6226,8 +6556,17 @@ function showCharacterSelect(onComplete) {
         const rect = canvas.getBoundingClientRect();
         const scaleX = canvas.width / rect.width;
         const scaleY = canvas.height / rect.height;
-        const cx = (e.clientX !== undefined) ? e.clientX : (e.touches ? e.touches[0].clientX : e.changedTouches[0].clientX);
-        const cy = (e.clientY !== undefined) ? e.clientY : (e.touches ? e.touches[0].clientY : e.changedTouches[0].clientY);
+        // Get coordinates — handle mouse, touchstart, and touchend
+        let cx, cy;
+        if (e.clientX !== undefined && e.clientY !== undefined) {
+            cx = e.clientX; cy = e.clientY;
+        } else if (e.changedTouches && e.changedTouches.length > 0) {
+            cx = e.changedTouches[0].clientX; cy = e.changedTouches[0].clientY;
+        } else if (e.touches && e.touches.length > 0) {
+            cx = e.touches[0].clientX; cy = e.touches[0].clientY;
+        } else {
+            return; // no valid coordinates
+        }
         const ex = (cx - rect.left) * scaleX;
         const ey = (cy - rect.top) * scaleY;
         const hit = getHit(ex, ey);
@@ -6243,7 +6582,8 @@ function showCharacterSelect(onComplete) {
         confirmed = true;
         canvas.removeEventListener('mousemove', onMove);
         canvas.removeEventListener('click', onClick);
-        canvas.removeEventListener('touchend', onClick);
+        canvas.removeEventListener('touchstart', onTouch);
+        canvas.removeEventListener('touchend', onTouch);
         document.removeEventListener('keydown', onKey);
         canvas.style.cursor = '';
         charSelectRunning = false;
@@ -6262,9 +6602,34 @@ function showCharacterSelect(onComplete) {
         }
     }
 
+    // Touch handler — use touchstart for immediate feedback
+    function onTouch(e) {
+        e.preventDefault();
+        const rect = canvas.getBoundingClientRect();
+        const scaleX = canvas.width / rect.width;
+        const scaleY = canvas.height / rect.height;
+        let cx, cy;
+        if (e.changedTouches && e.changedTouches.length > 0) {
+            cx = e.changedTouches[0].clientX; cy = e.changedTouches[0].clientY;
+        } else if (e.touches && e.touches.length > 0) {
+            cx = e.touches[0].clientX; cy = e.touches[0].clientY;
+        } else {
+            return;
+        }
+        const ex = (cx - rect.left) * scaleX;
+        const ey = (cy - rect.top) * scaleY;
+        const hit = getHit(ex, ey);
+        if (hit && hit.type === 'card') {
+            selectedCharIndex = hit.idx;
+        } else if (hit && hit.type === 'deploy') {
+            doDeploy();
+        }
+    }
+
     canvas.addEventListener('mousemove', onMove);
     canvas.addEventListener('click', onClick);
-    canvas.addEventListener('touchend', onClick);
+    canvas.addEventListener('touchstart', onTouch, { passive: false });
+    canvas.addEventListener('touchend', onTouch, { passive: false });
     document.addEventListener('keydown', onKey);
 
     requestAnimationFrame(drawFrame);
@@ -6434,6 +6799,7 @@ function playIntroCinematic(onComplete) {
     function onSkip() { skipRequested = true; }
     document.addEventListener('keydown', onSkip, { once: true });
     canvas.addEventListener('click', onSkip, { once: true });
+    canvas.addEventListener('touchstart', onSkip, { once: true });
 
     function drawFrame() {
         const elapsed = Date.now() - startTime;
@@ -6442,6 +6808,7 @@ function playIntroCinematic(onComplete) {
         if (skipRequested || t >= 1) {
             document.removeEventListener('keydown', onSkip);
             canvas.removeEventListener('click', onSkip);
+            canvas.removeEventListener('touchstart', onSkip);
             stopIntroAudio();
             onComplete();
             return;
@@ -7049,10 +7416,13 @@ document.addEventListener('keydown', (e) => {
     if (e.code === 'KeyW' || e.code === 'ArrowUp') { 
         e.preventDefault(); 
         dpadState.up = true;
-        // Jump if on ground (not flying, not already jumping, not underwater)
+        // Jump if on ground or on a platform (not flying, not already jumping, not underwater)
         if (!player.isFlying && !player.isJumping && !isUnderwater) {
             const groundY = canvas.height - 120;
-            if (Math.abs(player.y - groundY) < 8) {
+            const onGround = Math.abs(player.y - groundY) < 8;
+            const onPlat = !!player._onPlatform;
+            if (onGround || onPlat) {
+                if (onPlat) player._onPlatform = null; // leave platform
                 if (dpadState.right || dpadState.left) {
                     // Directional jump
                     player.isJumping = true;
@@ -7202,18 +7572,22 @@ function checkDpadJump() {
     const now = Date.now();
     const comboWindow = 250; // ms
     const gY = canvas.height - 120;
-    if (Math.abs(player.y - gY) > 8) return; // not on ground
+    const onGround = Math.abs(player.y - gY) < 8;
+    const onPlat = !!player._onPlatform;
+    if (!onGround && !onPlat) return;
     
     const upRecent = (now - dpadState.upTime) < comboWindow;
     const leftRecent = (now - dpadState.leftTime) < comboWindow;
     const rightRecent = (now - dpadState.rightTime) < comboWindow;
     
     if (upRecent && rightRecent) {
+        if (onPlat) player._onPlatform = null;
         player.isJumping = true;
         player.jumpVY = -12;
         player.jumpVX = 6;
         AudioSystem.playJump();
     } else if (upRecent && leftRecent) {
+        if (onPlat) player._onPlatform = null;
         player.isJumping = true;
         player.jumpVY = -12;
         player.jumpVX = -6;
@@ -7225,7 +7599,10 @@ function checkDpadJump() {
 function doStraightJump() {
     if (player.isFlying || player.isJumping || isUnderwater) return;
     const gY = canvas.height - 120;
-    if (Math.abs(player.y - gY) > 8) return;
+    const onGround = Math.abs(player.y - gY) < 8;
+    const onPlat = !!player._onPlatform;
+    if (!onGround && !onPlat) return;
+    if (onPlat) player._onPlatform = null;
     player.isJumping = true;
     player.jumpVY = -11;
     player.jumpVX = 0;
