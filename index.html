@@ -807,7 +807,7 @@ let gameRunning = false, score = 0, kills = 0, flyCharge = 0, wave = 1;
 let nextEncounterX = 650; // world x threshold to trigger the next group
 let techPlatforms = [];   // floating platforms to jump on
 let healthPickups = [];   // collectible health crates
-let nextPlatformX = 1200;  // world x for next platform spawn
+let nextPlatformX = 1600;  // world x for next platform spawn
 let jumpHintShown = false;
 
 // === UNDERWATER ZONE SYSTEM ===
@@ -1461,17 +1461,7 @@ function drawPlayer(x, y, width, height, legAngle, isFlying, facingRight, armAng
         ctx.fill();
     }
 
-    // Visor slit (all helmets)
-    ctx.save();
-    // Visor always stays gold; underwater the visor projects a focused flashlight beam
-    const visorGlow = isUnderwater ? 'rgba(255, 210, 80, 1)' : 'rgba(255, 204, 64, 0.95)';
-    const visorFill = isUnderwater ? 'rgba(255, 210, 80, 0.95)' : 'rgba(255, 204, 64, 0.70)';
-    ctx.shadowColor = visorGlow; ctx.shadowBlur = isUnderwater ? 35 : 20;
-    ctx.fillStyle = visorFill;
-    ctx.beginPath();
-    ctx.roundRect(-12, headY + 8, 24, 6, 6);
-    ctx.fill();
-    ctx.restore();
+    // Visor slit — drawn after arms below to prevent cannon overlap
 
 
     // ===== Arms / Weapons =====
@@ -1550,6 +1540,76 @@ function drawPlayer(x, y, width, height, legAngle, isFlying, facingRight, armAng
     ctx.lineWidth = 1.5;
     ctx.strokeRect(-torsoW/2, torsoY, torsoW, torsoH);
 
+    // Visor slit — drawn AFTER arms so cannon barrel never covers it
+    // Full visor glow with directional light cone following gun aim
+    ctx.save();
+    
+    // Main visor slit — bright gold bar (always horizontal on face)
+    ctx.shadowColor = isUnderwater ? 'rgba(255, 210, 80, 1)' : 'rgba(255, 204, 64, 0.95)';
+    ctx.shadowBlur = isUnderwater ? 40 : 25;
+    ctx.fillStyle = isUnderwater ? 'rgba(255, 210, 80, 0.95)' : 'rgba(255, 204, 64, 0.85)';
+    ctx.beginPath();
+    ctx.roundRect(-12, headY + 8, 24, 6, 2);
+    ctx.fill();
+    
+    // Bright center highlight
+    ctx.shadowBlur = isUnderwater ? 50 : 35;
+    ctx.fillStyle = 'rgba(255, 240, 180, 0.6)';
+    ctx.beginPath();
+    ctx.roundRect(-8, headY + 9, 16, 4, 2);
+    ctx.fill();
+    ctx.restore();
+    
+    // Directional light cone — follows arm/gun angle, projects from visor center
+    {
+        const visorCY = headY + 11;
+        const aim = Math.max(-1.2, Math.min(1.2, armAngle));
+        // Beam direction: right side of face when facingRight (but we're in flipped coords if !facingRight)
+        // Since ctx is already flipped for !facingRight, beam always goes +X direction with aim rotation
+        const beamLen = isUnderwater ? 420 : 200;
+        const beamSpread = isUnderwater ? 75 : 40;
+        const outerAlpha = isUnderwater ? 0.45 : 0.15;
+        const innerAlpha = isUnderwater ? 0.50 : 0.12;
+        
+        ctx.save();
+        if (isUnderwater) ctx.globalCompositeOperation = 'screen';
+        ctx.translate(0, visorCY);
+        ctx.rotate(aim); // follow gun aim directly
+        
+        // Outer cone
+        const g1 = ctx.createLinearGradient(0, 0, beamLen, 0);
+        g1.addColorStop(0, `rgba(255, 210, 95, ${outerAlpha})`);
+        g1.addColorStop(0.15, `rgba(255, 200, 80, ${outerAlpha * 0.55})`);
+        g1.addColorStop(0.5, `rgba(255, 180, 60, ${outerAlpha * 0.15})`);
+        g1.addColorStop(1, 'rgba(200, 150, 40, 0)');
+        ctx.fillStyle = g1;
+        ctx.beginPath();
+        ctx.moveTo(0, -3);
+        ctx.lineTo(0, 3);
+        ctx.lineTo(beamLen, beamSpread);
+        ctx.lineTo(beamLen, -beamSpread);
+        ctx.closePath();
+        ctx.fill();
+        
+        // Inner hotspot
+        const g2 = ctx.createLinearGradient(0, 0, beamLen * 0.55, 0);
+        g2.addColorStop(0, `rgba(255, 235, 150, ${innerAlpha})`);
+        g2.addColorStop(0.12, `rgba(255, 225, 130, ${innerAlpha * 0.45})`);
+        g2.addColorStop(0.5, `rgba(255, 210, 100, ${innerAlpha * 0.1})`);
+        g2.addColorStop(1, 'rgba(255, 200, 80, 0)');
+        ctx.fillStyle = g2;
+        ctx.beginPath();
+        ctx.moveTo(0, -1.5);
+        ctx.lineTo(0, 1.5);
+        ctx.lineTo(beamLen * 0.55, beamSpread * 0.3);
+        ctx.lineTo(beamLen * 0.55, -beamSpread * 0.3);
+        ctx.closePath();
+        ctx.fill();
+        
+        ctx.restore();
+        if (isUnderwater) ctx.globalCompositeOperation = 'source-over';
+    }
+
     // === ELECTRICITY EFFECT (more frequent arcs around the suit) ===
     // Use time-based randomness
     const elecTime = Date.now();
@@ -1616,64 +1676,7 @@ function drawPlayer(x, y, width, height, legAngle, isFlying, facingRight, armAng
     }
 
     
-    // Underwater: visor acts as the ONLY light source — focused gold flashlight beam
-    if (isUnderwater) {
-        const dir = facingRight ? 1 : -1;
-        const aim = Math.max(-1.57, Math.min(1.57, armAngle));
-
-        // Visor slit center (local coords)
-        const visorX = dir * 12;
-        const visorY = headY + 11;
-
-        const beamLen = 420;
-        const beamNarrow = 80;  // tighter cone than before
-
-        ctx.save();
-        ctx.globalCompositeOperation = 'screen';
-        ctx.translate(visorX, visorY);
-        ctx.rotate(aim);
-
-        // Outer cone — warm gold, focused
-        const g1 = ctx.createLinearGradient(0, 0, beamLen, 0);
-        g1.addColorStop(0, 'rgba(255, 210, 95, 0.50)');
-        g1.addColorStop(0.15, 'rgba(255, 200, 80, 0.28)');
-        g1.addColorStop(0.5, 'rgba(255, 180, 60, 0.08)');
-        g1.addColorStop(1, 'rgba(200, 150, 40, 0)');
-        ctx.fillStyle = g1;
-        ctx.beginPath();
-        ctx.moveTo(0, -6);
-        ctx.lineTo(beamLen, -beamNarrow);
-        ctx.lineTo(beamLen, beamNarrow);
-        ctx.lineTo(0, 6);
-        ctx.closePath();
-        ctx.fill();
-
-        // Inner hotspot — brighter, narrower
-        const g2 = ctx.createLinearGradient(0, 0, beamLen * 0.6, 0);
-        g2.addColorStop(0, 'rgba(255, 235, 150, 0.55)');
-        g2.addColorStop(0.12, 'rgba(255, 225, 130, 0.25)');
-        g2.addColorStop(0.5, 'rgba(255, 210, 100, 0.06)');
-        g2.addColorStop(1, 'rgba(255, 200, 80, 0)');
-        ctx.fillStyle = g2;
-        ctx.beginPath();
-        ctx.moveTo(0, -3);
-        ctx.lineTo(beamLen * 0.6, -beamNarrow * 0.35);
-        ctx.lineTo(beamLen * 0.6, beamNarrow * 0.35);
-        ctx.lineTo(0, 3);
-        ctx.closePath();
-        ctx.fill();
-
-        // Visor bloom (small bright dot at source)
-        ctx.shadowColor = 'rgba(255, 210, 95, 1)';
-        ctx.shadowBlur = 14;
-        ctx.fillStyle = 'rgba(255, 210, 95, 0.9)';
-        ctx.beginPath();
-        ctx.arc(0, 0, 3.5, 0, Math.PI * 2);
-        ctx.fill();
-
-        ctx.restore();
-        ctx.globalCompositeOperation = 'source-over';
-}
+    // Underwater visor bloom handled by unified beam above
 
 ctx.restore();
 }
@@ -2840,32 +2843,29 @@ function spawnPlatformsAndObstacles() {
     const groundY = canvas.height - 120;
     const worldX = nextPlatformX;
     
-    // Random choice: jumpable platform or platform with health pickup (rare)
-    const roll = Math.random();
+    // 25% elevator, 75% normal
+    const platType = Math.random() < 0.25 ? 'elevator' : 'normal';
     
-    if (roll < 0.85) {
-        // Floating tech platform — reachable by jump (max jump ~120px, stand offset 62)
-        const platY = groundY - (35 + Math.random() * 20);
-        const platW = 70 + Math.random() * 40;
-        techPlatforms.push({
-            x: worldX, y: platY, w: platW, h: 18,
-            bobPhase: Math.random() * Math.PI * 2
-        });
-    } else {
-        // Platform WITH health pickup on top (rare ~15%)
-        const platY = groundY - (35 + Math.random() * 18);
-        const platW = 80 + Math.random() * 30;
-        techPlatforms.push({
-            x: worldX, y: platY, w: platW, h: 18,
-            bobPhase: Math.random() * Math.PI * 2
-        });
+    const hasHealth = Math.random() < 0.15;
+    const platY = groundY - (35 + Math.random() * 20);
+    const platW = 70 + Math.random() * 40;
+    
+    const plat = {
+        x: worldX, y: platY, baseY: platY, w: platW, h: 18,
+        bobPhase: Math.random() * Math.PI * 2,
+        type: platType,
+        elevating: false, elevateT: 0, elevateDir: 0
+    };
+    techPlatforms.push(plat);
+    
+    if (hasHealth) {
         healthPickups.push({
             x: worldX + platW / 2, y: platY - 28,
             collected: false, bobPhase: Math.random() * Math.PI * 2
         });
     }
     
-    nextPlatformX += 900 + Math.random() * 1200;
+    nextPlatformX += 1400 + Math.random() * 1800;
 }
 
 function drawGroundObstacle(obs) {
@@ -2943,7 +2943,16 @@ function drawTechPlatform(plat) {
     const bob = Math.sin(now * 0.002 + plat.bobPhase) * 3;
     const py = plat.y + bob;
     const occupied = (player._onPlatform === plat);
-    const glowStr = occupied ? 1.0 : 0.0;
+    
+    // Default pulsing glow — all platforms breathe silver
+    const basePulse = 0.3 + Math.sin(now * 0.003 + plat.bobPhase) * 0.15;
+    
+    // Type-specific accent color
+    let accentR = 200, accentG = 210, accentB = 225; // silver default
+    if (plat.type === 'elevator') { accentR = 255; accentG = 200; accentB = 80; } // gold
+    
+    const glowAlpha = occupied ? 0.6 : basePulse;
+    const glowBlur = occupied ? 22 : (8 + Math.sin(now * 0.003 + plat.bobPhase) * 4);
     
     ctx.save();
     
@@ -2956,9 +2965,9 @@ function drawTechPlatform(plat) {
     ctx.fill();
     ctx.globalAlpha = 1;
     
-    // Silver glow underneath — brighter when occupied
-    ctx.shadowColor = occupied ? 'rgba(220, 225, 235, 0.5)' : 'rgba(180, 190, 200, 0.2)';
-    ctx.shadowBlur = occupied ? 18 : 8;
+    // Glow underneath — pulses by default, intensifies when occupied
+    ctx.shadowColor = `rgba(${accentR}, ${accentG}, ${accentB}, ${glowAlpha})`;
+    ctx.shadowBlur = glowBlur;
     
     // Main platform body
     const pg = ctx.createLinearGradient(sx, py - 4, sx, py + plat.h);
@@ -2976,12 +2985,13 @@ function drawTechPlatform(plat) {
     ctx.roundRect(sx, py, plat.w, plat.h, 3);
     ctx.fill();
     
-    // Top surface highlight (silver, brighter when occupied)
-    ctx.fillStyle = occupied ? 'rgba(220, 225, 235, 0.2)' : 'rgba(200, 210, 220, 0.1)';
+    // Top surface highlight — pulsing
+    const topAlpha = occupied ? 0.22 : (0.06 + basePulse * 0.08);
+    ctx.fillStyle = `rgba(${accentR}, ${accentG}, ${accentB}, ${topAlpha})`;
     ctx.fillRect(sx + 2, py, plat.w - 4, 3);
     
     // Side panel lines
-    ctx.strokeStyle = occupied ? 'rgba(200, 210, 220, 0.15)' : 'rgba(160, 170, 180, 0.1)';
+    ctx.strokeStyle = `rgba(${accentR}, ${accentG}, ${accentB}, ${occupied ? 0.15 : 0.07})`;
     ctx.lineWidth = 1;
     const panelW = plat.w / 4;
     for (let i = 1; i < 4; i++) {
@@ -2991,20 +3001,34 @@ function drawTechPlatform(plat) {
         ctx.stroke();
     }
     
-    // Edge glow (silver, brighter when occupied)
+    // Edge glow — pulsing border
     ctx.shadowBlur = 0;
-    ctx.strokeStyle = occupied ? 'rgba(220, 230, 240, 0.35)' : 'rgba(180, 190, 205, 0.18)';
+    const edgeAlpha = occupied ? 0.4 : (0.1 + basePulse * 0.1);
+    ctx.strokeStyle = `rgba(${accentR}, ${accentG}, ${accentB}, ${edgeAlpha})`;
     ctx.lineWidth = occupied ? 1.5 : 1;
     ctx.beginPath();
     ctx.roundRect(sx, py, plat.w, plat.h, 3);
     ctx.stroke();
     
-    // Hover emitters (silver dots underneath, brighter when occupied)
-    const pulse = occupied 
+    // Type indicator icons
+    const cx = sx + plat.w / 2;
+    if (plat.type === 'elevator') {
+        // Up/down arrows
+        ctx.fillStyle = `rgba(${accentR}, ${accentG}, ${accentB}, ${occupied ? 0.5 : 0.2 + basePulse * 0.15})`;
+        ctx.beginPath();
+        ctx.moveTo(cx, py + 4); ctx.lineTo(cx - 4, py + 9); ctx.lineTo(cx + 4, py + 9);
+        ctx.closePath(); ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(cx, py + plat.h - 4); ctx.lineTo(cx - 4, py + plat.h - 9); ctx.lineTo(cx + 4, py + plat.h - 9);
+        ctx.closePath(); ctx.fill();
+    }
+    
+    // Hover emitters — pulsing
+    const emitAlpha = occupied 
         ? 0.5 + Math.sin(now * 0.006 + plat.bobPhase) * 0.2
-        : 0.25 + Math.sin(now * 0.006 + plat.bobPhase) * 0.15;
-    ctx.fillStyle = `rgba(${occupied ? '220, 230, 240' : '180, 190, 210'}, ${pulse})`;
-    ctx.shadowColor = `rgba(220, 230, 240, ${occupied ? 0.5 : 0.3})`;
+        : basePulse * 0.7;
+    ctx.fillStyle = `rgba(${accentR}, ${accentG}, ${accentB}, ${emitAlpha})`;
+    ctx.shadowColor = `rgba(${accentR}, ${accentG}, ${accentB}, ${occupied ? 0.5 : 0.25})`;
     ctx.shadowBlur = occupied ? 8 : 4;
     const emitterCount = Math.floor(plat.w / 25);
     for (let i = 0; i < emitterCount; i++) {
@@ -4213,19 +4237,31 @@ if (!isUnderwater && !isOverWaterSurface && player.x > nextEncounterX) {
     
     // Spawn platforms and obstacles as player progresses (not in water)
     if (!isUnderwater && !isOverWaterSurface && player.x > nextPlatformX - 600) {
-        // Skip if next platform would be in water zone
-        const inWater = underwaterZone && nextPlatformX >= underwaterZone.startX - 200 && nextPlatformX <= underwaterZone.endX + 200;
+        // Skip if next platform would be in or near water zone (existing or future)
+        const wzStart = underwaterZone ? underwaterZone.startX : nextWaterEdgeX;
+        const wzEnd = underwaterZone ? underwaterZone.endX : (nextWaterEdgeX + WATER_ZONE_LENGTH_MAX);
+        const inWater = nextPlatformX >= wzStart - 300 && nextPlatformX <= wzEnd + 300;
         if (!inWater) {
             spawnPlatformsAndObstacles();
         } else {
-            nextPlatformX += 300; // skip past water
+            nextPlatformX = wzEnd + 400; // skip past water entirely
         }
     }
     
-    // Cull far-behind platforms/obstacles/pickups
+    // Cull far-behind platforms/pickups + remove any inside water zone (existing or future)
     const cullX = camX - 400;
-    techPlatforms = techPlatforms.filter(p => p.x + p.w > cullX);
-    healthPickups = healthPickups.filter(hp => !hp.collected && hp.x > cullX);
+    const wzStart = underwaterZone ? underwaterZone.startX : nextWaterEdgeX;
+    const wzEnd = underwaterZone ? underwaterZone.endX : (nextWaterEdgeX + WATER_ZONE_LENGTH_MAX);
+    techPlatforms = techPlatforms.filter(p => {
+        if (p.x + p.w < cullX) return false;
+        if (p.x > wzStart - 200 && p.x < wzEnd + 200) return false;
+        return true;
+    });
+    healthPickups = healthPickups.filter(hp => {
+        if (hp.collected || hp.x < cullX) return false;
+        if (hp.x > wzStart - 200 && hp.x < wzEnd + 200) return false;
+        return true;
+    });
     
     // === SINGLE SPECIAL WATER ZONE (ONE-OFF EVENT) ===
     // We create exactly ONE water zone in the whole run (a special occurrence).
@@ -4670,11 +4706,19 @@ if (!isUnderwater && !isOverWaterSurface && player.x > nextEncounterX) {
                     if (player.x > plat.x - 10 && player.x < plat.x + plat.w + 10 &&
                         playerFeetY >= platTop - 8 && playerFeetY <= platTop + 24 &&
                         player.jumpVY > 0) {
+                        
                         player.y = platTop - platStandOffset;
                         player.isJumping = false;
                         player.jumpVY = 0;
                         player.jumpVX = 0;
                         player._onPlatform = plat;
+                        
+                        // ELEVATOR — start rising
+                        if (plat.type === 'elevator' && !plat.elevating) {
+                            plat.elevating = true;
+                            plat.elevateT = 0;
+                            plat.elevateDir = 1;
+                        }
                         break;
                     }
                 }
@@ -4689,10 +4733,32 @@ if (!isUnderwater && !isOverWaterSurface && player.x > nextEncounterX) {
                 player._onPlatform = null;
             }
         } else if (player._onPlatform) {
-            // Standing on a platform — follow its bob, maintain same offset as ground
+            // Standing on a platform — follow its position
             const plat = player._onPlatform;
             const now = Date.now();
             const bob = Math.sin(now * 0.002 + plat.bobPhase) * 3;
+            
+            // ELEVATOR — smoothly rise and descend
+            if (plat.type === 'elevator' && plat.elevating) {
+                const elevateSpeed = 1.2; // px per frame
+                const maxRise = 200; // how high it goes
+                if (plat.elevateDir === 1) {
+                    plat.elevateT += elevateSpeed;
+                    if (plat.elevateT >= maxRise) {
+                        plat.elevateT = maxRise;
+                        plat.elevateDir = -1; // start descending
+                    }
+                } else {
+                    plat.elevateT -= elevateSpeed * 0.7; // descend slower
+                    if (plat.elevateT <= 0) {
+                        plat.elevateT = 0;
+                        plat.elevating = false;
+                        plat.elevateDir = 0;
+                    }
+                }
+                plat.y = plat.baseY - plat.elevateT;
+            }
+            
             player.y = plat.y + bob - 62; // match platStandOffset
             // Walk off edge?
             if (player.x < plat.x - 15 || player.x > plat.x + plat.w + 15) {
@@ -4727,6 +4793,21 @@ if (!isUnderwater && !isOverWaterSurface && player.x > nextEncounterX) {
         player.y = Math.max(60, Math.min(canvas.height - 40, player.y));}
 
     
+    // === UPDATE ALL PLATFORMS (elevator return) ===
+    for (const plat of techPlatforms) {
+        // Elevator: return to base when player not on it
+        if (plat.type === 'elevator' && plat.elevating && player._onPlatform !== plat) {
+            plat.elevateDir = -1;
+            plat.elevateT -= 1.0;
+            if (plat.elevateT <= 0) {
+                plat.elevateT = 0;
+                plat.elevating = false;
+                plat.elevateDir = 0;
+            }
+            plat.y = plat.baseY - plat.elevateT;
+        }
+    }
+    
     // === HEALTH PICKUP COLLECTION ===
     for (const hp of healthPickups) {
         if (hp.collected) continue;
@@ -4738,12 +4819,21 @@ if (!isUnderwater && !isOverWaterSurface && player.x > nextEncounterX) {
         const hdy = playerCenterY - (hp.y + bob);
         if (Math.abs(hdx) < 40 && Math.abs(hdy) < 50) {
             hp.collected = true;
-            const healAmt = Math.floor(player.maxHealth * 0.35);
-            player.health = Math.min(player.maxHealth, player.health + healAmt);
-            updateHUD();
-            createExplosion(hp.x, hp.y, '#00ff88', 25);
-            AudioSystem.playBarrelPickup();
-            showWaveAnnouncement('⚡ +35% HEALTH ⚡', '#00ff88');
+            if (player.health >= player.maxHealth) {
+                // Full health — give fuel boost instead
+                flyCharge = Math.min(FLY_CHARGE_MAX, flyCharge + FLY_CHARGE_MAX * 0.5);
+                updateHUD();
+                createExplosion(hp.x, hp.y, '#ffcc00', 25);
+                AudioSystem.playBarrelPickup();
+                showWaveAnnouncement('⚡ +50% FUEL ⚡', '#ffcc00');
+            } else {
+                const healAmt = Math.floor(player.maxHealth * 0.35);
+                player.health = Math.min(player.maxHealth, player.health + healAmt);
+                updateHUD();
+                createExplosion(hp.x, hp.y, '#00ff88', 25);
+                AudioSystem.playBarrelPickup();
+                showWaveAnnouncement('⚡ +35% HEALTH ⚡', '#00ff88');
+            }
         }
     }
     
@@ -5043,7 +5133,7 @@ if (player.isFlying && Date.now() > player.flyEndTime) { player.isFlying = false
                 AudioSystem.playHit();
                 if (enemy.health <= 0) {
                     const isTRex = enemy.kind === 'trex';
-                    createExplosion(enemy.x, enemy.y - 30, isTRex ? '#ff4444' : '#66aa44', isTRex ? 70 : 55, true);
+                    createExplosion(enemy.x, enemy.y - 30, isTRex ? '#ff4444' : '#ff6633', isTRex ? 70 : 55, true);
                     AudioSystem.playExplosion(true);
                     if (isTRex) {
                         AudioSystem.playTRexRoar();
@@ -5148,7 +5238,17 @@ if (player.isFlying && Date.now() > player.flyEndTime) { player.isFlying = false
             }
         }
 
-        return lz.life > 0 && lz.x > camX - 80 && lz.x < camX + canvas.width + 80 && lz.y > -80 && lz.y < canvas.height + 80;
+        // Ground collision — projectile hits the floor
+        const groundSurface = canvas.height - 88;
+        if (lz.y >= groundSurface) {
+            // Small spark on impact
+            for (let s = 0; s < 4; s++) {
+                sparks.push({ x: lz.x, y: groundSurface, vx: (Math.random()-0.5)*4, vy: -Math.random()*3, life: 0.6, size: 2 + Math.random()*2, color: lz.color || '#ff5533' });
+            }
+            return false;
+        }
+
+        return lz.life > 0 && lz.x > camX - 80 && lz.x < camX + canvas.width + 80 && lz.y > -80 && lz.y < canvas.height - 88;
     });
 
     smokeTrails = smokeTrails.filter(s => { s.x += s.vx; s.y += s.vy; s.vy -= 0.03; s.life -= 0.035; s.size *= 1.03; return s.life > 0; });
@@ -6158,7 +6258,7 @@ function actualStartGame() {
     enemies = []; rockets = []; enemyLasers = []; particles = []; sparks = []; smokeTrails = []; debris = []; drones = [];
     waterEnemies = []; waterBubbles = []; isUnderwater = false; waterZoneUsed = false; underwaterZone = null; nextWaterEdgeX = 5500; waterTransitionAlpha = 0; window.waterLightningBolts = []; waterEntryTime = 0; waterBarrel = null;
     waterEncounterSpawned = false; waterEncounterCleared = false; waterZonePassed = false; waterWaveIndex = 0; waterTotalSpawned = 0; waterTotalKills = 0;
-    techPlatforms = []; healthPickups = []; nextPlatformX = 1200;
+    techPlatforms = []; healthPickups = []; nextPlatformX = 1600;
     spawnTimer = 0; difficulty = 1; spawnInterval = 2800;
 
     initPlayer(); updateHUD();
@@ -6639,7 +6739,7 @@ function showCharacterSelect(onComplete) {
 function playIntroCinematic(onComplete) {
     const W = canvas.width, H = canvas.height;
     const startTime = Date.now();
-    const TOTAL_MS = 22000;
+    const TOTAL_MS = 28000;
     let skipRequested = false;
 
     // Hide any lingering wave announcement
@@ -6675,22 +6775,22 @@ function playIntroCinematic(onComplete) {
         droneGain.connect(ac.destination);
         droneGain.gain.setValueAtTime(0, t0);
         droneGain.gain.linearRampToValueAtTime(0.12, t0 + 2);
-        droneGain.gain.setValueAtTime(0.12, t0 + 14);
-        droneGain.gain.linearRampToValueAtTime(0, t0 + 20);
+        droneGain.gain.setValueAtTime(0.12, t0 + 20);
+        droneGain.gain.linearRampToValueAtTime(0, t0 + 26);
         drone.start(t0); droneLFO.start(t0);
-        drone.stop(t0 + 21); droneLFO.stop(t0 + 21);
+        drone.stop(t0 + 27); droneLFO.stop(t0 + 27);
         introNodes.push(drone, droneLFO);
 
-        // 2) Sub bass hit at "They rebelled" (~9.8s)
+        // 2) Sub bass hit at "They rebelled" (~12.4s)
         const sub = ac.createOscillator();
         const subGain = ac.createGain();
         sub.type = 'sine';
-        sub.frequency.setValueAtTime(35, t0 + 9.8);
+        sub.frequency.setValueAtTime(35, t0 + 12.4);
         sub.connect(subGain); subGain.connect(ac.destination);
         subGain.gain.setValueAtTime(0, t0);
-        subGain.gain.setValueAtTime(0.25, t0 + 9.8);
-        subGain.gain.exponentialRampToValueAtTime(0.01, t0 + 11.5);
-        sub.start(t0 + 9.8); sub.stop(t0 + 12);
+        subGain.gain.setValueAtTime(0.25, t0 + 12.4);
+        subGain.gain.exponentialRampToValueAtTime(0.01, t0 + 14);
+        sub.start(t0 + 12.4); sub.stop(t0 + 15);
         introNodes.push(sub);
 
         // 3) Engine rumble (~5s onward)
@@ -6698,16 +6798,16 @@ function playIntroCinematic(onComplete) {
         const engGain = ac.createGain();
         eng.type = 'triangle';
         eng.frequency.setValueAtTime(80, t0 + 5);
-        eng.frequency.linearRampToValueAtTime(50, t0 + 18);
+        eng.frequency.linearRampToValueAtTime(50, t0 + 24);
         eng.connect(engGain); engGain.connect(ac.destination);
         engGain.gain.setValueAtTime(0, t0);
         engGain.gain.linearRampToValueAtTime(0.06, t0 + 7);
-        engGain.gain.setValueAtTime(0.06, t0 + 16);
-        engGain.gain.linearRampToValueAtTime(0, t0 + 19);
-        eng.start(t0 + 5); eng.stop(t0 + 20);
+        engGain.gain.setValueAtTime(0.06, t0 + 22);
+        engGain.gain.linearRampToValueAtTime(0, t0 + 25);
+        eng.start(t0 + 5); eng.stop(t0 + 26);
         introNodes.push(eng);
         // Engine noise texture
-        const noiseBuf = ac.createBuffer(1, ac.sampleRate * 15, ac.sampleRate);
+        const noiseBuf = ac.createBuffer(1, ac.sampleRate * 21, ac.sampleRate);
         const nd = noiseBuf.getChannelData(0);
         for (let i = 0; i < nd.length; i++) nd[i] = (Math.random() * 2 - 1);
         const engNoise = ac.createBufferSource();
@@ -6721,22 +6821,22 @@ function playIntroCinematic(onComplete) {
         engNoiseGain.connect(ac.destination);
         engNoiseGain.gain.setValueAtTime(0, t0);
         engNoiseGain.gain.linearRampToValueAtTime(0.04, t0 + 8);
-        engNoiseGain.gain.setValueAtTime(0.04, t0 + 16);
-        engNoiseGain.gain.linearRampToValueAtTime(0, t0 + 19);
-        engNoise.start(t0 + 5); engNoise.stop(t0 + 20);
+        engNoiseGain.gain.setValueAtTime(0.04, t0 + 22);
+        engNoiseGain.gain.linearRampToValueAtTime(0, t0 + 25);
+        engNoise.start(t0 + 5); engNoise.stop(t0 + 26);
         introNodes.push(engNoise);
 
         // 4) Landing thud (~19s)
         const thudOsc = ac.createOscillator();
         const thudGain = ac.createGain();
         thudOsc.type = 'sine';
-        thudOsc.frequency.setValueAtTime(60, t0 + 19);
-        thudOsc.frequency.exponentialRampToValueAtTime(25, t0 + 19.6);
+        thudOsc.frequency.setValueAtTime(60, t0 + 25);
+        thudOsc.frequency.exponentialRampToValueAtTime(25, t0 + 25.6);
         thudOsc.connect(thudGain); thudGain.connect(ac.destination);
         thudGain.gain.setValueAtTime(0, t0);
-        thudGain.gain.setValueAtTime(0.3, t0 + 19);
-        thudGain.gain.exponentialRampToValueAtTime(0.01, t0 + 19.8);
-        thudOsc.start(t0 + 19); thudOsc.stop(t0 + 20);
+        thudGain.gain.setValueAtTime(0.3, t0 + 25);
+        thudGain.gain.exponentialRampToValueAtTime(0.01, t0 + 25.8);
+        thudOsc.start(t0 + 25); thudOsc.stop(t0 + 26);
         introNodes.push(thudOsc);
         // Thud noise burst
         const thudNBuf = ac.createBuffer(1, ac.sampleRate * 0.5, ac.sampleRate);
@@ -6747,16 +6847,16 @@ function playIntroCinematic(onComplete) {
         const thudNGain = ac.createGain();
         const thudNFilter = ac.createBiquadFilter();
         thudNFilter.type = 'lowpass';
-        thudNFilter.frequency.setValueAtTime(300, t0 + 19);
+        thudNFilter.frequency.setValueAtTime(300, t0 + 25);
         thudNoise.connect(thudNFilter); thudNFilter.connect(thudNGain);
         thudNGain.connect(ac.destination);
-        thudNGain.gain.setValueAtTime(0.15, t0 + 19);
-        thudNGain.gain.exponentialRampToValueAtTime(0.01, t0 + 19.6);
-        thudNoise.start(t0 + 19);
+        thudNGain.gain.setValueAtTime(0.15, t0 + 25);
+        thudNGain.gain.exponentialRampToValueAtTime(0.01, t0 + 25.6);
+        thudNoise.start(t0 + 25);
         introNodes.push(thudNoise);
 
         // 5) Text reveal shimmer at each story beat
-        [0.9, 4.2, 8.2, 9.8, 12.4, 17.5].forEach(beat => {
+        [1.0, 5.0, 7.8, 10.2, 12.4, 15.5, 18.5, 22.0].forEach(beat => {
             const sw = ac.createOscillator();
             const swGain = ac.createGain();
             sw.type = 'sine';
@@ -6778,14 +6878,14 @@ function playIntroCinematic(onComplete) {
     scheduleIntroAudio();
 
     const storyLines = [
-        { t: 900,   text: "YEAR 2187",                                   size: 34, y: 0.16, fade: 1600, color: "#00ffcc" },
-        { t: 4200,  text: "Humanity built machines of supreme intelligence…", size: 18, y: 0.34, fade: 1400 },
-        { t: 6200,  text: "They learned. They evolved.",                 size: 18, y: 0.40, fade: 1200 },
-        { t: 8200,  text: "They became sentient.",                       size: 22, y: 0.34, fade: 1200 },
-        { t: 9800,  text: "They rebelled.",                              size: 22, y: 0.40, fade: 1200, color: "#ff4444" },
-        { t: 12400, text: "From a fortress moon in a distant galaxy, they struck Earth.", size: 18, y: 0.34, fade: 1400 },
-        { t: 14400, text: "Civilization fell. The colonies are all that remain.",  size: 18, y: 0.40, fade: 1400 },
-        { t: 17500, text: "YOU ARE HUMANITY'S LAST OFFENSIVE.",          size: 22, y: 0.50, fade: 1800 },
+        { t: 1000,  text: "YEAR 2187",                                   size: 34, y: 0.16, fade: 2200, color: "#00ffcc" },
+        { t: 5000,  text: "Humanity built machines of supreme intelligence…", size: 18, y: 0.34, fade: 2000 },
+        { t: 7800,  text: "They learned. They evolved.",                 size: 18, y: 0.40, fade: 1800 },
+        { t: 10200, text: "They became sentient.",                       size: 22, y: 0.34, fade: 1600 },
+        { t: 12400, text: "They rebelled.",                              size: 22, y: 0.40, fade: 1600, color: "#ff4444" },
+        { t: 15500, text: "From a fortress moon in a distant galaxy, they struck Earth.", size: 18, y: 0.34, fade: 2000 },
+        { t: 18500, text: "Civilization fell. The colonies are all that remain.",  size: 18, y: 0.40, fade: 2000 },
+        { t: 22000, text: "YOU ARE HUMANITY'S LAST OFFENSIVE.",          size: 22, y: 0.50, fade: 2200 },
     ];
 
 
@@ -6904,7 +7004,7 @@ function playIntroCinematic(onComplete) {
         ctx.globalAlpha = 1;
 
         // === WARSHIP (cinematic heavy assault cruiser) ===
-        const landPhase = Math.min(1, Math.max(0, (elapsed - 5000) / 14000));
+        const landPhase = Math.min(1, Math.max(0, (elapsed - 5000) / 20000));
         const eased = landPhase * landPhase * (3 - 2 * landPhase);
         const shipX = W * 0.5;
         const shipTopY = -120;
@@ -7211,6 +7311,83 @@ function playIntroCinematic(onComplete) {
                 ctx.fillRect(gx - 4 + (gx < 0 ? -2 : gx > 0 ? 2 : 0), gy + gearExt * 12, 8, 2.5);
             }
             ctx.globalAlpha = 1;
+        }
+
+        // -- SHIP GLOW (same energy glow as player mechs) --
+        {
+            const shipGlowPulse = 0.4 + Math.sin(now * 0.002) * 0.15;
+            // Outer body glow
+            ctx.save();
+            ctx.shadowColor = `rgba(60, 160, 255, ${shipGlowPulse * 0.6})`;
+            ctx.shadowBlur = 25;
+            ctx.strokeStyle = `rgba(80, 180, 255, ${shipGlowPulse * 0.2})`;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(0, -86); ctx.lineTo(-16, -62); ctx.lineTo(-30, -16);
+            ctx.lineTo(-28, 20); ctx.lineTo(-18, 46); ctx.lineTo(18, 46);
+            ctx.lineTo(28, 20); ctx.lineTo(30, -16); ctx.lineTo(16, -62);
+            ctx.closePath(); ctx.stroke();
+            ctx.restore();
+            
+            // Wing edge glow
+            ctx.save();
+            ctx.shadowColor = `rgba(60, 160, 255, ${shipGlowPulse * 0.4})`;
+            ctx.shadowBlur = 15;
+            ctx.strokeStyle = `rgba(80, 180, 255, ${shipGlowPulse * 0.12})`;
+            ctx.lineWidth = 1.5;
+            ctx.beginPath(); ctx.moveTo(-12, -8); ctx.lineTo(-145, 20); ctx.lineTo(-115, 58); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(12, -8); ctx.lineTo(145, 20); ctx.lineTo(115, 58); ctx.stroke();
+            ctx.restore();
+        }
+
+        // -- ELECTRICITY ARCS (crackling energy around the ship hull) --
+        {
+            const elT = now;
+            const elChance = Math.sin(elT * 0.002) * Math.cos(elT * 0.001);
+            if (elChance > 0.15 && Math.random() < 0.4) {
+                ctx.save();
+                ctx.strokeStyle = '#00ddff';
+                ctx.shadowColor = '#00ddff';
+                ctx.shadowBlur = 16;
+                ctx.lineWidth = 1.5;
+                ctx.globalAlpha = 0.7 + Math.random() * 0.3;
+                
+                const numArcs = 1 + Math.floor(Math.random() * 3);
+                for (let a = 0; a < numArcs; a++) {
+                    // Random start on hull perimeter
+                    const side = Math.random() > 0.5 ? 1 : -1;
+                    const startX = side * (10 + Math.random() * 25);
+                    const startY = -80 + Math.random() * 120;
+                    
+                    ctx.beginPath();
+                    ctx.moveTo(startX, startY);
+                    
+                    let px = startX, py = startY;
+                    const segs = 3 + Math.floor(Math.random() * 4);
+                    for (let i = 0; i < segs; i++) {
+                        px += (Math.random() - 0.5) * 28;
+                        py += (Math.random() - 0.3) * 20;
+                        ctx.lineTo(px, py);
+                    }
+                    ctx.stroke();
+                }
+                
+                // Occasional wing arc
+                if (Math.random() < 0.3) {
+                    const ws = Math.random() > 0.5 ? 1 : -1;
+                    ctx.beginPath();
+                    ctx.moveTo(ws * 30, 10);
+                    let wx = ws * 30, wy = 10;
+                    for (let i = 0; i < 4; i++) {
+                        wx += ws * (15 + Math.random() * 20);
+                        wy += (Math.random() - 0.5) * 15;
+                        ctx.lineTo(wx, wy);
+                    }
+                    ctx.stroke();
+                }
+                
+                ctx.restore();
+            }
         }
 
         ctx.restore();
