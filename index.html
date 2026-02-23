@@ -877,7 +877,7 @@ window.addEventListener('blur', () => { isMoving = false; isFiring = false; mobi
 document.addEventListener('visibilitychange', () => { if (document.hidden) { isMoving = false; isFiring = false; mobileMoveHeld = false; lastFireTime = -1e9; dpadState.up = false; dpadState.down = false; dpadState.left = false; dpadState.right = false; } });
 window.addEventListener('resize', resize);
 
-const player = { x: 0, y: 0, targetX: 0, targetY: 0, width: 50, height: 80, health: 100, maxHealth: 100, speed: 5.5, isFlying: false, flyEndTime: 0, legAngle: 0, legDir: 1, isMoving: false, facingRight: true, screenShake: 0, armAngle: 0, invulnUntil: 0, shieldUntil: 0, shieldHits: 0, isJumping: false, jumpVY: 0, jumpVX: 0 };
+const player = { x: 0, y: 0, targetX: 0, targetY: 0, width: 50, height: 80, health: 100, maxHealth: 100, speed: 5.5, isFlying: false, flyEndTime: 0, legAngle: 0, legDir: 1, isMoving: false, facingRight: true, screenShake: 0, armAngle: 0, invulnUntil: 0, shieldUntil: 0, shieldHits: 0, isJumping: false, jumpVY: 0, jumpVX: 0, damageBoostUntil: 0 };
 let rockets = [], enemies = [], enemyLasers = [], particles = [], sparks = [], smokeTrails = [], debris = [], spawnTimer = 0, spawnInterval = 2500, difficulty = 1;
 // Pointer position (for reference) + separate aim reticle position (click-to-place)
 let mouseX = 400, mouseY = 400;
@@ -980,6 +980,7 @@ function initPlayer() {
     player.jumpVY = 0;
     player.jumpVX = 0;
     player._onPlatform = null;
+    player.damageBoostUntil = 0;
     nextEncounterX = player.x + 650;
     
     // Initialize position tracking for jump prevention
@@ -1610,65 +1611,111 @@ function drawPlayer(x, y, width, height, legAngle, isFlying, facingRight, armAng
         if (isUnderwater) ctx.globalCompositeOperation = 'source-over';
     }
 
-    // === ELECTRICITY EFFECT (more frequent arcs around the suit) ===
-    // Use time-based randomness
+    // === ELECTRICITY EFFECT ===
+    // Dramatically larger during weapons overcharge
     const elecTime = Date.now();
     const elecChance = Math.sin(elecTime * 0.002) * Math.cos(elecTime * 0.001);
+    const boosted = (elecTime < player.damageBoostUntil);
     
-    if (elecChance > 0.3 && Math.random() < 0.25) { // More frequent
+    // During overcharge: constant arcs, much larger, gold/orange color
+    const arcFreq = boosted ? 0.7 : 0.25;
+    const arcThreshold = boosted ? -0.5 : 0.3;
+    
+    if (elecChance > arcThreshold && Math.random() < arcFreq) {
         ctx.save();
-        ctx.strokeStyle = '#00ffff';
-        ctx.shadowColor = '#00ffff';
-        ctx.shadowBlur = 20;
-        ctx.lineWidth = 2;
+        const arcColor = boosted ? '#ffaa00' : '#00ffff';
+        const arcColor2 = boosted ? '#ffcc44' : '#00ffff';
+        ctx.strokeStyle = arcColor;
+        ctx.shadowColor = arcColor;
+        ctx.shadowBlur = boosted ? 35 : 20;
+        ctx.lineWidth = boosted ? 3 : 2;
         ctx.globalAlpha = 0.8 + Math.random() * 0.2;
         
-        // Draw 1-2 electric arcs
-        const numArcs = 1 + Math.floor(Math.random() * 2);
+        // Draw arcs — more and bigger when boosted
+        const numArcs = boosted ? (2 + Math.floor(Math.random() * 3)) : (1 + Math.floor(Math.random() * 2));
         for (let a = 0; a < numArcs; a++) {
-            // Random start point on body
-            const startX = (Math.random() - 0.5) * width * 1.2;
+            const reach = boosted ? 2.5 : 1.2;
+            const startX = (Math.random() - 0.5) * width * reach;
             const startY = torsoY + Math.random() * torsoH;
             
             ctx.beginPath();
             ctx.moveTo(startX, startY);
             
-            // Jagged lightning path
             let px = startX, py = startY;
-            const segments = 3 + Math.floor(Math.random() * 3);
+            const segments = boosted ? (5 + Math.floor(Math.random() * 4)) : (3 + Math.floor(Math.random() * 3));
+            const jitter = boosted ? 35 : 20;
             for (let i = 0; i < segments; i++) {
-                const nx = px + (Math.random() - 0.5) * 20;
-                const ny = py + (Math.random() - 0.5) * 25;
+                const nx = px + (Math.random() - 0.5) * jitter;
+                const ny = py + (Math.random() - 0.5) * jitter * 1.2;
                 ctx.lineTo(nx, ny);
                 px = nx; py = ny;
             }
             ctx.stroke();
             
-            // Small spark at end
-            ctx.fillStyle = '#ffffff';
+            // Spark at end
+            ctx.fillStyle = boosted ? '#ffffff' : '#ffffff';
             ctx.beginPath();
-            ctx.arc(px, py, 2 + Math.random() * 2, 0, Math.PI * 2);
+            ctx.arc(px, py, boosted ? (3 + Math.random() * 3) : (2 + Math.random() * 2), 0, Math.PI * 2);
             ctx.fill();
+        }
+        
+        // Boosted: extra arcs extending from weapon barrel and legs
+        if (boosted) {
+            ctx.strokeStyle = arcColor2;
+            ctx.lineWidth = 2;
+            // Weapon arc
+            const barrelX = shoulderX + 50;
+            ctx.beginPath();
+            ctx.moveTo(barrelX, shoulderY);
+            let bx = barrelX, by = shoulderY;
+            for (let i = 0; i < 4; i++) {
+                bx += 10 + Math.random() * 15;
+                by += (Math.random() - 0.5) * 20;
+                ctx.lineTo(bx, by);
+            }
+            ctx.stroke();
+            
+            // Leg arcs
+            for (const legSide of [-1, 1]) {
+                if (Math.random() < 0.4) {
+                    ctx.beginPath();
+                    const lx = legSide * width * 0.2;
+                    const ly = height * 0.3;
+                    ctx.moveTo(lx, ly);
+                    let lax = lx, lay = ly;
+                    for (let i = 0; i < 3; i++) {
+                        lax += (Math.random() - 0.5) * 25;
+                        lay += 8 + Math.random() * 12;
+                        ctx.lineTo(lax, lay);
+                    }
+                    ctx.stroke();
+                }
+            }
         }
         ctx.restore();
     }
     
-    // Occasional big discharge (more frequent)
-    if (elecChance > 0.6 && Math.random() < 0.12) {
+    // Occasional big discharge
+    const bigThreshold = boosted ? 0.2 : 0.6;
+    const bigFreq = boosted ? 0.3 : 0.12;
+    if (elecChance > bigThreshold && Math.random() < bigFreq) {
         ctx.save();
-        ctx.strokeStyle = '#ffff00';
-        ctx.shadowColor = '#ffff00';
-        ctx.shadowBlur = 25;
-        ctx.lineWidth = 3;
+        const bigColor = boosted ? '#ffdd44' : '#ffff00';
+        ctx.strokeStyle = bigColor;
+        ctx.shadowColor = bigColor;
+        ctx.shadowBlur = boosted ? 40 : 25;
+        ctx.lineWidth = boosted ? 4 : 3;
         ctx.globalAlpha = 0.9;
         
-        // Big arc from one side to another
+        // Big arc across body (wider when boosted)
+        const arcWidth = boosted ? width * 1.2 : width * 0.6;
         ctx.beginPath();
-        ctx.moveTo(-width * 0.6, torsoY + torsoH * 0.3);
-        let px = -width * 0.6, py = torsoY + torsoH * 0.3;
-        for (let i = 0; i < 8; i++) {
-            px += width * 0.15;
-            py += (Math.random() - 0.5) * 20;
+        ctx.moveTo(-arcWidth, torsoY + torsoH * 0.3);
+        let px = -arcWidth, py = torsoY + torsoH * 0.3;
+        const bigSegs = boosted ? 12 : 8;
+        for (let i = 0; i < bigSegs; i++) {
+            px += (arcWidth * 2) / bigSegs;
+            py += (Math.random() - 0.5) * (boosted ? 30 : 20);
             ctx.lineTo(px, py);
         }
         ctx.stroke();
@@ -2843,29 +2890,59 @@ function spawnPlatformsAndObstacles() {
     const groundY = canvas.height - 120;
     const worldX = nextPlatformX;
     
-    // 25% elevator, 75% normal
-    const platType = Math.random() < 0.25 ? 'elevator' : 'normal';
+    const roll = Math.random();
     
-    const hasHealth = Math.random() < 0.15;
-    const platY = groundY - (35 + Math.random() * 20);
-    const platW = 70 + Math.random() * 40;
-    
-    const plat = {
-        x: worldX, y: platY, baseY: platY, w: platW, h: 18,
-        bobPhase: Math.random() * Math.PI * 2,
-        type: platType,
-        elevating: false, elevateT: 0, elevateDir: 0
-    };
-    techPlatforms.push(plat);
-    
-    if (hasHealth) {
-        healthPickups.push({
-            x: worldX + platW / 2, y: platY - 28,
-            collected: false, bobPhase: Math.random() * Math.PI * 2
+    if (roll < 0.25) {
+        // === GOLD ELEVATOR — pickup is HIGH in the sky (at max elevator height) ===
+        const platY = groundY - (35 + Math.random() * 15);
+        const platW = 80 + Math.random() * 30;
+        const maxRise = 200; // matches elevator travel distance
+        techPlatforms.push({
+            x: worldX, y: platY, baseY: platY, w: platW, h: 18,
+            bobPhase: Math.random() * Math.PI * 2,
+            type: 'elevator',
+            elevating: false, elevateT: 0, elevateDir: 0
         });
+        // Pickup placed at the TOP of elevator travel — player must ride up or jump to grab
+        const pickupTypes = ['health', 'fuel', 'damage'];
+        const pickType = pickupTypes[Math.floor(Math.random() * pickupTypes.length)];
+        healthPickups.push({
+            x: worldX + platW / 2, y: platY - maxRise - 30,
+            collected: false, bobPhase: Math.random() * Math.PI * 2,
+            kind: pickType
+        });
+        nextPlatformX += 1400 + Math.random() * 1800;
+    } else {
+        // === SILVER STAIRCASE — 2-3 ascending platforms with jumpable gaps ===
+        const stepCount = 2 + (Math.random() < 0.4 ? 1 : 0);
+        const stepSpacing = 90 + Math.random() * 30; // wide enough to jump between
+        const baseHeight = 35 + Math.random() * 8;
+        const heightStep = 18 + Math.random() * 10; // moderate vertical gain per step
+        
+        for (let s = 0; s < stepCount; s++) {
+            const platX = worldX + s * stepSpacing;
+            const platY = groundY - (baseHeight + s * heightStep);
+            const platW = 65 + Math.random() * 20;
+            techPlatforms.push({
+                x: platX, y: platY, baseY: platY, w: platW, h: 18,
+                bobPhase: Math.random() * Math.PI * 2,
+                type: 'normal',
+                elevating: false, elevateT: 0, elevateDir: 0,
+                staircaseGroup: worldX
+            });
+            
+            // Top platform sometimes has a pickup
+            if (s === stepCount - 1 && Math.random() < 0.5) {
+                const pickType = Math.random() < 0.6 ? 'health' : 'fuel';
+                healthPickups.push({
+                    x: platX + platW / 2, y: platY - 28,
+                    collected: false, bobPhase: Math.random() * Math.PI * 2,
+                    kind: pickType
+                });
+            }
+        }
+        nextPlatformX += stepCount * stepSpacing + 1200 + Math.random() * 1400;
     }
-    
-    nextPlatformX += 1400 + Math.random() * 1800;
 }
 
 function drawGroundObstacle(obs) {
@@ -3050,37 +3127,77 @@ function drawHealthPickup(hp) {
     const bob = Math.sin(now * 0.003 + hp.bobPhase) * 4;
     const pulse = 0.6 + Math.sin(now * 0.005) * 0.3;
     const py = hp.y + bob;
+    const kind = hp.kind || 'health';
+    
+    // Color schemes per type
+    let glowR, glowG, glowB, bodyDark, bodyMid, bodyLight;
+    if (kind === 'health') {
+        glowR = 0; glowG = 255; glowB = 120;
+        bodyDark = '#081a0e'; bodyMid = '#0e2a16'; bodyLight = '#1a3a22';
+    } else if (kind === 'fuel') {
+        glowR = 255; glowG = 200; glowB = 40;
+        bodyDark = '#1a1408'; bodyMid = '#2a2010'; bodyLight = '#3a2e18';
+    } else { // damage — GOLD glowing
+        glowR = 255; glowG = 180; glowB = 30;
+        bodyDark = '#1a1205'; bodyMid = '#2a1e0a'; bodyLight = '#3a2e12';
+    }
     
     ctx.save();
     ctx.translate(sx, py);
     
     // Glow
-    ctx.shadowColor = `rgba(0, 255, 120, ${pulse * 0.7})`;
+    ctx.shadowColor = `rgba(${glowR}, ${glowG}, ${glowB}, ${pulse * 0.7})`;
     ctx.shadowBlur = 14 + pulse * 8;
     
     // Crate body
     const cw = 20, ch = 20;
     const cg = ctx.createLinearGradient(-cw/2, -ch/2, cw/2, ch/2);
-    cg.addColorStop(0, '#1a3a22');
-    cg.addColorStop(0.5, '#0e2a16');
-    cg.addColorStop(1, '#081a0e');
+    cg.addColorStop(0, bodyLight);
+    cg.addColorStop(0.5, bodyMid);
+    cg.addColorStop(1, bodyDark);
     ctx.fillStyle = cg;
     ctx.beginPath();
     ctx.roundRect(-cw/2, -ch/2, cw, ch, 3);
     ctx.fill();
     
     // Edge
-    ctx.strokeStyle = `rgba(0, 255, 120, ${0.3 + pulse * 0.2})`;
+    ctx.strokeStyle = `rgba(${glowR}, ${glowG}, ${glowB}, ${0.3 + pulse * 0.2})`;
     ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.roundRect(-cw/2, -ch/2, cw, ch, 3);
     ctx.stroke();
     
-    // Health cross
+    // Icon per type
     ctx.shadowBlur = 0;
-    ctx.fillStyle = `rgba(0, 255, 120, ${0.6 + pulse * 0.3})`;
-    ctx.fillRect(-2, -7, 4, 14);
-    ctx.fillRect(-7, -2, 14, 4);
+    ctx.fillStyle = `rgba(${glowR}, ${glowG}, ${glowB}, ${0.6 + pulse * 0.3})`;
+    
+    if (kind === 'health') {
+        // Cross
+        ctx.fillRect(-2, -7, 4, 14);
+        ctx.fillRect(-7, -2, 14, 4);
+    } else if (kind === 'fuel') {
+        // Lightning bolt
+        ctx.beginPath();
+        ctx.moveTo(2, -8); ctx.lineTo(-3, -1); ctx.lineTo(1, -1);
+        ctx.lineTo(-2, 8); ctx.lineTo(3, 1); ctx.lineTo(-1, 1);
+        ctx.closePath();
+        ctx.fill();
+    } else {
+        // Golden star burst (weapon power)
+        ctx.beginPath();
+        for (let i = 0; i < 5; i++) {
+            const ang = -Math.PI/2 + i * Math.PI * 2 / 5;
+            const ang2 = ang + Math.PI / 5;
+            ctx.lineTo(Math.cos(ang) * 7, Math.sin(ang) * 7);
+            ctx.lineTo(Math.cos(ang2) * 3, Math.sin(ang2) * 3);
+        }
+        ctx.closePath();
+        ctx.fill();
+        // Extra glow ring
+        ctx.strokeStyle = `rgba(${glowR}, ${glowG}, ${glowB}, ${0.4 + pulse * 0.3})`;
+        ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.arc(0, 0, 10, 0, Math.PI * 2); ctx.stroke();
+    }
     
     ctx.restore();
 }
@@ -4808,32 +4925,42 @@ if (!isUnderwater && !isOverWaterSurface && player.x > nextEncounterX) {
         }
     }
     
-    // === HEALTH PICKUP COLLECTION ===
+    // === PICKUP COLLECTION (health, fuel, damage boost) ===
     for (const hp of healthPickups) {
         if (hp.collected) continue;
         const now = Date.now();
         const bob = Math.sin(now * 0.003 + hp.bobPhase) * 4;
         const hdx = player.x - hp.x;
-        // Check distance from player body center (player.y is head area, feet at +62)
-        const playerCenterY = player.y + 30; // mid-body
+        const playerCenterY = player.y + 30;
         const hdy = playerCenterY - (hp.y + bob);
         if (Math.abs(hdx) < 40 && Math.abs(hdy) < 50) {
             hp.collected = true;
-            if (player.health >= player.maxHealth) {
-                // Full health — give fuel boost instead
-                flyCharge = Math.min(FLY_CHARGE_MAX, flyCharge + FLY_CHARGE_MAX * 0.5);
-                updateHUD();
-                createExplosion(hp.x, hp.y, '#ffcc00', 25);
-                AudioSystem.playBarrelPickup();
-                showWaveAnnouncement('⚡ +50% FUEL ⚡', '#ffcc00');
-            } else {
-                const healAmt = Math.floor(player.maxHealth * 0.35);
-                player.health = Math.min(player.maxHealth, player.health + healAmt);
-                updateHUD();
-                createExplosion(hp.x, hp.y, '#00ff88', 25);
-                AudioSystem.playBarrelPickup();
-                showWaveAnnouncement('⚡ +35% HEALTH ⚡', '#00ff88');
+            const kind = hp.kind || 'health';
+            
+            if (kind === 'health') {
+                if (player.health >= player.maxHealth) {
+                    // Full health — give fuel instead
+                    flyCharge = Math.min(FLY_CHARGE_MAX, flyCharge + FLY_CHARGE_MAX * 0.5);
+                    createExplosion(hp.x, hp.y, '#ffcc00', 25);
+                    showWaveAnnouncement('⚡ +50% FUEL ⚡', '#ffcc00');
+                } else {
+                    const healAmt = Math.floor(player.maxHealth * 0.35);
+                    player.health = Math.min(player.maxHealth, player.health + healAmt);
+                    createExplosion(hp.x, hp.y, '#00ff88', 25);
+                    showWaveAnnouncement('⚡ +35% HEALTH ⚡', '#00ff88');
+                }
+            } else if (kind === 'fuel') {
+                flyCharge = Math.min(FLY_CHARGE_MAX, flyCharge + FLY_CHARGE_MAX * 0.6);
+                createExplosion(hp.x, hp.y, '#ffcc00', 30);
+                showWaveAnnouncement('⚡ +60% FUEL ⚡', '#ffcc00');
+            } else if (kind === 'damage') {
+                player.damageBoostUntil = Date.now() + 30000; // 30 seconds
+                createExplosion(hp.x, hp.y, '#ffcc00', 40);
+                showWaveAnnouncement('⚡ WEAPONS OVERCHARGE — 30s ⚡', '#ffcc00');
             }
+            
+            AudioSystem.playBarrelPickup();
+            updateHUD();
         }
     }
     
@@ -5128,7 +5255,8 @@ if (player.isFlying && Date.now() > player.flyEndTime) { player.isFlying = false
             const hitboxCenterY = enemy.y - enemy.height * 0.45;
             
             if (Math.abs(rocket.x - enemy.x) < hitboxW && Math.abs(rocket.y - hitboxCenterY) < hitboxH) {
-                enemy.health -= 30;
+                const dmgMult = (Date.now() < player.damageBoostUntil) ? 2 : 1;
+                enemy.health -= 30 * dmgMult;
                 createExplosion(rocket.x, rocket.y, '#ff8844', 25);
                 AudioSystem.playHit();
                 if (enemy.health <= 0) {
@@ -5154,7 +5282,8 @@ if (player.isFlying && Date.now() > player.flyEndTime) { player.isFlying = false
         for (let i = drones.length - 1; i >= 0; i--) {
             const drone = drones[i];
             if (Math.abs(rocket.x - drone.x) < 25 && Math.abs(rocket.y - drone.y) < 20) {
-                drone.health -= 30;
+                const dmgMult = (Date.now() < player.damageBoostUntil) ? 2 : 1;
+                drone.health -= 30 * dmgMult;
                 createExplosion(rocket.x, rocket.y, '#00ccff', 20);
                 AudioSystem.playHit();
                 if (drone.health <= 0) {
@@ -5177,7 +5306,8 @@ if (player.isFlying && Date.now() > player.flyEndTime) { player.isFlying = false
             const hitH = we.kind === 'crab' ? 35 : 14;
             const hitY = we.kind === 'crab' ? we.y - we.height * 0.3 : we.y;
             if (Math.abs(rocket.x - we.x) < hitW && Math.abs(rocket.y - hitY) < hitH) {
-                we.health -= 30;
+                const dmgMult = (Date.now() < player.damageBoostUntil) ? 2 : 1;
+                we.health -= 30 * dmgMult;
                 createExplosion(rocket.x, rocket.y, '#00ccff', 20);
                 AudioSystem.playHit();
                 return false;
@@ -6038,6 +6168,26 @@ function draw() {
         ctx.shadowBlur = 0;
 
         drawPlayer(player.x, player.y, player.width, player.height, player.legAngle, player.isFlying, player.facingRight, player.armAngle);
+        
+        // WEAPONS OVERCHARGE AURA — gold pulsing glow when active
+        if (Date.now() < player.damageBoostUntil) {
+            const boostRemain = player.damageBoostUntil - Date.now();
+            const boostPulse = 0.18 + Math.sin(Date.now() * 0.006) * 0.08;
+            // Flash faster when about to expire (last 5s)
+            const urgency = boostRemain < 5000 ? (0.1 + Math.sin(Date.now() * 0.02) * 0.1) : 0;
+            ctx.save();
+            ctx.globalAlpha = boostPulse + urgency;
+            const auraGrad = ctx.createRadialGradient(player.x, player.y, 5, player.x, player.y, 60);
+            auraGrad.addColorStop(0, 'rgba(255, 200, 40, 0.4)');
+            auraGrad.addColorStop(0.5, 'rgba(255, 160, 20, 0.15)');
+            auraGrad.addColorStop(1, 'rgba(255, 120, 10, 0)');
+            ctx.fillStyle = auraGrad;
+            ctx.beginPath();
+            ctx.arc(player.x, player.y, 60, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+        }
+        
         // DEBUG: Draw bright cyan circle at calculated gun barrel position
         if (window.debugGunX && window.debugGunY) {
             ctx.save();
