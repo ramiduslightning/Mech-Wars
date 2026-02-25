@@ -501,20 +501,36 @@ const AudioSystem = {
         screechGain.gain.exponentialRampToValueAtTime(0.01, t + 0.4);
         screech.start(t + 0.15);
         screech.stop(t + 0.4);
+    },
+    
+    playBatScreech() {
+        if (!this.enabled || !this.ctx) return;
+        const t = this.ctx.currentTime;
         
-        // High-pitched energy whine
-        const whine = this.ctx.createOscillator();
-        const whineGain = this.ctx.createGain();
-        whine.connect(whineGain);
-        whineGain.connect(this.ctx.destination);
+        // High-pitched ultrasonic screech
+        const s1 = this.ctx.createOscillator();
+        const g1 = this.ctx.createGain();
+        s1.connect(g1); g1.connect(this.ctx.destination);
+        s1.type = 'sawtooth';
+        s1.frequency.setValueAtTime(1800, t);
+        s1.frequency.exponentialRampToValueAtTime(3500, t + 0.08);
+        s1.frequency.exponentialRampToValueAtTime(1200, t + 0.25);
+        g1.gain.setValueAtTime(0.15, t);
+        g1.gain.linearRampToValueAtTime(0.25, t + 0.05);
+        g1.gain.exponentialRampToValueAtTime(0.01, t + 0.25);
+        s1.start(t); s1.stop(t + 0.25);
         
-        whine.type = 'triangle';
-        whine.frequency.setValueAtTime(1500, t);
-        whine.frequency.linearRampToValueAtTime(3000, t + 0.3);
-        whineGain.gain.setValueAtTime(0.15, t);
-        whineGain.gain.exponentialRampToValueAtTime(0.01, t + 0.35);
-        whine.start(t);
-        whine.stop(t + 0.35);
+        // Crackling noise layer
+        const buf = this.ctx.createBuffer(1, this.ctx.sampleRate * 0.15, this.ctx.sampleRate);
+        const data = buf.getChannelData(0);
+        for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / data.length, 2);
+        const noise = this.ctx.createBufferSource();
+        const ng = this.ctx.createGain();
+        noise.buffer = buf;
+        noise.connect(ng); ng.connect(this.ctx.destination);
+        ng.gain.setValueAtTime(0.08, t);
+        ng.gain.exponentialRampToValueAtTime(0.01, t + 0.15);
+        noise.start(t); noise.stop(t + 0.15);
     },
 
     playCrabCharge() {
@@ -822,7 +838,19 @@ function getUnderwaterTopY(){ return Math.max(80, canvas.height - 560); }
 let isUnderwater = false;
 let waterZoneUsed = false; // single special water occurrence
 let underwaterZone = null; // { startX, endX } - world coords of current water zone
-let nextWaterEdgeX = 5500; // chemical pool appears well into the run — feels like a special event
+let nextWaterEdgeX = 10500; // chemical pool appears well into the run — feels like a special event
+
+// === CAVE ZONE ===
+let isInCave = false;
+let caveZoneUsed = false;
+let caveZone = null; // { startX, endX }
+let nextCaveEdgeX = 5500; // cave appears after the chemical pool
+let batBots = []; // bat-bot enemies
+let sonicRings = []; // sonic screech projectiles
+let caveBarrel = null; // reward pickup inside cave
+let caveAllBatsCleared = false;
+const CAVE_LENGTH_MIN = 2000;
+const CAVE_LENGTH_MAX = 2800;
 let waterEnemies = []; // torpedo drones + crab walkers
 let waterEncounterSpawned = false; // first wave has spawned
 let waterEncounterCleared = false; // ALL waves done and all enemies dead
@@ -1546,36 +1574,35 @@ function drawPlayer(x, y, width, height, legAngle, isFlying, facingRight, armAng
     ctx.save();
     
     // Main visor slit — bright gold bar (always horizontal on face)
-    ctx.shadowColor = isUnderwater ? 'rgba(255, 210, 80, 1)' : 'rgba(255, 204, 64, 0.95)';
-    ctx.shadowBlur = isUnderwater ? 40 : 25;
-    ctx.fillStyle = isUnderwater ? 'rgba(255, 210, 80, 0.95)' : 'rgba(255, 204, 64, 0.85)';
+    const darkMode = isUnderwater || isInCave;
+    ctx.shadowColor = darkMode ? 'rgba(255, 210, 80, 1)' : 'rgba(255, 204, 64, 0.95)';
+    ctx.shadowBlur = darkMode ? 40 : 25;
+    ctx.fillStyle = darkMode ? 'rgba(255, 210, 80, 0.95)' : 'rgba(255, 204, 64, 0.85)';
     ctx.beginPath();
     ctx.roundRect(-12, headY + 8, 24, 6, 2);
     ctx.fill();
     
     // Bright center highlight
-    ctx.shadowBlur = isUnderwater ? 50 : 35;
+    ctx.shadowBlur = darkMode ? 50 : 35;
     ctx.fillStyle = 'rgba(255, 240, 180, 0.6)';
     ctx.beginPath();
     ctx.roundRect(-8, headY + 9, 16, 4, 2);
     ctx.fill();
     ctx.restore();
     
-    // Directional light cone — follows arm/gun angle, projects from visor center
-    {
+    // Directional light cone — ONLY in dark environments (underwater/cave)
+    if (isUnderwater || isInCave) {
         const visorCY = headY + 11;
         const aim = Math.max(-1.2, Math.min(1.2, armAngle));
-        // Beam direction: right side of face when facingRight (but we're in flipped coords if !facingRight)
-        // Since ctx is already flipped for !facingRight, beam always goes +X direction with aim rotation
-        const beamLen = isUnderwater ? 420 : 200;
-        const beamSpread = isUnderwater ? 75 : 40;
-        const outerAlpha = isUnderwater ? 0.45 : 0.15;
-        const innerAlpha = isUnderwater ? 0.50 : 0.12;
+        const beamLen = 420;
+        const beamSpread = 75;
+        const outerAlpha = 0.45;
+        const innerAlpha = 0.50;
         
         ctx.save();
-        if (isUnderwater) ctx.globalCompositeOperation = 'screen';
+        ctx.globalCompositeOperation = 'screen';
         ctx.translate(0, visorCY);
-        ctx.rotate(aim); // follow gun aim directly
+        ctx.rotate(aim);
         
         // Outer cone
         const g1 = ctx.createLinearGradient(0, 0, beamLen, 0);
@@ -1608,7 +1635,7 @@ function drawPlayer(x, y, width, height, legAngle, isFlying, facingRight, armAng
         ctx.fill();
         
         ctx.restore();
-        if (isUnderwater) ctx.globalCompositeOperation = 'source-over';
+        ctx.globalCompositeOperation = 'source-over';
     }
 
     // === ELECTRICITY EFFECT ===
@@ -4177,6 +4204,390 @@ function drawWaterBubbles() {
 }
 
 
+// =============================================
+// === CAVE ZONE — UNDERGROUND BAT-BOT LAIR ===
+// =============================================
+
+function createCaveZone(startX) {
+    const seed = Math.floor(startX / 97.0) * 88813 + 4207;
+    let r = Math.sin(seed) * 10000;
+    r = r - Math.floor(r);
+    const length = CAVE_LENGTH_MIN + r * (CAVE_LENGTH_MAX - CAVE_LENGTH_MIN);
+    // Generate stalactites (ceiling spikes)
+    const stalactites = [];
+    for (let sx = 0; sx < length; sx += 40 + Math.random() * 60) {
+        stalactites.push({
+            xOff: sx,
+            h: 25 + Math.random() * 55,
+            w: 8 + Math.random() * 12
+        });
+    }
+    return { startX, endX: startX + length, length, stalactites };
+}
+
+function spawnBatBot() {
+    if (!caveZone) return;
+    const ahead = Math.max(caveZone.startX + 100, player.x + 200);
+    const maxX = Math.min(caveZone.endX - 100, player.x + 550);
+    if (ahead >= maxX) return;
+    const spawnX = ahead + Math.random() * (maxX - ahead);
+    // Spawn at various flight levels — from ceiling to mid-screen
+    const groundY = canvas.height - 120;
+    const minY = 100; // just below cave ceiling
+    const maxY = groundY - 80; // above ground
+    const flyY = minY + Math.random() * (maxY - minY);
+    batBots.push({
+        x: spawnX,
+        y: flyY,
+        baseY: flyY,
+        width: 50, height: 30,
+        health: 50 + difficulty * 10,
+        maxHealth: 50 + difficulty * 10,
+        speed: 2.0 + Math.random() * 1.0,
+        wingAngle: Math.random() * Math.PI * 2,
+        state: 'fly', // always active — fly, swoop, retreat
+        swoopTimer: Date.now() + 1500 + Math.random() * 2000,
+        lastShot: Date.now() + 500 + Math.random() * 1500,
+        shotRate: 2200 + Math.random() * 1200, // consistent with other enemies
+        facingRight: false,
+        patrolOffsetY: (Math.random() - 0.5) * 60
+    });
+}
+
+function drawBatBot(bat) {
+    const sx = bat.x;
+    if (sx < camX - 80 || sx > camX + canvas.width + 80) return;
+    const now = Date.now();
+    const dir = bat.facingRight ? 1 : -1;
+    
+    ctx.save();
+    ctx.translate(sx, bat.y);
+    ctx.scale(dir, 1);
+    
+    // Wing flap
+    const wingFlap = Math.sin(now * 0.012 + bat.wingAngle) * 0.4;
+    
+    // === WINGS — angular stealth bomber style ===
+    ctx.save();
+    // Left wing
+    ctx.save();
+    ctx.rotate(-wingFlap - 0.1);
+    const wingGrad = ctx.createLinearGradient(0, 0, -45, -5);
+    wingGrad.addColorStop(0, '#2a3040');
+    wingGrad.addColorStop(0.5, '#1a2030');
+    wingGrad.addColorStop(1, '#0e1520');
+    ctx.fillStyle = wingGrad;
+    ctx.beginPath();
+    ctx.moveTo(-6, -2);
+    ctx.lineTo(-22, -12);
+    ctx.lineTo(-42, -6);
+    ctx.lineTo(-38, 2);
+    ctx.lineTo(-18, 4);
+    ctx.lineTo(-6, 3);
+    ctx.closePath();
+    ctx.fill();
+    // Wing strut lines
+    ctx.strokeStyle = 'rgba(100, 130, 170, 0.15)';
+    ctx.lineWidth = 0.6;
+    ctx.beginPath(); ctx.moveTo(-10, -2); ctx.lineTo(-35, -4); ctx.stroke();
+    // Thruster vent on wing
+    ctx.fillStyle = `rgba(255, 60, 30, ${0.3 + Math.sin(now * 0.008) * 0.15})`;
+    ctx.shadowColor = 'rgba(255, 40, 20, 0.5)';
+    ctx.shadowBlur = 5;
+    ctx.beginPath(); ctx.arc(-32, -2, 2, 0, Math.PI * 2); ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.restore();
+    
+    // Right wing
+    ctx.save();
+    ctx.rotate(wingFlap + 0.1);
+    ctx.fillStyle = wingGrad;
+    ctx.beginPath();
+    ctx.moveTo(6, -2);
+    ctx.lineTo(22, -12);
+    ctx.lineTo(42, -6);
+    ctx.lineTo(38, 2);
+    ctx.lineTo(18, 4);
+    ctx.lineTo(6, 3);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(100, 130, 170, 0.15)';
+    ctx.lineWidth = 0.6;
+    ctx.beginPath(); ctx.moveTo(10, -2); ctx.lineTo(35, -4); ctx.stroke();
+    ctx.fillStyle = `rgba(255, 60, 30, ${0.3 + Math.sin(now * 0.008 + 1) * 0.15})`;
+    ctx.shadowColor = 'rgba(255, 40, 20, 0.5)';
+    ctx.shadowBlur = 5;
+    ctx.beginPath(); ctx.arc(32, -2, 2, 0, Math.PI * 2); ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.restore();
+    ctx.restore();
+    
+    // === BODY — compact angular fuselage ===
+    const bodyGrad = ctx.createLinearGradient(-10, -10, 10, 10);
+    bodyGrad.addColorStop(0, '#3a4458');
+    bodyGrad.addColorStop(0.5, '#242e3e');
+    bodyGrad.addColorStop(1, '#141c28');
+    ctx.fillStyle = bodyGrad;
+    ctx.beginPath();
+    ctx.moveTo(-8, -8);
+    ctx.lineTo(0, -12);
+    ctx.lineTo(8, -8);
+    ctx.lineTo(10, 4);
+    ctx.lineTo(0, 8);
+    ctx.lineTo(-10, 4);
+    ctx.closePath();
+    ctx.fill();
+    
+    // Edge highlight
+    ctx.strokeStyle = 'rgba(140, 170, 210, 0.12)';
+    ctx.lineWidth = 0.8;
+    ctx.stroke();
+    
+    // === EYES — dual red glowing sensors ===
+    const eyePulse = 0.6 + Math.sin(now * 0.006) * 0.25;
+    ctx.shadowColor = `rgba(255, 30, 20, ${eyePulse})`;
+    ctx.shadowBlur = 8;
+    ctx.fillStyle = `rgba(255, 40, 25, ${eyePulse + 0.15})`;
+    ctx.beginPath(); ctx.arc(-4, -3, 2, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(4, -3, 2, 0, Math.PI * 2); ctx.fill();
+    ctx.shadowBlur = 0;
+    
+    // === HEALTH BAR ===
+    const hpPct = bat.health / bat.maxHealth;
+    if (hpPct < 1) {
+        ctx.fillStyle = '#300000';
+        ctx.fillRect(-15, -18, 30, 3);
+        ctx.fillStyle = hpPct > 0.5 ? '#ff4444' : '#ff0000';
+        ctx.fillRect(-15, -18, 30 * hpPct, 3);
+    }
+    
+    ctx.restore();
+}
+
+function drawSonicRing(bolt) {
+    if (bolt.life <= 0) return;
+    const sx = bolt.x;
+    if (sx < camX - 60 || sx > camX + canvas.width + 60) return;
+    
+    const alpha = Math.min(1, bolt.life / 30); // fade near end
+    const now = Date.now();
+    
+    ctx.save();
+    ctx.translate(sx, bolt.y);
+    
+    // Red electricity bolt — jagged line with glow
+    ctx.shadowColor = 'rgba(255, 50, 20, 0.8)';
+    ctx.shadowBlur = 12;
+    ctx.strokeStyle = `rgba(255, 70, 30, ${alpha * 0.9})`;
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.moveTo(-6, 0);
+    for (let i = 0; i < 4; i++) {
+        const jx = -4 + i * 3 + (Math.sin(now * 0.02 + i) * 3);
+        const jy = (Math.random() - 0.5) * 8;
+        ctx.lineTo(jx, jy);
+    }
+    ctx.lineTo(6, 0);
+    ctx.stroke();
+    
+    // Hot white core
+    ctx.strokeStyle = `rgba(255, 200, 150, ${alpha * 0.6})`;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(-3, 0);
+    ctx.lineTo(3, 0);
+    ctx.stroke();
+    
+    // Glow orb
+    ctx.fillStyle = `rgba(255, 60, 20, ${alpha * 0.5})`;
+    ctx.beginPath();
+    ctx.arc(0, 0, 5, 0, Math.PI * 2);
+    ctx.fill();
+    
+    ctx.restore();
+}
+
+function drawCaveEntrance(caveStartX, caveEndX) {
+    const H = canvas.height;
+    const groundY = H - 90;
+    const now = Date.now();
+    
+    const moundH = 260;
+    const mouthH = 105;
+    const mouthW = 115;
+    const moundTopY = groundY - moundH;
+    
+    function drawMound(cx) {
+        const moundW = 240;
+        
+        // Back shadow layer
+        ctx.fillStyle = '#0c0c0c';
+        ctx.beginPath();
+        ctx.moveTo(cx - moundW - 25, groundY);
+        ctx.quadraticCurveTo(cx - moundW, groundY - moundH * 0.5, cx - moundW * 0.6, moundTopY + 15);
+        ctx.quadraticCurveTo(cx - moundW * 0.2, moundTopY - 20, cx, moundTopY - 10);
+        ctx.quadraticCurveTo(cx + moundW * 0.2, moundTopY - 20, cx + moundW * 0.6, moundTopY + 15);
+        ctx.quadraticCurveTo(cx + moundW, groundY - moundH * 0.5, cx + moundW + 25, groundY);
+        ctx.closePath();
+        ctx.fill();
+        
+        // Main rock body — dark grey matching moon ground
+        const rockGrad = ctx.createLinearGradient(cx, moundTopY, cx, groundY);
+        rockGrad.addColorStop(0, '#222222');
+        rockGrad.addColorStop(0.3, '#1a1a1a');
+        rockGrad.addColorStop(0.6, '#141414');
+        rockGrad.addColorStop(1, '#0e0e0e');
+        ctx.fillStyle = rockGrad;
+        ctx.beginPath();
+        ctx.moveTo(cx - moundW, groundY);
+        ctx.quadraticCurveTo(cx - moundW * 0.8, groundY - moundH * 0.6, cx - moundW * 0.5, moundTopY + 25);
+        ctx.quadraticCurveTo(cx - moundW * 0.15, moundTopY - 5, cx, moundTopY);
+        ctx.quadraticCurveTo(cx + moundW * 0.15, moundTopY - 5, cx + moundW * 0.5, moundTopY + 25);
+        ctx.quadraticCurveTo(cx + moundW * 0.8, groundY - moundH * 0.6, cx + moundW, groundY);
+        ctx.closePath();
+        ctx.fill();
+        
+        // Highlight ridge at top
+        const highGrad = ctx.createLinearGradient(cx, moundTopY, cx, moundTopY + moundH * 0.4);
+        highGrad.addColorStop(0, 'rgba(60, 60, 60, 0.35)');
+        highGrad.addColorStop(1, 'rgba(30, 30, 30, 0)');
+        ctx.fillStyle = highGrad;
+        ctx.beginPath();
+        ctx.moveTo(cx - moundW * 0.7, groundY - moundH * 0.3);
+        ctx.quadraticCurveTo(cx - moundW * 0.4, moundTopY + 30, cx, moundTopY + 5);
+        ctx.quadraticCurveTo(cx + moundW * 0.4, moundTopY + 30, cx + moundW * 0.7, groundY - moundH * 0.3);
+        ctx.closePath();
+        ctx.fill();
+        
+        // Rock texture — horizontal ledges
+        ctx.strokeStyle = 'rgba(50, 50, 50, 0.25)';
+        ctx.lineWidth = 1.5;
+        for (let ly = moundTopY + 30; ly < groundY - 30; ly += 22 + Math.sin(ly * 0.1) * 8) {
+            const layerW = moundW * (1 - (groundY - ly) / moundH * 0.5);
+            const xOff = Math.sin(ly * 0.07) * 8;
+            ctx.beginPath();
+            ctx.moveTo(cx - layerW * 0.8 + xOff, ly);
+            ctx.lineTo(cx - layerW * 0.3 + xOff + Math.sin(ly * 0.15) * 15, ly + 3);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(cx + layerW * 0.2 + xOff, ly + 5);
+            ctx.lineTo(cx + layerW * 0.7 + xOff + Math.sin(ly * 0.12) * 10, ly + 2);
+            ctx.stroke();
+        }
+        // Vertical cracks
+        ctx.strokeStyle = 'rgba(40, 40, 40, 0.2)';
+        ctx.lineWidth = 1;
+        for (let cx2 = cx - moundW * 0.5; cx2 < cx + moundW * 0.5; cx2 += 40 + Math.sin(cx2 * 0.04) * 20) {
+            const topY = moundTopY + 20 + Math.abs(Math.sin(cx2 * 0.1)) * 40;
+            ctx.beginPath();
+            ctx.moveTo(cx2, topY);
+            ctx.lineTo(cx2 + Math.sin(topY * 0.1) * 8, topY + 30 + Math.abs(Math.sin(cx2 * 0.07)) * 30);
+            ctx.stroke();
+        }
+        
+        // Cave mouth — dark opening with arch
+        const archCx = cx;
+        const archTopY = groundY - mouthH;
+        
+        // Dark interior
+        ctx.fillStyle = '#030303';
+        ctx.beginPath();
+        ctx.moveTo(archCx - mouthW/2, groundY);
+        ctx.lineTo(archCx - mouthW/2, archTopY + 15);
+        ctx.quadraticCurveTo(archCx - mouthW/2 + 10, archTopY - 10, archCx, archTopY - 5);
+        ctx.quadraticCurveTo(archCx + mouthW/2 - 10, archTopY - 10, archCx + mouthW/2, archTopY + 15);
+        ctx.lineTo(archCx + mouthW/2, groundY);
+        ctx.closePath();
+        ctx.fill();
+        
+        // Rocky arch border
+        ctx.strokeStyle = '#2a2a2a';
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.moveTo(archCx - mouthW/2 - 2, groundY);
+        ctx.lineTo(archCx - mouthW/2 - 2, archTopY + 15);
+        ctx.quadraticCurveTo(archCx - mouthW/2 + 8, archTopY - 14, archCx, archTopY - 10);
+        ctx.quadraticCurveTo(archCx + mouthW/2 - 8, archTopY - 14, archCx + mouthW/2 + 2, archTopY + 15);
+        ctx.lineTo(archCx + mouthW/2 + 2, groundY);
+        ctx.stroke();
+        
+        // Keystone
+        ctx.fillStyle = '#303030';
+        ctx.beginPath();
+        ctx.moveTo(archCx - 12, archTopY - 8);
+        ctx.lineTo(archCx + 12, archTopY - 8);
+        ctx.lineTo(archCx + 8, archTopY - 20);
+        ctx.lineTo(archCx - 8, archTopY - 20);
+        ctx.closePath();
+        ctx.fill();
+    }
+    
+    drawMound(caveStartX);
+    drawMound(caveEndX);
+}
+
+
+function drawCaveZone(startX, endX) {
+    const now = Date.now();
+    const W = canvas.width;
+    const H = canvas.height;
+    const sx = startX;
+    const ex = endX;
+    const groundY = H - 90;
+    const ceilH = 80;
+    
+    // Ceiling
+    ctx.fillStyle = '#0a0a0a';
+    ctx.fillRect(sx, 0, ex - sx, ceilH - 15);
+    ctx.fillStyle = '#121212';
+    ctx.beginPath();
+    ctx.moveTo(sx, ceilH - 15);
+    for (let rx = sx; rx <= ex; rx += 15) {
+        ctx.lineTo(rx, ceilH + Math.sin(rx*0.05)*8 + Math.sin(rx*0.13)*5);
+    }
+    ctx.lineTo(ex, 0); ctx.lineTo(sx, 0); ctx.closePath(); ctx.fill();
+    
+    // Stalactites
+    if (caveZone && caveZone.stalactites) {
+        for (const st of caveZone.stalactites) {
+            const stX = sx + st.xOff;
+            if (stX < camX - 20 || stX > camX + W + 20) continue;
+            ctx.fillStyle = '#141414';
+            ctx.beginPath();
+            ctx.moveTo(stX - st.w/2, ceilH - 5);
+            ctx.lineTo(stX + st.w/2, ceilH - 5);
+            ctx.lineTo(stX + 1, ceilH + st.h);
+            ctx.closePath(); ctx.fill();
+        }
+    }
+    
+    // Stalagmites from floor
+    for (let rx = sx + 60; rx < ex - 60; rx += 80 + Math.sin(rx*0.02)*40) {
+        if (rx < camX - 20 || rx > camX + W + 20) continue;
+        const sh = 12 + Math.sin(rx*0.04)*8;
+        ctx.fillStyle = '#181818';
+        ctx.beginPath();
+        ctx.moveTo(rx - 5, groundY - 2);
+        ctx.lineTo(rx + 5, groundY - 2);
+        ctx.lineTo(rx, groundY - sh);
+        ctx.closePath(); ctx.fill();
+    }
+    
+    // Ambient darkness with player spotlight
+    ctx.save();
+    const darkGrad = ctx.createRadialGradient(player.x, player.y, 50, player.x, player.y, 300);
+    darkGrad.addColorStop(0, 'rgba(0,0,0,0)');
+    darkGrad.addColorStop(0.4, 'rgba(0,0,0,0.15)');
+    darkGrad.addColorStop(0.7, 'rgba(0,0,0,0.3)');
+    darkGrad.addColorStop(1, 'rgba(0,0,0,0.45)');
+    ctx.fillStyle = darkGrad;
+    ctx.fillRect(sx, 0, ex - sx, H);
+    ctx.restore();
+    
+    ctx.shadowBlur = 0;
+}
+
+
 function fireRocket(fromX, fromY, toX, toY) {
     const angle = Math.atan2(toY - fromY, toX - fromX);
     const speed = 14;
@@ -4341,7 +4752,7 @@ if (isOverWaterSurface && underwaterZone) {
     drones = drones.filter(d => d.x < sx0 || d.x > sx1);
 }
 
-if (!isUnderwater && !isOverWaterSurface && player.x > nextEncounterX) {
+if (!isUnderwater && !isOverWaterSurface && !isInCave && player.x > nextEncounterX) {
         const count = 2 + Math.floor(Math.random()*2) + Math.floor(difficulty*0.25);
         for (let i=0;i<count;i++) spawnEnemy();
         // Spawn drones occasionally (30% chance per encounter)
@@ -4352,31 +4763,40 @@ if (!isUnderwater && !isOverWaterSurface && player.x > nextEncounterX) {
         nextEncounterX += 650 + Math.random()*650;
     }
     
-    // Spawn platforms and obstacles as player progresses (not in water)
-    if (!isUnderwater && !isOverWaterSurface && player.x > nextPlatformX - 600) {
+    // Spawn platforms and obstacles as player progresses (not in water or cave)
+    if (!isUnderwater && !isOverWaterSurface && !isInCave && player.x > nextPlatformX - 600) {
         // Skip if next platform would be in or near water zone (existing or future)
         const wzStart = underwaterZone ? underwaterZone.startX : nextWaterEdgeX;
         const wzEnd = underwaterZone ? underwaterZone.endX : (nextWaterEdgeX + WATER_ZONE_LENGTH_MAX);
+        const czStart = caveZone ? caveZone.startX : nextCaveEdgeX;
+        const czEnd = caveZone ? caveZone.endX : (nextCaveEdgeX + CAVE_LENGTH_MAX);
         const inWater = nextPlatformX >= wzStart - 300 && nextPlatformX <= wzEnd + 300;
-        if (!inWater) {
+        const inCave = nextPlatformX >= czStart - 300 && nextPlatformX <= czEnd + 300;
+        if (!inWater && !inCave) {
             spawnPlatformsAndObstacles();
+        } else if (inWater) {
+            nextPlatformX = wzEnd + 400;
         } else {
-            nextPlatformX = wzEnd + 400; // skip past water entirely
+            nextPlatformX = czEnd + 400;
         }
     }
     
-    // Cull far-behind platforms/pickups + remove any inside water zone (existing or future)
-    const cullX = camX - 400;
+    // Cull far-behind platforms/pickups + remove any inside water or cave zone
+    const cullX = camX - 1500;
     const wzStart = underwaterZone ? underwaterZone.startX : nextWaterEdgeX;
     const wzEnd = underwaterZone ? underwaterZone.endX : (nextWaterEdgeX + WATER_ZONE_LENGTH_MAX);
+    const czStart = caveZone ? caveZone.startX : nextCaveEdgeX;
+    const czEnd = caveZone ? caveZone.endX : (nextCaveEdgeX + CAVE_LENGTH_MAX);
     techPlatforms = techPlatforms.filter(p => {
         if (p.x + p.w < cullX) return false;
         if (p.x > wzStart - 200 && p.x < wzEnd + 200) return false;
+        if (p.x > czStart - 200 && p.x < czEnd + 200) return false;
         return true;
     });
     healthPickups = healthPickups.filter(hp => {
         if (hp.collected || hp.x < cullX) return false;
         if (hp.x > wzStart - 200 && hp.x < wzEnd + 200) return false;
+        if (hp.x > czStart - 200 && hp.x < czEnd + 200) return false;
         return true;
     });
     
@@ -4910,6 +5330,197 @@ if (!isUnderwater && !isOverWaterSurface && player.x > nextEncounterX) {
         player.y = Math.max(60, Math.min(canvas.height - 40, player.y));}
 
     
+    // === CAVE ZONE (ONE-OFF EVENT) ===
+    if (!caveZoneUsed && !caveZone && player.x >= nextCaveEdgeX) {
+        caveZone = createCaveZone(nextCaveEdgeX);
+        caveZoneUsed = true;
+        isInCave = true;
+        showWaveAnnouncement('⚠ MOON CAVE — VISOR ON — BAT-BOTS DETECTED ⚠', '#ff6644');
+        // Clear surface enemies at cave entrance
+        enemies = enemies.filter(e => e.x < caveZone.startX - 100);
+        drones = drones.filter(d => d.x < caveZone.startX - 100);
+        // Spawn initial wave of bat-bots (smaller count)
+        for (let i = 0; i < 2; i++) spawnBatBot();
+        // Spawn reward barrel in middle of cave
+        const barrelX = caveZone.startX + caveZone.length * (0.4 + Math.random() * 0.2);
+        caveBarrel = { x: barrelX, y: canvas.height - 120 - 20, collected: false };
+        // Spawn health + fuel pickups inside cave
+        const cavePickup1X = caveZone.startX + caveZone.length * 0.25;
+        const cavePickup2X = caveZone.startX + caveZone.length * 0.65;
+        healthPickups.push({ x: cavePickup1X, y: canvas.height - 150, kind: 'health', collected: false, bobPhase: Math.random() * Math.PI * 2 });
+        healthPickups.push({ x: cavePickup2X, y: canvas.height - 150, kind: 'fuel', collected: false, bobPhase: Math.random() * Math.PI * 2 });
+        caveAllBatsCleared = false;
+    }
+    
+    // Cave zone active check
+    if (caveZone) {
+        const inCaveX = player.x >= caveZone.startX && player.x < caveZone.endX;
+        isInCave = inCaveX;
+        
+        if (inCaveX) {
+            // Spawn bat-bots progressively — moderate rate
+            const caveProgress = (player.x - caveZone.startX) / caveZone.length;
+            const maxBats = Math.floor(2 + caveProgress * 3); // 2 to 5
+            if (batBots.length < maxBats && Math.random() < 0.01) {
+                spawnBatBot();
+            }
+            
+            // Notify player when all bats cleared
+            if (!caveAllBatsCleared && batBots.length === 0 && caveProgress > 0.3) {
+                caveAllBatsCleared = true;
+                showWaveAnnouncement('✓ BAT-BOTS CLEARED — EXIT AHEAD →', '#00ffaa');
+            }
+        }
+        
+        // Passed cave — announce exit
+        if (!inCaveX && player.x >= caveZone.endX) {
+            if (isInCave) showWaveAnnouncement('☀ SURFACE REACHED ☀', '#00ffaa');
+            isInCave = false;
+        }
+    }
+    
+    // === BAT-BOT AI UPDATE ===
+    const bNow = Date.now();
+    batBots = batBots.filter(bat => {
+        if (!caveZone) return false;
+        if (bat.x < camX - 300) return false;
+        
+        bat.facingRight = player.x > bat.x;
+        bat.wingAngle += 0.15;
+        
+        const dx = player.x - bat.x;
+        const dy = player.y - bat.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        const groundY = canvas.height - 120;
+        
+        if (bat.state === 'fly') {
+            // Patrol — weave toward player at moderate speed
+            const targetY = bat.baseY + Math.sin(bNow * 0.002 + bat.patrolOffsetY) * 40;
+            bat.y += (targetY - bat.y) * 0.03;
+            
+            // Drift toward player horizontally
+            if (dist > 60) {
+                bat.x += Math.sign(dx) * bat.speed * 0.6;
+            }
+            
+            // Periodically swoop at player
+            if (bNow > bat.swoopTimer) {
+                bat.state = 'swoop';
+                bat.swoopTimer = bNow + 3000 + Math.random() * 2000;
+            }
+        } else if (bat.state === 'swoop') {
+            // Dive aggressively at player
+            const d = dist || 1;
+            bat.x += (dx / d) * bat.speed * 2.5;
+            bat.y += (dy / d) * bat.speed * 2.5;
+            
+            // Contact damage
+            if (dist < 35 && bNow > player.invulnUntil) {
+                if (bNow < player.shieldUntil && player.shieldHits > 0) {
+                    player.shieldHits--;
+                    player.screenShake = Math.max(player.screenShake, 6);
+                    createExplosion(bat.x, bat.y, '#66aaff', 12);
+                    player.invulnUntil = bNow + 300;
+                } else {
+                    player.health -= 10;
+                    player.invulnUntil = bNow + 400;
+                    player.screenShake = Math.max(player.screenShake, 8);
+                    createExplosion(bat.x, bat.y, '#ff4444', 15);
+                    AudioSystem.playDamage();
+                    updateHUD();
+                    if (player.health <= 0) {
+                        createExplosion(player.x, player.y, '#00ffcc', 60, true);
+                        AudioSystem.playExplosion(true);
+                        gameOver();
+                    }
+                }
+                bat.state = 'retreat';
+            }
+            
+            // Pull out after getting close or after timeout
+            if (dist < 60 || bat.y > groundY - 30) {
+                bat.state = 'retreat';
+            }
+        } else if (bat.state === 'retreat') {
+            // Pull back to patrol height
+            const retreatY = bat.baseY;
+            bat.y += (retreatY - bat.y) * 0.06;
+            // Drift away from player briefly
+            bat.x -= Math.sign(dx) * bat.speed * 0.4;
+            
+            if (Math.abs(bat.y - retreatY) < 20) {
+                bat.state = 'fly';
+            }
+        }
+        
+        // Fire red electricity bolt at player (consistent rate with other enemies)
+        if (bNow > bat.lastShot && dist < 450 && dist > 50) {
+            bat.lastShot = bNow + bat.shotRate;
+            const shotDx = player.x - bat.x;
+            const shotDy = (player.y + 10) - bat.y;
+            const shotD = Math.sqrt(shotDx * shotDx + shotDy * shotDy) || 1;
+            const boltSpeed = 5;
+            sonicRings.push({
+                x: bat.x, y: bat.y,
+                vx: (shotDx / shotD) * boltSpeed,
+                vy: (shotDy / shotD) * boltSpeed,
+                life: 120, // frames
+                color: '#ff3322'
+            });
+            AudioSystem.playBatScreech();
+        }
+        
+        // Keep in cave bounds and off ground/ceiling
+        if (caveZone) {
+            bat.x = Math.max(caveZone.startX + 30, Math.min(caveZone.endX - 30, bat.x));
+        }
+        bat.y = Math.max(90, Math.min(groundY - 40, bat.y));
+        
+        return bat.health > 0;
+    });
+    
+    // === BAT BOLT UPDATE (red electricity projectiles) ===
+    sonicRings = sonicRings.filter(bolt => {
+        bolt.x += bolt.vx;
+        bolt.y += bolt.vy;
+        bolt.life--;
+        if (bolt.life <= 0) return false;
+        if (bolt.x < camX - 100 || bolt.x > camX + canvas.width + 100) return false;
+        // Ground collision
+        if (bolt.y >= canvas.height - 88) {
+            for (let s = 0; s < 3; s++) {
+                sparks.push({ x: bolt.x, y: canvas.height - 88, vx: (Math.random()-0.5)*3, vy: -Math.random()*2.5, life: 0.5, size: 2 + Math.random()*2, color: '#ff4422' });
+            }
+            return false;
+        }
+        
+        // Hit player
+        const hdx = bolt.x - player.x;
+        const hdy = bolt.y - (player.y + 20);
+        if (Math.abs(hdx) < 25 && Math.abs(hdy) < 35 && bNow > player.invulnUntil) {
+            if (bNow < player.shieldUntil && player.shieldHits > 0) {
+                player.shieldHits--;
+                player.screenShake = Math.max(player.screenShake, 5);
+                createExplosion(player.x, player.y, '#66aaff', 10);
+                player.invulnUntil = bNow + 200;
+            } else {
+                player.health -= 6;
+                player.invulnUntil = bNow + 300;
+                player.screenShake = Math.max(player.screenShake, 6);
+                AudioSystem.playDamage();
+                updateHUD();
+                if (player.health <= 0) {
+                    createExplosion(player.x, player.y, '#00ffcc', 60, true);
+                    AudioSystem.playExplosion(true);
+                    gameOver();
+                }
+            }
+            return false;
+        }
+        
+        return true;
+    });
+    
     // === UPDATE ALL PLATFORMS (elevator return) ===
     for (const plat of techPlatforms) {
         // Elevator: return to base when player not on it
@@ -4961,6 +5572,22 @@ if (!isUnderwater && !isOverWaterSurface && player.x > nextEncounterX) {
             
             AudioSystem.playBarrelPickup();
             updateHUD();
+        }
+    }
+    
+    // === CAVE BARREL COLLECTION (ultimate reward for risk) ===
+    if (caveBarrel && !caveBarrel.collected) {
+        const bdx = player.x - caveBarrel.x;
+        const bdy = (player.y + 20) - caveBarrel.y;
+        if (Math.abs(bdx) < 40 && Math.abs(bdy) < 45) {
+            caveBarrel.collected = true;
+            player.health = player.maxHealth;
+            flyCharge = FLY_CHARGE_MAX;
+            player.damageBoostUntil = Date.now() + 30000;
+            updateHUD();
+            createExplosion(caveBarrel.x, caveBarrel.y, '#ffcc00', 50);
+            AudioSystem.playBarrelPickup();
+            showWaveAnnouncement('⚡ FULL CHARGE + HEALTH + OVERCHARGE ⚡', '#ffcc00');
         }
     }
     
@@ -5299,6 +5926,27 @@ if (player.isFlying && Date.now() > player.flyEndTime) { player.isFlying = false
             }
         }
         
+        // Bat-bot collision
+        for (let i = batBots.length - 1; i >= 0; i--) {
+            const bat = batBots[i];
+            if (Math.abs(rocket.x - bat.x) < 28 && Math.abs(rocket.y - bat.y) < 22) {
+                const dmgMult = (Date.now() < player.damageBoostUntil) ? 2 : 1;
+                bat.health -= 30 * dmgMult;
+                createExplosion(rocket.x, rocket.y, '#ff6633', 18);
+                AudioSystem.playHit();
+                if (bat.health <= 0) {
+                    createExplosion(bat.x, bat.y, '#ff6633', 35, true);
+                    AudioSystem.playExplosion(true);
+                    batBots.splice(i, 1);
+                    kills++;
+                    score += 120;
+                    flyCharge = Math.min(FLY_CHARGE_MAX, flyCharge + 15);
+                    updateHUD();
+                }
+                return false;
+            }
+        }
+        
         // Water enemy collision
         for (let i = waterEnemies.length - 1; i >= 0; i--) {
             const we = waterEnemies[i];
@@ -5418,6 +6066,23 @@ function draw() {
     if (isUnderwater) {
         // === UNDERWATER BACKGROUND ===
         drawUnderwaterBackground();
+    } else if (isInCave) {
+        // === CAVE BACKGROUND — dark grey matching moon ground ===
+        const caveBg = ctx.createLinearGradient(0, 0, 0, canvas.height);
+        caveBg.addColorStop(0, '#050505');
+        caveBg.addColorStop(0.3, '#080808');
+        caveBg.addColorStop(0.7, '#0a0a0a');
+        caveBg.addColorStop(1, '#060606');
+        ctx.fillStyle = caveBg;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        // Cave ground (screen-space) — same as moon ground
+        const caveGroundGrad = ctx.createLinearGradient(0, canvas.height - 90, 0, canvas.height);
+        caveGroundGrad.addColorStop(0, '#0a0a0a');
+        caveGroundGrad.addColorStop(0.5, '#050505');
+        caveGroundGrad.addColorStop(1, '#000000');
+        ctx.fillStyle = caveGroundGrad;
+        ctx.fillRect(0, canvas.height - 90, canvas.width, 90);
     } else {
 
     // Pure black space
@@ -6044,6 +6709,78 @@ function draw() {
         drawDrone(drone);
     });
 
+    // Cave zone rendering
+    if (caveZone) {
+        const csx = caveZone.startX;
+        const cex = caveZone.endX;
+        if (isInCave) {
+            // INSIDE: draw cave interior only (no entrance mounds)
+            if (cex > camX && csx < camX + canvas.width) {
+                drawCaveZone(csx, cex);
+            }
+        } else {
+            // OUTSIDE: draw entrance/exit mounds only
+            if (cex + 300 > camX && csx - 300 < camX + canvas.width) {
+                drawCaveEntrance(csx, cex);
+            }
+        }
+    } else if (!caveZoneUsed && nextCaveEdgeX > camX - 400 && nextCaveEdgeX < camX + canvas.width + 800) {
+        // Preview: draw the entrance mountain before cave is created
+        const previewEnd = nextCaveEdgeX + CAVE_LENGTH_MAX;
+        drawCaveEntrance(nextCaveEdgeX, previewEnd);
+    }
+
+    // Bat-bots (cave enemies) — drawn after cave overlay so they're visible
+    batBots.forEach(bat => drawBatBot(bat));
+    sonicRings.forEach(ring => drawSonicRing(ring));
+    
+    // Cave barrel (reward pickup)
+    if (caveBarrel && !caveBarrel.collected && isInCave) {
+        const bx = caveBarrel.x;
+        const by = caveBarrel.y;
+        const now = Date.now();
+        const bob = Math.sin(now * 0.003) * 3;
+        const pulse = 0.7 + Math.sin(now * 0.005) * 0.3;
+        
+        ctx.save();
+        ctx.translate(bx, by + bob);
+        
+        // Golden glow aura
+        ctx.shadowColor = `rgba(255, 200, 40, ${pulse * 0.6})`;
+        ctx.shadowBlur = 20 + pulse * 12;
+        
+        // Barrel body
+        const bw = 24, bh = 32;
+        const bg = ctx.createLinearGradient(-bw/2, -bh/2, bw/2, bh/2);
+        bg.addColorStop(0, '#3a2e10');
+        bg.addColorStop(0.5, '#2a2008');
+        bg.addColorStop(1, '#1a1405');
+        ctx.fillStyle = bg;
+        ctx.beginPath();
+        ctx.roundRect(-bw/2, -bh/2, bw, bh, 4);
+        ctx.fill();
+        
+        // Gold star icon
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = `rgba(255, 200, 40, ${0.6 + pulse * 0.3})`;
+        ctx.beginPath();
+        for (let i = 0; i < 5; i++) {
+            const ang = -Math.PI/2 + i * Math.PI * 2 / 5;
+            const ang2 = ang + Math.PI / 5;
+            ctx.lineTo(Math.cos(ang) * 8, Math.sin(ang) * 8);
+            ctx.lineTo(Math.cos(ang2) * 3.5, Math.sin(ang2) * 3.5);
+        }
+        ctx.closePath();
+        ctx.fill();
+        
+        // Glow ring
+        ctx.strokeStyle = `rgba(255, 200, 40, ${0.3 + pulse * 0.2})`;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.arc(0, 0, 14, 0, Math.PI * 2); ctx.stroke();
+        
+        ctx.restore();
+    }
+
     // Water enemies (torpedo drones + crab walkers)
     if (isUnderwater) {
         // Draw power-up barrel
@@ -6385,10 +7122,8 @@ function startGame() {
             });
         });
     } else {
-        // REDEPLOY — show character select again (quick)
-        showCharacterSelect(() => {
-            actualStartGame();
-        });
+        // REDEPLOY — skip character select, use same suit, straight to game
+        actualStartGame();
     }
 }
 
@@ -6405,8 +7140,10 @@ function actualStartGame() {
 
     camX = 0;
     score = 0; kills = 0; flyCharge = 0; wave = 1;
+    document.getElementById('easterEggHint').classList.remove('show');
     enemies = []; rockets = []; enemyLasers = []; particles = []; sparks = []; smokeTrails = []; debris = []; drones = [];
-    waterEnemies = []; waterBubbles = []; isUnderwater = false; waterZoneUsed = false; underwaterZone = null; nextWaterEdgeX = 5500; waterTransitionAlpha = 0; window.waterLightningBolts = []; waterEntryTime = 0; waterBarrel = null;
+    waterEnemies = []; waterBubbles = []; isUnderwater = false; waterZoneUsed = false; underwaterZone = null; nextWaterEdgeX = 10500; waterTransitionAlpha = 0; window.waterLightningBolts = []; waterEntryTime = 0; waterBarrel = null;
+    isInCave = false; caveZoneUsed = false; caveZone = null; nextCaveEdgeX = 5500; batBots = []; sonicRings = []; caveBarrel = null; caveAllBatsCleared = false;
     waterEncounterSpawned = false; waterEncounterCleared = false; waterZonePassed = false; waterWaveIndex = 0; waterTotalSpawned = 0; waterTotalKills = 0;
     techPlatforms = []; healthPickups = []; nextPlatformX = 1600;
     spawnTimer = 0; difficulty = 1; spawnInterval = 2800;
@@ -6439,18 +7176,21 @@ function showCharacterSelect(onComplete) {
     let hoveredIdx = -1;
     let confirmed = false;
 
-    // Card layout — 2x2 grid on small screens, 1x4 on wide screens
-    const isMobile = W < 500;
+    // Card layout — 2x2 grid on portrait/narrow screens, 1x4 on wide screens
+    const isMobile = W < 700 || H > W;
     const cols = isMobile ? 2 : 4;
     const rows = isMobile ? 2 : 1;
-    const cardW = isMobile ? Math.min(140, (W - 50) / 2 - 10) : Math.min(140, (W - 80) / 4 - 12);
+    // On mobile: scale cards to fit screen with room for title + deploy button
+    const maxCardH = isMobile ? (H * 0.55) / 2 - 10 : 999; // max 55% of screen for 2 rows
+    const rawCardW = isMobile ? Math.min(120, (W - 50) / 2 - 10) : Math.min(140, (W - 80) / 4 - 12);
+    const cardW = isMobile ? Math.min(rawCardW, maxCardH / 1.5) : rawCardW;
     const cardH = cardW * 1.5;
-    const gapX = isMobile ? 14 : 12;
-    const gapY = isMobile ? 14 : 0;
+    const gapX = isMobile ? 10 : 12;
+    const gapY = isMobile ? 10 : 0;
     const totalW = cols * cardW + (cols - 1) * gapX;
     const totalH = rows * cardH + (rows - 1) * gapY;
     const startX = (W - totalW) / 2;
-    const cardStartY = isMobile ? H * 0.12 : H * 0.22;
+    const cardStartY = isMobile ? H * 0.10 : H * 0.22;
 
     function getCardRect(i) {
         const col = i % cols;
@@ -6732,12 +7472,13 @@ function showCharacterSelect(onComplete) {
         }
 
         // DEPLOY button — large, easy to hit
-        const btnW = isMobile ? Math.min(260, W * 0.65) : Math.min(300, W * 0.5);
-        const btnH = isMobile ? 50 : 56;
+        const btnW = isMobile ? Math.min(240, W * 0.6) : Math.min(300, W * 0.5);
+        const btnH = isMobile ? 44 : 56;
         const btnX = (W - btnW) / 2;
         const lastCardBottom = getCardRect(CHARACTERS.length - 1);
+        const cardsBottom = lastCardBottom.y + lastCardBottom.h;
         const btnY = isMobile 
-            ? Math.min(lastCardBottom.y + lastCardBottom.h + 16, H * 0.82) 
+            ? Math.min(cardsBottom + 14, H - btnH - 40) 
             : H * 0.78;
         const activeIdx = (hoveredIdx >= 0 && hoveredIdx < CHARACTERS.length) ? hoveredIdx : selectedCharIndex;
         const activeCh = CHARACTERS[activeIdx];
@@ -6770,14 +7511,15 @@ function showCharacterSelect(onComplete) {
     // Hit testing
     function getHit(ex, ey) {
         // Check deploy button FIRST (priority over cards if overlap)
-        const btnW = isMobile ? Math.min(260, W * 0.65) : Math.min(300, W * 0.5);
-        const btnH = isMobile ? 50 : 56;
+        const btnW = isMobile ? Math.min(240, W * 0.6) : Math.min(300, W * 0.5);
+        const btnH = isMobile ? 44 : 56;
         const btnX = (W - btnW) / 2;
         const lastCardBottom = getCardRect(CHARACTERS.length - 1);
+        const cardsBottom = lastCardBottom.y + lastCardBottom.h;
         const btnY = isMobile 
-            ? Math.min(lastCardBottom.y + lastCardBottom.h + 16, H * 0.82)
+            ? Math.min(cardsBottom + 14, H - btnH - 40)
             : H * 0.78;
-        const pad = isMobile ? 18 : 12;
+        const pad = isMobile ? 20 : 12;
         if (ex >= btnX - pad && ex <= btnX + btnW + pad && ey >= btnY - pad && ey <= btnY + btnH + pad) return { type: 'deploy' };
         // Check cards (with touch padding on mobile)
         const cardPad = isMobile ? 6 : 0;
