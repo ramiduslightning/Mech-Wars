@@ -2870,6 +2870,12 @@ function spawnEnemy() {
     if (!isUnderwater && baseX > (wzStart - 120) && baseX < (wzEnd + 120)) {
         return;
     }
+    // Prevent surface enemies from spawning in/near cave zone
+    const czStart = (caveZone ? caveZone.startX : nextCaveEdgeX);
+    const czEnd   = (caveZone ? caveZone.endX   : (nextCaveEdgeX + CAVE_LENGTH_MAX));
+    if (baseX > (czStart - 300) && baseX < (czEnd + 300)) {
+        return;
+    }
     const groundY = canvas.height - 120;  // Raised for mobile visibility
 
     const enemy = {
@@ -3231,6 +3237,10 @@ function drawHealthPickup(hp) {
 
 function spawnDrone() {
     const baseX = camX + canvas.width + 100 + Math.random() * 200;
+    // Don't spawn drones near cave zone
+    const czStart = (caveZone ? caveZone.startX : nextCaveEdgeX);
+    const czEnd   = (caveZone ? caveZone.endX   : (nextCaveEdgeX + CAVE_LENGTH_MAX));
+    if (baseX > (czStart - 300) && baseX < (czEnd + 300)) return;
     // Keep drones in the sky - well above ground (canvas.height - 120)
     const minY = 40;
     const maxY = Math.min(canvas.height - 280, 300); // At least 280px above ground, never below 300
@@ -4752,6 +4762,15 @@ if (isOverWaterSurface && underwaterZone) {
     drones = drones.filter(d => d.x < sx0 || d.x > sx1);
 }
 
+// Cull any surface enemies/drones near cave mounds
+{
+    const czS = (caveZone ? caveZone.startX : nextCaveEdgeX);
+    const czE = (caveZone ? caveZone.endX   : (nextCaveEdgeX + CAVE_LENGTH_MAX));
+    const cM = 250; // mound half-width
+    enemies = enemies.filter(e => e.x < czS - cM || e.x > czE + cM);
+    drones = drones.filter(d => d.x < czS - cM || d.x > czE + cM);
+}
+
 if (!isUnderwater && !isOverWaterSurface && !isInCave && player.x > nextEncounterX) {
         const count = 2 + Math.floor(Math.random()*2) + Math.floor(difficulty*0.25);
         for (let i=0;i<count;i++) spawnEnemy();
@@ -4761,6 +4780,12 @@ if (!isUnderwater && !isOverWaterSurface && !isInCave && player.x > nextEncounte
             for (let i = 0; i < droneCount; i++) spawnDrone();
         }
         nextEncounterX += 650 + Math.random()*650;
+        // Skip encounter zone past cave if it would land inside
+        const ncS = (caveZone ? caveZone.startX : nextCaveEdgeX);
+        const ncE = (caveZone ? caveZone.endX   : (nextCaveEdgeX + CAVE_LENGTH_MAX));
+        if (nextEncounterX > ncS - 300 && nextEncounterX < ncE + 300) {
+            nextEncounterX = ncE + 400;
+        }
     }
     
     // Spawn platforms and obstacles as player progresses (not in water or cave)
@@ -5115,9 +5140,23 @@ if (!isUnderwater && !isOverWaterSurface && !isInCave && player.x > nextEncounte
         // Hard clamp: never let drones go below sky area
         drone.y = Math.min(drone.y, canvas.height - 250);
         
+        // Cave-zone safety: keep drones away from cave mound area
+        const czS = (caveZone ? caveZone.startX : nextCaveEdgeX);
+        const czE = (caveZone ? caveZone.endX   : (nextCaveEdgeX + CAVE_LENGTH_MAX));
+        const cMarg = 280;
+        if (drone.x > czS - cMarg && drone.x < czE + cMarg) {
+            if (drone.x < (czS + czE) / 2) drone.x = czS - cMarg;
+            else drone.x = czE + cMarg;
+        }
+        
         // Respawn if too far off screen
         if (drone.x < camX - 200 || drone.x > camX + canvas.width + 200) {
-            drone.x = player.x + 400 + Math.random() * 300;
+            let newX = player.x + 400 + Math.random() * 300;
+            // Don't respawn into cave zone
+            if (newX > czS - cMarg && newX < czE + cMarg) {
+                newX = czE + cMarg + 100;
+            }
+            drone.x = newX;
             drone.targetY = 40 + Math.random() * Math.max(60, Math.min(canvas.height - 280, 300) - 40);
         }
         
@@ -5361,7 +5400,7 @@ if (!isUnderwater && !isOverWaterSurface && !isInCave && player.x > nextEncounte
             // Spawn bat-bots progressively — moderate rate
             const caveProgress = (player.x - caveZone.startX) / caveZone.length;
             const maxBats = Math.floor(2 + caveProgress * 3); // 2 to 5
-            if (batBots.length < maxBats && Math.random() < 0.01) {
+            if (!caveAllBatsCleared && batBots.length < maxBats && Math.random() < 0.01) {
                 spawnBatBot();
             }
             
@@ -5693,6 +5732,22 @@ if (player.isFlying && Date.now() > player.flyEndTime) { player.isFlying = false
             }
             enemy.targetY = canvas.height - 120 - Math.random() * 20;
         }
+        
+        // Cave-zone safety: keep LAND enemies out of the cave mound area
+        const czStart = (caveZone ? caveZone.startX : nextCaveEdgeX);
+        const czEnd   = (caveZone ? caveZone.endX   : (nextCaveEdgeX + CAVE_LENGTH_MAX));
+        const caveMargin = 280; // mound half-width
+        if (enemy.x > czStart - caveMargin && enemy.x < czEnd + caveMargin) {
+            const mid = (czStart + czEnd) * 0.5;
+            if (enemy.x < mid) {
+                enemy.x = czStart - caveMargin;
+                enemy.targetX = czStart - caveMargin;
+            } else {
+                enemy.x = czEnd + caveMargin;
+                enemy.targetX = czEnd + caveMargin;
+            }
+        }
+        
         const dx = enemy.targetX - enemy.x, dy = enemy.targetY - enemy.y, dist = Math.sqrt(dx * dx + dy * dy);
         const distToPlayer = Math.hypot(enemy.x - player.x, enemy.y - player.y);
         
@@ -7180,17 +7235,21 @@ function showCharacterSelect(onComplete) {
     const isMobile = W < 700 || H > W;
     const cols = isMobile ? 2 : 4;
     const rows = isMobile ? 2 : 1;
-    // On mobile: scale cards to fit screen with room for title + deploy button
-    const maxCardH = isMobile ? (H * 0.55) / 2 - 10 : 999; // max 55% of screen for 2 rows
-    const rawCardW = isMobile ? Math.min(120, (W - 50) / 2 - 10) : Math.min(140, (W - 80) / 4 - 12);
-    const cardW = isMobile ? Math.min(rawCardW, maxCardH / 1.5) : rawCardW;
-    const cardH = cardW * 1.5;
-    const gapX = isMobile ? 10 : 12;
-    const gapY = isMobile ? 10 : 0;
+    // On mobile: calculate card size to guarantee everything fits on screen
+    // Need space for: title (8%), cards (max 55%), gap, deploy button (8%), hint (4%), bottom margin
+    const titleSpace = isMobile ? H * 0.07 : 0;
+    const btnSpace = isMobile ? 70 : 0; // deploy button + hint + margin
+    const availableH = isMobile ? (H - titleSpace - btnSpace - 20) * 0.7 : 999; // 70% of remaining for cards
+    const maxCardHFromScreen = isMobile ? (availableH / 2 - 8) : 999;
+    const rawCardW = isMobile ? Math.min(110, (W - 40) / 2 - 8) : Math.min(140, (W - 80) / 4 - 12);
+    const cardW = isMobile ? Math.min(rawCardW, maxCardHFromScreen / 1.4) : rawCardW;
+    const cardH = isMobile ? cardW * 1.4 : cardW * 1.5;
+    const gapX = isMobile ? 8 : 12;
+    const gapY = isMobile ? 8 : 0;
     const totalW = cols * cardW + (cols - 1) * gapX;
     const totalH = rows * cardH + (rows - 1) * gapY;
     const startX = (W - totalW) / 2;
-    const cardStartY = isMobile ? H * 0.10 : H * 0.22;
+    const cardStartY = isMobile ? titleSpace + 10 : H * 0.22;
 
     function getCardRect(i) {
         const col = i % cols;
@@ -7414,12 +7473,12 @@ function showCharacterSelect(onComplete) {
         // Title
         ctx.textAlign = 'center';
         ctx.fillStyle = '#c0e8ff';
-        ctx.font = `800 ${isMobile ? 16 : 24}px system-ui, -apple-system, Arial`;
-        ctx.fillText('SELECT OPERATIVE', W / 2, isMobile ? H * 0.06 : H * 0.12);
+        ctx.font = `800 ${isMobile ? 13 : 24}px system-ui, -apple-system, Arial`;
+        ctx.fillText('SELECT OPERATIVE', W / 2, isMobile ? H * 0.035 : H * 0.12);
 
-        ctx.font = `400 ${isMobile ? 10 : 13}px system-ui, Arial`;
+        ctx.font = `400 ${isMobile ? 9 : 13}px system-ui, Arial`;
         ctx.fillStyle = 'rgba(180, 210, 240, 0.5)';
-        ctx.fillText('Choose your mech suit', W / 2, isMobile ? H * 0.095 : H * 0.17);
+        ctx.fillText('Choose your mech suit', W / 2, isMobile ? H * 0.06 : H * 0.17);
 
         // Draw character cards
         for (let i = 0; i < CHARACTERS.length; i++) {
@@ -7472,13 +7531,14 @@ function showCharacterSelect(onComplete) {
         }
 
         // DEPLOY button — large, easy to hit
-        const btnW = isMobile ? Math.min(240, W * 0.6) : Math.min(300, W * 0.5);
-        const btnH = isMobile ? 44 : 56;
+        const btnW = isMobile ? Math.min(220, W * 0.55) : Math.min(300, W * 0.5);
+        const btnH = isMobile ? 40 : 56;
         const btnX = (W - btnW) / 2;
         const lastCardBottom = getCardRect(CHARACTERS.length - 1);
         const cardsBottom = lastCardBottom.y + lastCardBottom.h;
+        // On mobile: place button right below cards, clamped well above bottom
         const btnY = isMobile 
-            ? Math.min(cardsBottom + 14, H - btnH - 40) 
+            ? Math.min(cardsBottom + 12, H - btnH - 30) 
             : H * 0.78;
         const activeIdx = (hoveredIdx >= 0 && hoveredIdx < CHARACTERS.length) ? hoveredIdx : selectedCharIndex;
         const activeCh = CHARACTERS[activeIdx];
@@ -7497,12 +7557,14 @@ function showCharacterSelect(onComplete) {
         ctx.textAlign = 'center';
         ctx.fillStyle = activeCh.trim;
         ctx.font = `800 ${isMobile ? 18 : 22}px system-ui, Arial`;
-        ctx.fillText('▶ DEPLOY', W / 2, btnY + (isMobile ? 32 : 36));
+        ctx.fillText('▶ DEPLOY', W / 2, btnY + (isMobile ? 26 : 36));
 
-        // Hint
-        ctx.fillStyle = 'rgba(140, 170, 200, 0.35)';
-        ctx.font = `400 ${isMobile ? 10 : 12}px system-ui, Arial`;
-        ctx.fillText(isMobile ? 'Tap a suit, then tap DEPLOY' : 'Select a suit, then hit DEPLOY or press Enter', W / 2, btnY + btnH + 20);
+        // Hint (skip on mobile to save space)
+        if (!isMobile) {
+            ctx.fillStyle = 'rgba(140, 170, 200, 0.35)';
+            ctx.font = '400 12px system-ui, Arial';
+            ctx.fillText('Select a suit, then hit DEPLOY or press Enter', W / 2, btnY + btnH + 20);
+        }
         ctx.textAlign = 'left';
 
         requestAnimationFrame(drawFrame);
@@ -7511,15 +7573,15 @@ function showCharacterSelect(onComplete) {
     // Hit testing
     function getHit(ex, ey) {
         // Check deploy button FIRST (priority over cards if overlap)
-        const btnW = isMobile ? Math.min(240, W * 0.6) : Math.min(300, W * 0.5);
-        const btnH = isMobile ? 44 : 56;
+        const btnW = isMobile ? Math.min(220, W * 0.55) : Math.min(300, W * 0.5);
+        const btnH = isMobile ? 40 : 56;
         const btnX = (W - btnW) / 2;
         const lastCardBottom = getCardRect(CHARACTERS.length - 1);
         const cardsBottom = lastCardBottom.y + lastCardBottom.h;
         const btnY = isMobile 
-            ? Math.min(cardsBottom + 14, H - btnH - 40)
+            ? Math.min(cardsBottom + 12, H - btnH - 30)
             : H * 0.78;
-        const pad = isMobile ? 20 : 12;
+        const pad = isMobile ? 22 : 12;
         if (ex >= btnX - pad && ex <= btnX + btnW + pad && ey >= btnY - pad && ey <= btnY + btnH + pad) return { type: 'deploy' };
         // Check cards (with touch padding on mobile)
         const cardPad = isMobile ? 6 : 0;
