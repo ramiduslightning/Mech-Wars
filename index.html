@@ -5286,8 +5286,9 @@ if (!isUnderwater && !isOverWaterSurface && !isInCave && player.x > nextEncounte
                     const bob = Math.sin(now * 0.002 + plat.bobPhase) * 3;
                     const platTop = plat.y + bob;
                     const playerFeetY = player.y + platStandOffset;
-                    if (player.x > plat.x - 10 && player.x < plat.x + plat.w + 10 &&
-                        playerFeetY >= platTop - 8 && playerFeetY <= platTop + 24 &&
+                    const hPad = (plat.type === 'elevator') ? 25 : 10; // wider landing zone for elevators
+                    if (player.x > plat.x - hPad && player.x < plat.x + plat.w + hPad &&
+                        playerFeetY >= platTop - 10 && playerFeetY <= platTop + 28 &&
                         player.jumpVY > 0) {
                         
                         player.y = platTop - platStandOffset;
@@ -5343,11 +5344,19 @@ if (!isUnderwater && !isOverWaterSurface && !isInCave && player.x > nextEncounte
             const bob = Math.sin(now * 0.002 + plat.bobPhase) * 3;
             
             player.y = plat.y + bob - 62; // match platStandOffset
-            // Walk off edge?
-            if (player.x < plat.x - 15 || player.x > plat.x + plat.w + 15) {
+            
+            // Elevator: lock player to platform center while actively rising
+            if (plat.type === 'elevator' && plat.elevating && plat.elevateDir === 1) {
+                const platCenter = plat.x + plat.w / 2;
+                player.x = platCenter; // locked — jump off to leave
+            }
+            
+            // Walk off edge? (wider tolerance for elevators)
+            const edgeTol = (plat.type === 'elevator') ? 40 : 15;
+            if (player.x < plat.x - edgeTol || player.x > plat.x + plat.w + edgeTol) {
                 player._onPlatform = null;
                 player.isJumping = true;
-                player.jumpVY = 1; // gentle fall
+                player.jumpVY = 3; // strong enough fall to not get stuck
                 player.jumpVX = 0;
             }
         } else if (isUnderwater && underwaterZone) {
