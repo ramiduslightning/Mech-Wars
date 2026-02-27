@@ -4818,6 +4818,13 @@ if (!isUnderwater && !isOverWaterSurface && !isInCave && player.x > nextEncounte
         if (p.x > czStart - 200 && p.x < czEnd + 200) return false;
         return true;
     });
+    // If player's platform was culled, detach them
+    if (player._onPlatform && !techPlatforms.includes(player._onPlatform)) {
+        player._onPlatform = null;
+        player.isJumping = true;
+        player.jumpVY = 1;
+        player.jumpVX = 0;
+    }
     healthPickups = healthPickups.filter(hp => {
         if (hp.collected || hp.x < cullX) return false;
         if (hp.x > wzStart - 200 && hp.x < wzEnd + 200) return false;
@@ -5309,23 +5316,19 @@ if (!isUnderwater && !isOverWaterSurface && !isInCave && player.x > nextEncounte
                 player._onPlatform = null;
             }
         } else if (player._onPlatform) {
-            // Standing on a platform — follow its position
+            // === ELEVATOR ANIMATION (update position before player follows) ===
             const plat = player._onPlatform;
-            const now = Date.now();
-            const bob = Math.sin(now * 0.002 + plat.bobPhase) * 3;
-            
-            // ELEVATOR — smoothly rise and descend
             if (plat.type === 'elevator' && plat.elevating) {
-                const elevateSpeed = 1.2; // px per frame
-                const maxRise = 200; // how high it goes
+                const elevateSpeed = 1.2;
+                const maxRise = 200;
                 if (plat.elevateDir === 1) {
                     plat.elevateT += elevateSpeed;
                     if (plat.elevateT >= maxRise) {
                         plat.elevateT = maxRise;
-                        plat.elevateDir = -1; // start descending
+                        plat.elevateDir = -1;
                     }
                 } else {
-                    plat.elevateT -= elevateSpeed * 0.7; // descend slower
+                    plat.elevateT -= elevateSpeed * 0.7;
                     if (plat.elevateT <= 0) {
                         plat.elevateT = 0;
                         plat.elevating = false;
@@ -5334,6 +5337,10 @@ if (!isUnderwater && !isOverWaterSurface && !isInCave && player.x > nextEncounte
                 }
                 plat.y = plat.baseY - plat.elevateT;
             }
+            
+            // Standing on a platform — follow its position
+            const now = Date.now();
+            const bob = Math.sin(now * 0.002 + plat.bobPhase) * 3;
             
             player.y = plat.y + bob - 62; // match platStandOffset
             // Walk off edge?
@@ -5363,10 +5370,40 @@ if (!isUnderwater && !isOverWaterSurface && !isInCave && player.x > nextEncounte
             player.targetY = groundY;
             player.y += (groundY - player.y) * 0.18;
             if (Math.abs(groundY - player.y) < 0.6) player.y = groundY;
+            // SAFETY NET: if somehow above ground without jumping/platform, start falling
+            if (player.y < groundY - 5 && !player._onPlatform) {
+                player.isJumping = true;
+                player.jumpVY = 1;
+                player.jumpVX = 0;
+            }
         }
     } else {
         // Flying: allow full vertical range - can go way up!
-        player.y = Math.max(60, Math.min(canvas.height - 40, player.y));}
+        player.y = Math.max(60, Math.min(canvas.height - 40, player.y));
+    }
+    
+    // === ELEVATOR ANIMATION for elevators player is NOT riding ===
+    for (const plat of techPlatforms) {
+        if (plat.type === 'elevator' && plat.elevating && plat !== player._onPlatform) {
+            const elevateSpeed = 1.2;
+            const maxRise = 200;
+            if (plat.elevateDir === 1) {
+                plat.elevateT += elevateSpeed;
+                if (plat.elevateT >= maxRise) {
+                    plat.elevateT = maxRise;
+                    plat.elevateDir = -1;
+                }
+            } else {
+                plat.elevateT -= elevateSpeed * 0.7;
+                if (plat.elevateT <= 0) {
+                    plat.elevateT = 0;
+                    plat.elevating = false;
+                    plat.elevateDir = 0;
+                }
+            }
+            plat.y = plat.baseY - plat.elevateT;
+        }
+    }
 
     
     // === CAVE ZONE (ONE-OFF EVENT) ===
