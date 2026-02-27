@@ -7154,6 +7154,19 @@ let introPlayed = false;
 let introRunning = false;
 let charSelectRunning = false;
 
+function hideMobileControls() {
+    ['mobileControls', 'pauseBtn', 'flyBtn', 'shieldBtn', 'mobileFuelWrap', 'statusPanel'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.style.display = 'none';
+    });
+}
+function showMobileControls() {
+    ['mobileControls', 'pauseBtn', 'flyBtn', 'shieldBtn', 'mobileFuelWrap', 'statusPanel'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.style.display = '';
+    });
+}
+
 let _startGameRunning = false;
 function startGame() {
     if (_startGameRunning) return;
@@ -7165,6 +7178,9 @@ function startGame() {
     // Hide start screen immediately
     document.getElementById('startScreen').style.display = 'none';
     document.getElementById('gameOverScreen').style.display = 'none';
+    
+    // Hide ALL mobile controls during intro & character select
+    hideMobileControls();
 
     if (!introPlayed) {
         introPlayed = true;
@@ -7183,6 +7199,9 @@ function startGame() {
 }
 
 function actualStartGame() {
+    // Restore mobile controls for gameplay
+    showMobileControls();
+    
     // Switch to in-game cursor mode (hide OS cursor, show bullseye)
     document.body.classList.add('inGame');
 
@@ -7227,46 +7246,31 @@ function showCharacterSelect(onComplete) {
     // Hide wave announce during selection
     const _wa = document.getElementById('waveAnnounce');
     if (_wa) { _wa.style.display = 'none'; _wa.style.opacity = '0'; }
-    // Hide mobile game controls during selection
-    const _mc = document.getElementById('mobileControls');
-    const _pb = document.getElementById('pauseBtn');
-    const _fb = document.getElementById('flyBtn');
-    const _sb = document.getElementById('shieldBtn');
-    const _fw = document.getElementById('mobileFuelWrap');
-    const _sp = document.getElementById('statusPanel');
-    if (_mc) _mc.style.display = 'none';
-    if (_pb) _pb.style.display = 'none';
-    if (_fb) _fb.style.display = 'none';
-    if (_sb) _sb.style.display = 'none';
-    if (_fw) _fw.style.display = 'none';
-    if (_sp) _sp.style.display = 'none';
+    // Mobile controls already hidden by startGame/hideMobileControls
     
     const W = canvas.width, H = canvas.height;
     let hoveredIdx = -1;
     let confirmed = false;
 
-    // Detect mobile/small: portrait phones, narrow screens, OR landscape phones (short height)
-    const isMobile = W < 700 || H > W || H < 500;
-    // Landscape phone: wide but short — use 1x4 but smaller cards
-    const isLandscapePhone = (H < 500 && W > H);
+    // Detect mobile/small: touch devices, portrait phones, narrow screens, landscape phones
+    const isMobile = isTouchDevice || W < 700 || H > W || H < 500;
+    // Landscape phone: touch device wider than tall
+    const isLandscapePhone = isTouchDevice && W > H;
     const cols = (isMobile && !isLandscapePhone) ? 2 : 4;
     const rows = (isMobile && !isLandscapePhone) ? 2 : 1;
-    // Calculate card size to guarantee everything fits
-    const titleH = 40; // title + subtitle space
-    const btnReserve = 60; // deploy button + margin
-    const availForCards = H - titleH - btnReserve - 20;
-    const maxCardH = (isMobile && !isLandscapePhone) ? (availForCards / 2 - 8) : (availForCards - 8);
-    const rawCardW = isLandscapePhone 
-        ? Math.min(maxCardH / 1.3, (W - 80) / 4 - 12)
-        : (isMobile ? Math.min(110, (W - 40) / 2 - 8) : Math.min(140, (W - 80) / 4 - 12));
-    const cardW = Math.min(rawCardW, maxCardH / 1.3);
-    const cardH = cardW * 1.3;
-    const gapX = isMobile ? 8 : 12;
-    const gapY = isMobile ? 8 : 0;
+    // Calculate card size to GUARANTEE deploy button fits on screen
+    // Reserve: title=35px, deployBtn=45px, gaps=25px
+    const reservedH = 35 + 45 + 25;
+    const availForCards = H - reservedH;
+    const maxCardH = (rows === 2) ? (availForCards / 2 - 6) : (availForCards - 6);
+    const maxCardW = (W - 40) / cols - 10;
+    const cardH = Math.min(maxCardH, maxCardW * 1.3);
+    const cardW = cardH / 1.3;
+    const gapX = 8;
+    const gapY = 8;
     const totalW = cols * cardW + (cols - 1) * gapX;
-    const totalH = rows * cardH + (rows - 1) * gapY;
     const startX = (W - totalW) / 2;
-    const cardStartY = isMobile ? (titleH + 5) : H * 0.22;
+    const cardStartY = 38;
 
     function getCardRect(i) {
         const col = i % cols;
@@ -7490,12 +7494,12 @@ function showCharacterSelect(onComplete) {
         // Title
         ctx.textAlign = 'center';
         ctx.fillStyle = '#c0e8ff';
-        ctx.font = `800 ${isMobile ? 13 : 24}px system-ui, -apple-system, Arial`;
-        ctx.fillText('SELECT OPERATIVE', W / 2, isMobile ? 18 : H * 0.12);
+        ctx.font = `800 ${H < 400 ? 12 : (isMobile ? 14 : 24)}px system-ui, -apple-system, Arial`;
+        ctx.fillText('SELECT OPERATIVE', W / 2, 16);
 
-        ctx.font = `400 ${isMobile ? 9 : 13}px system-ui, Arial`;
+        ctx.font = `400 ${H < 400 ? 8 : (isMobile ? 9 : 13)}px system-ui, Arial`;
         ctx.fillStyle = 'rgba(180, 210, 240, 0.5)';
-        ctx.fillText('Choose your mech suit', W / 2, isMobile ? 34 : H * 0.17);
+        ctx.fillText('Choose your mech suit', W / 2, 30);
 
         // Draw character cards
         for (let i = 0; i < CHARACTERS.length; i++) {
@@ -7542,18 +7546,18 @@ function showCharacterSelect(onComplete) {
             // Name
             ctx.textAlign = 'center';
             ctx.fillStyle = showActive ? ch.trim : '#a0b8d0';
-            ctx.font = `700 ${Math.max(10, cardW * 0.1)}px system-ui, Arial`;
-            ctx.fillText(ch.name, r.x + r.w / 2, r.y + r.h * 0.82);
+            ctx.font = `700 ${Math.max(9, cardW * 0.09)}px system-ui, Arial`;
+            ctx.fillText(ch.name, r.x + r.w / 2, r.y + r.h - 8);
 
         }
 
         // DEPLOY button — large, easy to hit, always visible
-        const btnW = isMobile ? Math.min(220, W * 0.5) : Math.min(300, W * 0.5);
-        const btnH = isMobile ? 36 : 56;
+        const btnW = Math.min(220, W * 0.4);
+        const btnH = H < 400 ? 30 : 38;
         const btnX = (W - btnW) / 2;
         const lastCardBottom = getCardRect(CHARACTERS.length - 1);
         const cardsBottom = lastCardBottom.y + lastCardBottom.h;
-        const btnY = Math.min(cardsBottom + 10, H - btnH - 10);
+        const btnY = cardsBottom + 6;
         const activeIdx = (hoveredIdx >= 0 && hoveredIdx < CHARACTERS.length) ? hoveredIdx : selectedCharIndex;
         const activeCh = CHARACTERS[activeIdx];
         const btnHover = (hoveredIdx === -2);
@@ -7570,7 +7574,7 @@ function showCharacterSelect(onComplete) {
 
         ctx.textAlign = 'center';
         ctx.fillStyle = activeCh.trim;
-        ctx.font = `800 ${isMobile ? 16 : 22}px system-ui, Arial`;
+        ctx.font = `800 ${H < 400 ? 14 : 18}px system-ui, Arial`;
         ctx.fillText('▶ DEPLOY', W / 2, btnY + btnH / 2 + 6);
 
         // Hint (skip on mobile to save space)
@@ -7587,13 +7591,13 @@ function showCharacterSelect(onComplete) {
     // Hit testing
     function getHit(ex, ey) {
         // Check deploy button FIRST
-        const btnW = isMobile ? Math.min(220, W * 0.5) : Math.min(300, W * 0.5);
-        const btnH = isMobile ? 36 : 56;
+        const btnW = Math.min(220, W * 0.4);
+        const btnH = H < 400 ? 30 : 38;
         const btnX = (W - btnW) / 2;
         const lastCardBottom = getCardRect(CHARACTERS.length - 1);
         const cardsBottom = lastCardBottom.y + lastCardBottom.h;
-        const btnY = Math.min(cardsBottom + 10, H - btnH - 10);
-        const pad = isMobile ? 22 : 12;
+        const btnY = cardsBottom + 6;
+        const pad = 22;
         if (ex >= btnX - pad && ex <= btnX + btnW + pad && ey >= btnY - pad && ey <= btnY + btnH + pad) return { type: 'deploy' };
         // Check cards (with touch padding on mobile)
         const cardPad = isMobile ? 6 : 0;
@@ -7653,13 +7657,6 @@ function showCharacterSelect(onComplete) {
         document.removeEventListener('keydown', onKey);
         canvas.style.cursor = '';
         charSelectRunning = false;
-        // Restore mobile controls
-        if (_mc) _mc.style.display = '';
-        if (_pb) _pb.style.display = '';
-        if (_fb) _fb.style.display = '';
-        if (_sb) _sb.style.display = '';
-        if (_fw) _fw.style.display = '';
-        if (_sp) _sp.style.display = '';
         onComplete();
     }
 
