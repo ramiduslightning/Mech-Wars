@@ -4428,53 +4428,55 @@ function drawCaveEntrance(caveStartX, caveEndX) {
     const mouthW = 115;
     const moundTopY = groundY - moundH;
     
-    function drawMound(cx) {
-        const moundW = 240;
+    function drawMound(cx, showMouth, scale) {
+        const mW = 240 * scale;
+        const mH = moundH * scale;
+        const mTop = groundY - mH;
         
         // Back shadow layer
         ctx.fillStyle = '#0c0c0c';
         ctx.beginPath();
-        ctx.moveTo(cx - moundW - 25, groundY);
-        ctx.quadraticCurveTo(cx - moundW, groundY - moundH * 0.5, cx - moundW * 0.6, moundTopY + 15);
-        ctx.quadraticCurveTo(cx - moundW * 0.2, moundTopY - 20, cx, moundTopY - 10);
-        ctx.quadraticCurveTo(cx + moundW * 0.2, moundTopY - 20, cx + moundW * 0.6, moundTopY + 15);
-        ctx.quadraticCurveTo(cx + moundW, groundY - moundH * 0.5, cx + moundW + 25, groundY);
+        ctx.moveTo(cx - mW - 25, groundY);
+        ctx.quadraticCurveTo(cx - mW, groundY - mH * 0.5, cx - mW * 0.6, mTop + 15);
+        ctx.quadraticCurveTo(cx - mW * 0.2, mTop - 20, cx, mTop - 10);
+        ctx.quadraticCurveTo(cx + mW * 0.2, mTop - 20, cx + mW * 0.6, mTop + 15);
+        ctx.quadraticCurveTo(cx + mW, groundY - mH * 0.5, cx + mW + 25, groundY);
         ctx.closePath();
         ctx.fill();
         
         // Main rock body — dark grey matching moon ground
-        const rockGrad = ctx.createLinearGradient(cx, moundTopY, cx, groundY);
+        const rockGrad = ctx.createLinearGradient(cx, mTop, cx, groundY);
         rockGrad.addColorStop(0, '#222222');
         rockGrad.addColorStop(0.3, '#1a1a1a');
         rockGrad.addColorStop(0.6, '#141414');
         rockGrad.addColorStop(1, '#0e0e0e');
         ctx.fillStyle = rockGrad;
         ctx.beginPath();
-        ctx.moveTo(cx - moundW, groundY);
-        ctx.quadraticCurveTo(cx - moundW * 0.8, groundY - moundH * 0.6, cx - moundW * 0.5, moundTopY + 25);
-        ctx.quadraticCurveTo(cx - moundW * 0.15, moundTopY - 5, cx, moundTopY);
-        ctx.quadraticCurveTo(cx + moundW * 0.15, moundTopY - 5, cx + moundW * 0.5, moundTopY + 25);
-        ctx.quadraticCurveTo(cx + moundW * 0.8, groundY - moundH * 0.6, cx + moundW, groundY);
+        ctx.moveTo(cx - mW, groundY);
+        ctx.quadraticCurveTo(cx - mW * 0.8, groundY - mH * 0.6, cx - mW * 0.5, mTop + 25);
+        ctx.quadraticCurveTo(cx - mW * 0.15, mTop - 5, cx, mTop);
+        ctx.quadraticCurveTo(cx + mW * 0.15, mTop - 5, cx + mW * 0.5, mTop + 25);
+        ctx.quadraticCurveTo(cx + mW * 0.8, groundY - mH * 0.6, cx + mW, groundY);
         ctx.closePath();
         ctx.fill();
         
         // Highlight ridge at top
-        const highGrad = ctx.createLinearGradient(cx, moundTopY, cx, moundTopY + moundH * 0.4);
+        const highGrad = ctx.createLinearGradient(cx, mTop, cx, mTop + mH * 0.4);
         highGrad.addColorStop(0, 'rgba(60, 60, 60, 0.35)');
         highGrad.addColorStop(1, 'rgba(30, 30, 30, 0)');
         ctx.fillStyle = highGrad;
         ctx.beginPath();
-        ctx.moveTo(cx - moundW * 0.7, groundY - moundH * 0.3);
-        ctx.quadraticCurveTo(cx - moundW * 0.4, moundTopY + 30, cx, moundTopY + 5);
-        ctx.quadraticCurveTo(cx + moundW * 0.4, moundTopY + 30, cx + moundW * 0.7, groundY - moundH * 0.3);
+        ctx.moveTo(cx - mW * 0.7, groundY - mH * 0.3);
+        ctx.quadraticCurveTo(cx - mW * 0.4, mTop + 30, cx, mTop + 5);
+        ctx.quadraticCurveTo(cx + mW * 0.4, mTop + 30, cx + mW * 0.7, groundY - mH * 0.3);
         ctx.closePath();
         ctx.fill();
         
         // Rock texture — horizontal ledges
         ctx.strokeStyle = 'rgba(50, 50, 50, 0.25)';
         ctx.lineWidth = 1.5;
-        for (let ly = moundTopY + 30; ly < groundY - 30; ly += 22 + Math.sin(ly * 0.1) * 8) {
-            const layerW = moundW * (1 - (groundY - ly) / moundH * 0.5);
+        for (let ly = mTop + 30; ly < groundY - 30; ly += 22 + Math.sin(ly * 0.1) * 8) {
+            const layerW = mW * (1 - (groundY - ly) / mH * 0.5);
             const xOff = Math.sin(ly * 0.07) * 8;
             ctx.beginPath();
             ctx.moveTo(cx - layerW * 0.8 + xOff, ly);
@@ -4488,17 +4490,18 @@ function drawCaveEntrance(caveStartX, caveEndX) {
         // Vertical cracks
         ctx.strokeStyle = 'rgba(40, 40, 40, 0.2)';
         ctx.lineWidth = 1;
-        for (let cx2 = cx - moundW * 0.5; cx2 < cx + moundW * 0.5; cx2 += 40 + Math.sin(cx2 * 0.04) * 20) {
-            const topY = moundTopY + 20 + Math.abs(Math.sin(cx2 * 0.1)) * 40;
+        for (let cx2 = cx - mW * 0.5; cx2 < cx + mW * 0.5; cx2 += 40 + Math.sin(cx2 * 0.04) * 20) {
+            const topY = mTop + 20 + Math.abs(Math.sin(cx2 * 0.1)) * 40;
             ctx.beginPath();
             ctx.moveTo(cx2, topY);
             ctx.lineTo(cx2 + Math.sin(topY * 0.1) * 8, topY + 30 + Math.abs(Math.sin(cx2 * 0.07)) * 30);
             ctx.stroke();
         }
         
-        // Cave mouth — dark opening with arch
-        const archCx = cx;
-        const archTopY = groundY - mouthH;
+        // Cave mouth — only on entrance mound
+        if (showMouth) {
+            const archCx = cx;
+            const archTopY = groundY - mouthH;
         
         // Dark interior
         ctx.fillStyle = '#030303';
@@ -4531,10 +4534,11 @@ function drawCaveEntrance(caveStartX, caveEndX) {
         ctx.lineTo(archCx - 8, archTopY - 20);
         ctx.closePath();
         ctx.fill();
+        } // end showMouth
     }
     
-    drawMound(caveStartX);
-    drawMound(caveEndX);
+    drawMound(caveStartX, true, 1.0);    // entrance — full size with cave mouth
+    drawMound(caveEndX, false, 0.55);    // exit — smaller mound, no mouth
 }
 
 
