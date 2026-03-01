@@ -468,6 +468,51 @@ const AudioSystem = {
         noise.start(t);
     },
     
+    playOverchargeLaunch() {
+        if (!this.enabled || !this.ctx) return;
+        const t = this.ctx.currentTime;
+        
+        // Deep bass thump
+        const bass = this.ctx.createOscillator();
+        const bassGain = this.ctx.createGain();
+        bass.connect(bassGain);
+        bassGain.connect(this.ctx.destination);
+        bass.type = 'sine';
+        bass.frequency.setValueAtTime(80, t);
+        bass.frequency.exponentialRampToValueAtTime(40, t + 0.25);
+        bassGain.gain.setValueAtTime(0.35, t);
+        bassGain.gain.exponentialRampToValueAtTime(0.01, t + 0.3);
+        bass.start(t); bass.stop(t + 0.3);
+        
+        // Searing electric zap
+        const zap = this.ctx.createOscillator();
+        const zapGain = this.ctx.createGain();
+        zap.connect(zapGain);
+        zapGain.connect(this.ctx.destination);
+        zap.type = 'sawtooth';
+        zap.frequency.setValueAtTime(1200, t);
+        zap.frequency.exponentialRampToValueAtTime(200, t + 0.2);
+        zapGain.gain.setValueAtTime(0.2, t);
+        zapGain.gain.exponentialRampToValueAtTime(0.01, t + 0.25);
+        zap.start(t); zap.stop(t + 0.25);
+        
+        // Crackling energy burst
+        const bufSize = this.ctx.sampleRate * 0.2;
+        const buf = this.ctx.createBuffer(1, bufSize, this.ctx.sampleRate);
+        const d = buf.getChannelData(0);
+        for (let i = 0; i < bufSize; i++) {
+            d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / bufSize, 0.8) * 0.5;
+        }
+        const ns = this.ctx.createBufferSource();
+        const nsG = this.ctx.createGain();
+        ns.buffer = buf;
+        ns.connect(nsG);
+        nsG.connect(this.ctx.destination);
+        nsG.gain.setValueAtTime(0.25, t);
+        nsG.gain.exponentialRampToValueAtTime(0.01, t + 0.2);
+        ns.start(t);
+    },
+    
     playSpiderLaser() {
         if (!this.enabled || !this.ctx) return;
         const t = this.ctx.currentTime;
@@ -844,6 +889,7 @@ let nextWaterEdgeX = 10500; // chemical pool appears well into the run — feels
 // === CAVE ZONE ===
 let isInCave = false;
 let caveZoneUsed = false;
+let caveSkippedByFlight = false;
 let caveZone = null; // { startX, endX }
 let nextCaveEdgeX = 5500; // cave appears after the chemical pool
 let batBots = []; // bat-bot enemies
@@ -2746,9 +2792,77 @@ function drawMetallicTRex(x, y, width, height, legAngle, facingRight, health, ma
 function drawRocket(rocket) {
     ctx.save();
     ctx.translate(rocket.x, rocket.y);
-    // Always face direction of travel (no spinning)
     const ang = Math.atan2(rocket.vy, rocket.vx);
     ctx.rotate(ang);
+    
+    if (rocket.boosted) {
+        // === OVERCHARGE ROCKET — golden energy bolt ===
+        
+        // Fiery trail
+        ctx.save();
+        ctx.globalAlpha = 0.5;
+        const trailGrad = ctx.createLinearGradient(-50, 0, -10, 0);
+        trailGrad.addColorStop(0, 'rgba(255,100,0,0)');
+        trailGrad.addColorStop(0.5, 'rgba(255,180,30,0.4)');
+        trailGrad.addColorStop(1, 'rgba(255,255,100,0.7)');
+        ctx.strokeStyle = trailGrad;
+        ctx.lineWidth = 6;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(-45, 0);
+        ctx.lineTo(-10, 0);
+        ctx.stroke();
+        ctx.restore();
+        
+        // Outer golden glow
+        ctx.shadowColor = '#ffaa00';
+        ctx.shadowBlur = 18;
+        
+        // Energy bolt body — larger, golden
+        const bGrad = ctx.createLinearGradient(-20, -7, 20, 7);
+        bGrad.addColorStop(0, '#ff8800');
+        bGrad.addColorStop(0.3, '#ffdd44');
+        bGrad.addColorStop(0.6, '#ffffff');
+        bGrad.addColorStop(1, '#ffaa00');
+        ctx.fillStyle = bGrad;
+        ctx.beginPath();
+        ctx.roundRect(-18, -6, 30, 12, 4);
+        ctx.fill();
+        
+        // Glowing nose
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.moveTo(12, -5);
+        ctx.lineTo(22, 0);
+        ctx.lineTo(12, 5);
+        ctx.closePath();
+        ctx.fill();
+        
+        // Energy crackle fins
+        ctx.fillStyle = '#ff6600';
+        ctx.beginPath();
+        ctx.moveTo(-12, -6);
+        ctx.lineTo(-18, -12);
+        ctx.lineTo(-6, -6);
+        ctx.closePath();
+        ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(-12, 6);
+        ctx.lineTo(-18, 12);
+        ctx.lineTo(-6, 6);
+        ctx.closePath();
+        ctx.fill();
+        
+        // Bright core
+        ctx.globalAlpha = 0.7;
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(4, 0, 3, 0, Math.PI * 2);
+        ctx.fill();
+        
+        ctx.shadowBlur = 0;
+    } else {
+        // === STANDARD ROCKET ===
 
     // Thin smoke + tiny crackle behind missile (kept subtle)
     ctx.save();
@@ -2815,6 +2929,8 @@ function drawRocket(rocket) {
     ctx.arc(17, 0, 1.8, 0, Math.PI*2);
     ctx.fill();
     ctx.restore();
+
+    } // end standard rocket
 
     ctx.restore();
 }
@@ -4604,7 +4720,8 @@ function drawCaveZone(startX, endX) {
 
 function fireRocket(fromX, fromY, toX, toY) {
     const angle = Math.atan2(toY - fromY, toX - fromX);
-    const speed = 14;
+    const boosted = Date.now() < player.damageBoostUntil;
+    const speed = boosted ? 18 : 14;
     rockets.push({
         x: fromX, y: fromY,
         vx: Math.cos(angle) * speed,
@@ -4612,25 +4729,32 @@ function fireRocket(fromX, fromY, toX, toY) {
         angle: angle,
         spin: 0,
         spinSpeed: 0,
-        life: 180
+        life: 180,
+        boosted: boosted
     });
-    AudioSystem.playRocketLaunch();
+    if (boosted) {
+        AudioSystem.playOverchargeLaunch();
+    } else {
+        AudioSystem.playRocketLaunch();
+    }
 
-    // Launch FX: minimal thin smoke only (no bubble blasts)
+    // Launch FX
+    const smokeColor = boosted ? 'rgba(255,180,40,0.4)' : 'rgba(210,220,235,0.22)';
+    const smokeColor2 = boosted ? 'rgba(255,200,60,0.5)' : 'rgba(210,220,235,0.30)';
     smokeTrails.push({
         x: fromX - Math.cos(angle) * 10,
         y: fromY - Math.sin(angle) * 10,
-        size: 8 + Math.random() * 6,
+        size: boosted ? 12 + Math.random() * 8 : 8 + Math.random() * 6,
         life: 1,
-        color: 'rgba(210,220,235,0.22)',
+        color: smokeColor,
         vx: -Math.cos(angle) * 0.9 + (Math.random()*0.4-0.2),
         vy: -Math.sin(angle) * 0.9 + (Math.random()*0.4-0.2)
     });smokeTrails.push({
         x: fromX - Math.cos(angle) * 10,
         y: fromY - Math.sin(angle) * 10,
-        size: 10 + Math.random() * 10,
+        size: boosted ? 14 + Math.random() * 12 : 10 + Math.random() * 10,
         life: 1,
-        color: 'rgba(210,220,235,0.30)',
+        color: smokeColor2,
         vx: -Math.cos(angle) * 1.2 + (Math.random()*0.8-0.4),
         vy: -Math.sin(angle) * 1.2 + (Math.random()*0.8-0.4)
     });
@@ -4712,6 +4836,11 @@ function fireRocketFromPlayerOnce() {
 
 function activateFlight() {
     if (flyCharge >= FLY_CHARGE_MAX && !player.isFlying) {
+        // Can't fly inside cave — you'd hit the ceiling!
+        if (isInCave) {
+            showWaveAnnouncement('⚠ CAN\'T FLY — CAVE CEILING ⚠', '#ff4444');
+            return;
+        }
         player.isFlying = true;
         player._onPlatform = null;
         player.flyEndTime = Date.now() + FLY_DURATION;
@@ -5439,32 +5568,32 @@ if (!isUnderwater && !isOverWaterSurface && !isInCave && player.x > nextEncounte
         caveZone = createCaveZone(nextCaveEdgeX);
         caveZoneUsed = true;
         // Only enter cave if on the ground (not flying over)
-        const caveRoofY = canvas.height - 120 - 100; // above this = flying over
+        const caveRoofY = canvas.height - 120 - 100;
         if (!player.isFlying && player.y >= caveRoofY) {
             isInCave = true;
             showWaveAnnouncement('⚠ MOON CAVE — VISOR ON — BAT-BOTS DETECTED ⚠', '#ff6644');
         } else {
             isInCave = false;
+            caveSkippedByFlight = true;
             showWaveAnnouncement('☁ FLYING OVER CAVE ZONE ☁', '#88ccff');
         }
-        // Clear surface enemies at cave entrance
-        enemies = enemies.filter(e => e.x < caveZone.startX - 100);
-        drones = drones.filter(d => d.x < caveZone.startX - 100);
-        // Spawn initial wave of bat-bots (smaller count)
-        for (let i = 0; i < 2; i++) spawnBatBot();
-        // Spawn reward barrel in middle of cave
-        const barrelX = caveZone.startX + caveZone.length * (0.4 + Math.random() * 0.2);
-        caveBarrel = { x: barrelX, y: canvas.height - 120 - 20, collected: false };
-        // Spawn health + fuel pickups inside cave
-        const cavePickup1X = caveZone.startX + caveZone.length * 0.25;
-        const cavePickup2X = caveZone.startX + caveZone.length * 0.65;
-        healthPickups.push({ x: cavePickup1X, y: canvas.height - 150, kind: 'health', collected: false, bobPhase: Math.random() * Math.PI * 2 });
-        healthPickups.push({ x: cavePickup2X, y: canvas.height - 150, kind: 'fuel', collected: false, bobPhase: Math.random() * Math.PI * 2 });
-        caveAllBatsCleared = false;
+        // Only spawn cave content if player walked in
+        if (!caveSkippedByFlight) {
+            enemies = enemies.filter(e => e.x < caveZone.startX - 100);
+            drones = drones.filter(d => d.x < caveZone.startX - 100);
+            for (let i = 0; i < 2; i++) spawnBatBot();
+            const barrelX = caveZone.startX + caveZone.length * (0.4 + Math.random() * 0.2);
+            caveBarrel = { x: barrelX, y: canvas.height - 120 - 20, collected: false };
+            const cavePickup1X = caveZone.startX + caveZone.length * 0.25;
+            const cavePickup2X = caveZone.startX + caveZone.length * 0.65;
+            healthPickups.push({ x: cavePickup1X, y: canvas.height - 150, kind: 'health', collected: false, bobPhase: Math.random() * Math.PI * 2 });
+            healthPickups.push({ x: cavePickup2X, y: canvas.height - 150, kind: 'fuel', collected: false, bobPhase: Math.random() * Math.PI * 2 });
+            caveAllBatsCleared = false;
+        }
     }
     
-    // Cave zone active check — continuously update isInCave based on position AND altitude
-    if (caveZone) {
+    // Cave zone active check — if skipped by flight, cave is permanently done
+    if (caveZone && !caveSkippedByFlight) {
         const inCaveX = player.x >= caveZone.startX && player.x < caveZone.endX;
         const caveRoofY = canvas.height - 120 - 100;
         const atGroundLevel = !player.isFlying && player.y >= caveRoofY;
@@ -5474,11 +5603,9 @@ if (!isUnderwater && !isOverWaterSurface && !isInCave && player.x > nextEncounte
         // Announce transitions
         if (isInCave && !wasInCave && inCaveX) {
             showWaveAnnouncement('⚠ ENTERING CAVE ⚠', '#ff6644');
-        } else if (!isInCave && wasInCave && inCaveX) {
-            showWaveAnnouncement('☁ FLYING ABOVE CAVE ☁', '#88ccff');
         }
         
-        if (inCaveX) {
+        if (inCaveX && isInCave) {
             // Spawn bat-bots progressively — moderate rate
             const caveProgress = (player.x - caveZone.startX) / caveZone.length;
             const maxBats = Math.floor(2 + caveProgress * 3); // 2 to 5
@@ -5493,9 +5620,9 @@ if (!isUnderwater && !isOverWaterSurface && !isInCave && player.x > nextEncounte
             }
         }
         
-        // Passed cave — announce exit (only for players who walked through)
-        if (!inCaveX && player.x >= caveZone.endX && !player.isFlying) {
-            if (isInCave || wasInCave) showWaveAnnouncement('☀ SURFACE REACHED ☀', '#00ffaa');
+        // Passed cave — announce exit
+        if (!inCaveX && player.x >= caveZone.endX) {
+            if (wasInCave) showWaveAnnouncement('☀ SURFACE REACHED ☀', '#00ffaa');
             isInCave = false;
         }
     }
@@ -6023,9 +6150,13 @@ if (player.isFlying && Date.now() > player.flyEndTime) { player.isFlying = false
             const hitboxCenterY = enemy.y - enemy.height * 0.45;
             
             if (Math.abs(rocket.x - enemy.x) < hitboxW && Math.abs(rocket.y - hitboxCenterY) < hitboxH) {
-                const dmgMult = (Date.now() < player.damageBoostUntil) ? 2 : 1;
+                const dmgMult = (Date.now() < player.damageBoostUntil) ? 3 : 1;
                 enemy.health -= 30 * dmgMult;
-                createExplosion(rocket.x, rocket.y, '#ff8844', 25);
+                if (rocket.boosted) {
+                    createExplosion(rocket.x, rocket.y, '#ffaa00', 40, true);
+                } else {
+                    createExplosion(rocket.x, rocket.y, '#ff8844', 25);
+                }
                 AudioSystem.playHit();
                 if (enemy.health <= 0) {
                     const isTRex = enemy.kind === 'trex';
@@ -6050,9 +6181,9 @@ if (player.isFlying && Date.now() > player.flyEndTime) { player.isFlying = false
         for (let i = drones.length - 1; i >= 0; i--) {
             const drone = drones[i];
             if (Math.abs(rocket.x - drone.x) < 25 && Math.abs(rocket.y - drone.y) < 20) {
-                const dmgMult = (Date.now() < player.damageBoostUntil) ? 2 : 1;
+                const dmgMult = (Date.now() < player.damageBoostUntil) ? 3 : 1;
                 drone.health -= 30 * dmgMult;
-                createExplosion(rocket.x, rocket.y, '#00ccff', 20);
+                createExplosion(rocket.x, rocket.y, rocket.boosted ? '#ffaa00' : '#00ccff', rocket.boosted ? 35 : 20, rocket.boosted);
                 AudioSystem.playHit();
                 if (drone.health <= 0) {
                     createExplosion(drone.x, drone.y, '#ff6600', 40, true);
@@ -6071,9 +6202,9 @@ if (player.isFlying && Date.now() > player.flyEndTime) { player.isFlying = false
         for (let i = batBots.length - 1; i >= 0; i--) {
             const bat = batBots[i];
             if (Math.abs(rocket.x - bat.x) < 28 && Math.abs(rocket.y - bat.y) < 22) {
-                const dmgMult = (Date.now() < player.damageBoostUntil) ? 2 : 1;
+                const dmgMult = (Date.now() < player.damageBoostUntil) ? 3 : 1;
                 bat.health -= 30 * dmgMult;
-                createExplosion(rocket.x, rocket.y, '#ff6633', 18);
+                createExplosion(rocket.x, rocket.y, rocket.boosted ? '#ffaa00' : '#ff6633', rocket.boosted ? 30 : 18, rocket.boosted);
                 AudioSystem.playHit();
                 if (bat.health <= 0) {
                     createExplosion(bat.x, bat.y, '#ff6633', 35, true);
@@ -6095,9 +6226,9 @@ if (player.isFlying && Date.now() > player.flyEndTime) { player.isFlying = false
             const hitH = we.kind === 'crab' ? 35 : 14;
             const hitY = we.kind === 'crab' ? we.y - we.height * 0.3 : we.y;
             if (Math.abs(rocket.x - we.x) < hitW && Math.abs(rocket.y - hitY) < hitH) {
-                const dmgMult = (Date.now() < player.damageBoostUntil) ? 2 : 1;
+                const dmgMult = (Date.now() < player.damageBoostUntil) ? 3 : 1;
                 we.health -= 30 * dmgMult;
-                createExplosion(rocket.x, rocket.y, '#00ccff', 20);
+                createExplosion(rocket.x, rocket.y, rocket.boosted ? '#ffaa00' : '#00ccff', rocket.boosted ? 35 : 20, rocket.boosted);
                 AudioSystem.playHit();
                 return false;
             }
@@ -7309,7 +7440,7 @@ function actualStartGame() {
     document.getElementById('easterEggHint').classList.remove('show');
     enemies = []; rockets = []; enemyLasers = []; particles = []; sparks = []; smokeTrails = []; debris = []; drones = [];
     waterEnemies = []; waterBubbles = []; isUnderwater = false; waterZoneUsed = false; underwaterZone = null; nextWaterEdgeX = 10500; waterTransitionAlpha = 0; window.waterLightningBolts = []; waterEntryTime = 0; waterBarrel = null;
-    isInCave = false; caveZoneUsed = false; caveZone = null; nextCaveEdgeX = 5500; batBots = []; sonicRings = []; caveBarrel = null; caveAllBatsCleared = false;
+    isInCave = false; caveZoneUsed = false; caveSkippedByFlight = false; caveZone = null; nextCaveEdgeX = 5500; batBots = []; sonicRings = []; caveBarrel = null; caveAllBatsCleared = false;
     waterEncounterSpawned = false; waterEncounterCleared = false; waterZonePassed = false; waterWaveIndex = 0; waterTotalSpawned = 0; waterTotalKills = 0;
     techPlatforms = []; healthPickups = []; nextPlatformX = 1600;
     spawnTimer = 0; difficulty = 1; spawnInterval = 2800;
