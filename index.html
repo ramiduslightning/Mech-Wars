@@ -5435,8 +5435,15 @@ if (!isUnderwater && !isOverWaterSurface && !isInCave && player.x > nextEncounte
     if (!caveZoneUsed && !caveZone && player.x >= nextCaveEdgeX) {
         caveZone = createCaveZone(nextCaveEdgeX);
         caveZoneUsed = true;
-        isInCave = true;
-        showWaveAnnouncement('⚠ MOON CAVE — VISOR ON — BAT-BOTS DETECTED ⚠', '#ff6644');
+        // Only enter cave if on the ground (not flying over)
+        const caveRoofY = canvas.height - 120 - 100; // above this = flying over
+        if (!player.isFlying && player.y >= caveRoofY) {
+            isInCave = true;
+            showWaveAnnouncement('⚠ MOON CAVE — VISOR ON — BAT-BOTS DETECTED ⚠', '#ff6644');
+        } else {
+            isInCave = false;
+            showWaveAnnouncement('☁ FLYING OVER CAVE ZONE ☁', '#88ccff');
+        }
         // Clear surface enemies at cave entrance
         enemies = enemies.filter(e => e.x < caveZone.startX - 100);
         drones = drones.filter(d => d.x < caveZone.startX - 100);
@@ -5453,10 +5460,20 @@ if (!isUnderwater && !isOverWaterSurface && !isInCave && player.x > nextEncounte
         caveAllBatsCleared = false;
     }
     
-    // Cave zone active check
+    // Cave zone active check — continuously update isInCave based on position AND altitude
     if (caveZone) {
         const inCaveX = player.x >= caveZone.startX && player.x < caveZone.endX;
-        isInCave = inCaveX;
+        const caveRoofY = canvas.height - 120 - 100;
+        const atGroundLevel = !player.isFlying && player.y >= caveRoofY;
+        const wasInCave = isInCave;
+        isInCave = inCaveX && atGroundLevel;
+        
+        // Announce transitions
+        if (isInCave && !wasInCave && inCaveX) {
+            showWaveAnnouncement('⚠ ENTERING CAVE ⚠', '#ff6644');
+        } else if (!isInCave && wasInCave && inCaveX) {
+            showWaveAnnouncement('☁ FLYING ABOVE CAVE ☁', '#88ccff');
+        }
         
         if (inCaveX) {
             // Spawn bat-bots progressively — moderate rate
@@ -5473,9 +5490,9 @@ if (!isUnderwater && !isOverWaterSurface && !isInCave && player.x > nextEncounte
             }
         }
         
-        // Passed cave — announce exit
-        if (!inCaveX && player.x >= caveZone.endX) {
-            if (isInCave) showWaveAnnouncement('☀ SURFACE REACHED ☀', '#00ffaa');
+        // Passed cave — announce exit (only for players who walked through)
+        if (!inCaveX && player.x >= caveZone.endX && !player.isFlying) {
+            if (isInCave || wasInCave) showWaveAnnouncement('☀ SURFACE REACHED ☀', '#00ffaa');
             isInCave = false;
         }
     }
@@ -7221,7 +7238,7 @@ let introRunning = false;
 let charSelectRunning = false;
 
 function hideMobileControls() {
-    ['mobileControls', 'pauseBtn', 'flyBtn', 'shieldBtn', 'mobileFuelWrap', 'statusPanel'].forEach(id => {
+    ['mobileControls', 'pauseBtn', 'flyBtn', 'shieldBtn', 'mobileFuelWrap', 'statusPanel', 'hud'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.style.setProperty('display', 'none', 'important');
     });
@@ -7234,6 +7251,9 @@ function showMobileControls() {
     // mobileFuelWrap needs special handling — CSS has !important
     const fw = document.getElementById('mobileFuelWrap');
     if (fw) fw.style.setProperty('display', 'block', 'important');
+    // Restore HUD
+    const hud = document.getElementById('hud');
+    if (hud) hud.style.removeProperty('display');
 }
 
 let _startGameRunning = false;
