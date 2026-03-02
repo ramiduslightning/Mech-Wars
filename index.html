@@ -104,11 +104,36 @@
         
         /* Landscape phone */
         @media (max-height: 500px) and (orientation: landscape) {
-            .dpad { width: 100px; height: 100px; grid-template-columns: 31px 31px 31px; grid-template-rows: 31px 31px 31px; padding: 2px; bottom: 6px !important; left: 6px !important; }
-            .dpad-btn { font-size: 8px; border-radius: 6px; }
-            .hud-abilities { bottom: 90px !important; right: 8px !important; gap: 6px !important; }
-            #flyBtn, #shieldBtn { width: 40px; height: 40px; font-size: 7px; }
-            #pauseBtn { bottom: 6px; right: 6px; width: 40px; height: 40px; font-size: 7px; }
+            /* COMPACT HUD for landscape phones */
+            #hud {
+                padding: 4px 8px;
+                padding-right: 160px;
+                gap: 6px;
+            }
+            .hud-panel {
+                padding: 4px 8px;
+                border-width: 1px;
+                box-shadow: 0 0 8px rgba(0, 255, 204, 0.3);
+            }
+            .hud-label { font-size: 6px; letter-spacing: 1px; margin-bottom: 1px; }
+            .hud-value { font-size: 13px; }
+            #statusPanel {
+                top: 4px;
+                right: 8px;
+                max-width: 140px;
+                padding: 4px 8px;
+            }
+            #healthBar { width: 80px; height: 8px; margin-top: 2px; }
+            #flyMeter { width: 60px; height: 6px; margin-top: 3px; }
+            .hud-label[style*="margin-top"] { margin-top: 3px !important; }
+            
+            .dpad { width: 85px; height: 85px; grid-template-columns: 26px 26px 26px; grid-template-rows: 26px 26px 26px; padding: 2px; bottom: 4px !important; left: 4px !important; }
+            .dpad-btn { font-size: 7px; border-radius: 5px; }
+            .hud-abilities { bottom: 75px !important; right: 6px !important; gap: 4px !important; }
+            #flyBtn, #shieldBtn { width: 36px; height: 36px; font-size: 6px; border-width: 2px; }
+            .mobile-fuel-bar { width: 36px; }
+            .mobile-fuel-label { font-size: 5px !important; }
+            #pauseBtn { bottom: 4px; right: 4px; width: 36px; height: 36px; font-size: 7px; }
             #easterEggHint { bottom: 50px; font-size: 9px; }
             
             /* COMPACT START SCREEN FOR LANDSCAPE */
