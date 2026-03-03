@@ -986,7 +986,7 @@ let isMoving = false, isFiring = false, lastFireTime = -1e9;
 let paused = false;
 let mobileMoveHeld = false;
 let lmbDownTime = 0, lmbDownX = 0, lmbDownY = 0;
-const fireRate = 900;
+const fireRate = 1300;
 
 // Detect mobile/touch device and show appropriate instructions
 
@@ -1827,279 +1827,6 @@ function drawPlayer(x, y, width, height, legAngle, isFlying, facingRight, armAng
 ctx.restore();
 }
 
-
-function drawTRex(x, y, width, height, legAngle, facingRight, health, maxHealth, isCharging) {
-    ctx.save();
-    ctx.translate(x, y);
-    if (!facingRight) ctx.scale(-1, 1);
-
-    const scale = 1.06;
-    ctx.scale(scale, scale);
-
-    // === Mech-Rex palette (back to the previous look) ===
-    const steel = '#667489';
-    const steelDark = '#222b36';
-    const steelMid = '#3e4c5e';
-    const edge = 'rgba(220,240,255,0.16)';
-    const bolt = '#0d121b';
-    const glow = isCharging ? 'rgba(255,55,55,0.95)' : 'rgba(255,190,0,0.85)';
-
-    // Shadow
-    ctx.fillStyle = 'rgba(0,0,0,0.42)';
-    ctx.beginPath();
-    ctx.ellipse(0, height * 0.35, width * 0.62, 12, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    const steelGrad = (x0, x1) => {
-        const g = ctx.createLinearGradient(x0, 0, x1, 0);
-        g.addColorStop(0, steelDark);
-        g.addColorStop(0.45, steel);
-        g.addColorStop(1, steelMid);
-        return g;
-    };
-
-    // === Segmented tail (kept) ===
-    const wag = Math.sin(legAngle * 2) * 0.18;
-    const tailBaseX = -width * 0.22, tailBaseY = -height * 0.02;
-    const segCount = 7;
-    for (let i = 0; i < segCount; i++) {
-        const t = i / (segCount - 1);
-        const segW = width * (0.22 - t * 0.14);
-        const segH = height * (0.11 - t * 0.065);
-        const bend = wag * (0.55 + t * 1.2);
-        const px = tailBaseX - width * (0.18 + i * 0.18) + Math.cos(t * 2.2) * 4;
-        const py = tailBaseY + Math.sin(t * 2.4 + wag) * (6 + i * 2);
-
-        ctx.save();
-        ctx.translate(px, py);
-        ctx.rotate(-0.12 - t * 0.28 + bend);
-
-        ctx.shadowColor = glow;
-        ctx.shadowBlur = 10;
-
-        ctx.fillStyle = steelGrad(-segW, segW);
-        ctx.beginPath();
-        ctx.roundRect(-segW * 0.5, -segH * 0.5, segW, segH, Math.max(3, segH * 0.4));
-        ctx.fill();
-
-        ctx.shadowBlur = 0;
-        ctx.strokeStyle = edge;
-        ctx.lineWidth = 1.2;
-        ctx.beginPath();
-        ctx.moveTo(-segW * 0.42, -segH * 0.10);
-        ctx.lineTo(segW * 0.42, -segH * 0.10);
-        ctx.stroke();
-
-        ctx.fillStyle = steelDark;
-        ctx.beginPath();
-        ctx.arc(-segW * 0.52, 0, Math.max(3, segH * 0.34), 0, Math.PI * 2);
-        ctx.fill();
-
-        ctx.fillStyle = bolt;
-        for (let b = 0; b < 2; b++) {
-            ctx.beginPath();
-            ctx.arc(segW * (0.15 + b * 0.22), -segH * 0.12, 1.7, 0, Math.PI * 2);
-            ctx.arc(segW * (0.15 + b * 0.22),  segH * 0.12, 1.7, 0, Math.PI * 2);
-            ctx.fill();
-        }
-
-        ctx.restore();
-    }
-
-    // Tail tip spike
-    ctx.save();
-    ctx.translate(tailBaseX - width * 1.42, tailBaseY + Math.sin(wag) * 10);
-    ctx.rotate(-0.55 + wag * 0.6);
-    ctx.fillStyle = steelDark;
-    ctx.beginPath();
-    ctx.moveTo(0, 0);
-    ctx.lineTo(-18, 5);
-    ctx.lineTo(-16, -5);
-    ctx.closePath();
-    ctx.fill();
-    ctx.restore();
-
-    // === Body that reads as a T-Rex (less "squished") ===
-    // Under-body haunch silhouette to give the classic rex shape
-    const haunchW = width * 0.70;
-    const haunchH = height * 0.48;
-    ctx.shadowColor = glow;
-    ctx.shadowBlur = 16;
-    ctx.fillStyle = 'rgba(10,12,16,0.28)';
-    ctx.beginPath();
-    ctx.ellipse(-width*0.06, -height*0.04, haunchW*0.55, haunchH*0.52, 0.06, 0, Math.PI*2);
-    ctx.fill();
-
-    // Main torso plate (wider + taller so it doesn't look compressed)
-    const torsoW = width * 0.72;
-    const torsoH = height * 0.48;
-    const torsoY = -height * 0.16;
-
-    ctx.fillStyle = steelGrad(-torsoW/2, torsoW/2);
-    ctx.beginPath();
-    ctx.roundRect(-torsoW/2, torsoY, torsoW, torsoH, 22);
-    ctx.fill();
-
-    // Belly plate
-    ctx.shadowBlur = 0;
-    ctx.fillStyle = steelDark;
-    ctx.beginPath();
-    ctx.roundRect(-torsoW*0.20, torsoY + torsoH*0.18, torsoW*0.56, torsoH*0.66, 16);
-    ctx.fill();
-
-    // Rib/vent slats
-    ctx.strokeStyle = 'rgba(180,210,255,0.14)';
-    ctx.lineWidth = 2;
-    for (let i=0;i<4;i++){
-        const yy = torsoY + torsoH*(0.30 + i*0.14);
-        ctx.beginPath();
-        ctx.moveTo(-torsoW*0.10, yy);
-        ctx.lineTo(torsoW*0.30, yy);
-        ctx.stroke();
-    }
-
-    // Spine fins / heat sinks
-    ctx.fillStyle = steelMid;
-    for (let i=0;i<4;i++){
-        const sx = -torsoW*0.22 + i*torsoW*0.19;
-        ctx.beginPath();
-        ctx.roundRect(sx, torsoY - 14, 18, 18, 4);
-        ctx.fill();
-    }
-
-    // === Neck + head (kept mech) ===
-    const neckX = torsoW*0.40;
-    const neckY = torsoY + torsoH*0.22;
-
-    ctx.save();
-    ctx.translate(neckX, neckY);
-    ctx.rotate(-0.10);
-    ctx.fillStyle = steelGrad(-20, 22);
-    ctx.beginPath();
-    ctx.roundRect(-10, -14, 46, 24, 10);
-    ctx.fill();
-    ctx.restore();
-
-    // Head
-    ctx.save();
-    ctx.translate(neckX + 34, neckY - 18);
-    ctx.rotate(-0.10);
-
-    // Skull block
-    ctx.shadowColor = glow;
-    ctx.shadowBlur = 14;
-    ctx.fillStyle = steelGrad(-40, 44);
-    ctx.beginPath();
-    ctx.roundRect(-18, -18, 70, 40, 14);
-    ctx.fill();
-
-    // Eye
-    ctx.shadowBlur = 0;
-    ctx.fillStyle = '#0a0d12';
-    ctx.beginPath();
-    ctx.ellipse(24, -2, 9, 6, 0, 0, Math.PI*2);
-    ctx.fill();
-    ctx.fillStyle = isCharging ? '#ff3333' : '#ffd24a';
-    ctx.beginPath();
-    ctx.ellipse(26, -2, 4, 3, 0, 0, Math.PI*2);
-    ctx.fill();
-
-    // Jaw
-    ctx.fillStyle = steelDark;
-    ctx.beginPath();
-    ctx.roundRect(-6, 12, 62, 16, 10);
-    ctx.fill();
-
-    // Teeth
-    ctx.fillStyle = 'rgba(235,245,255,0.75)';
-    for (let i=0;i<6;i++){
-        const tx = 6 + i*8;
-        ctx.beginPath();
-        ctx.moveTo(tx, 14);
-        ctx.lineTo(tx+3, 22);
-        ctx.lineTo(tx-2, 22);
-        ctx.closePath();
-        ctx.fill();
-    }
-
-    // Snout bolts
-    ctx.fillStyle = bolt;
-    for (let i=0;i<3;i++){
-        ctx.beginPath();
-        ctx.arc(48, -8 + i*10, 2.0, 0, Math.PI*2);
-        ctx.fill();
-    }
-
-    ctx.restore();
-
-    // === Legs (make them longer / less stubby) ===
-    const legBaseY = height * 0.14;
-    const legX = [-width*0.06, width*0.14];
-    const step = Math.sin(legAngle) * 10;
-
-    for (let i=0;i<2;i++){
-        ctx.save();
-        ctx.translate(legX[i], legBaseY);
-        ctx.rotate((i===0? -1:1) * legAngle*0.22);
-
-        // Thigh (longer)
-        ctx.fillStyle = steelGrad(-16, 18);
-        ctx.beginPath();
-        ctx.roundRect(-12, -4, 26, height*0.28, 10);
-        ctx.fill();
-
-        // Knee joint
-        ctx.fillStyle = steelDark;
-        ctx.beginPath();
-        ctx.arc(0, height*0.28, 6, 0, Math.PI*2);
-        ctx.fill();
-
-        // Calf piston (longer)
-        ctx.save();
-        ctx.translate(0, height*0.28);
-        ctx.rotate((i===0?1:-1)*legAngle*0.18);
-        ctx.fillStyle = steelMid;
-        ctx.beginPath();
-        ctx.roundRect(-9, 0, 20, height*0.28, 10);
-        ctx.fill();
-
-        // Foot (lower)
-        ctx.fillStyle = steelDark;
-        ctx.beginPath();
-        ctx.roundRect(-18, height*0.25 + step*0.02, 44, 14, 6);
-        ctx.fill();
-
-        // Claw spikes
-        ctx.fillStyle = '#0c0f14';
-        for (let c=0;c<3;c++){
-            const cx = 6 + c*11;
-            ctx.beginPath();
-            ctx.moveTo(cx, height*0.28 + step*0.02);
-            ctx.lineTo(cx+6, height*0.28 + step*0.02 + 6);
-            ctx.lineTo(cx-2, height*0.28 + step*0.02 + 6);
-            ctx.closePath();
-            ctx.fill();
-        }
-
-        ctx.restore();
-        ctx.restore();
-    }
-
-    // Subtle outline
-    ctx.strokeStyle = 'rgba(220,235,255,0.10)';
-    ctx.lineWidth = 1.5;
-    ctx.strokeRect(-torsoW/2, torsoY, torsoW, torsoH);
-
-    // Health bar
-    const barW = width * 0.6;
-    const barY = -height * 0.65;
-    ctx.fillStyle = 'rgba(0,0,0,0.6)';
-    ctx.fillRect(-barW/2, barY, barW, 6);
-    ctx.fillStyle = '#ff3333';
-    ctx.fillRect(-barW/2, barY, barW * Math.max(0, health / maxHealth), 6);
-
-    ctx.restore();
-}
 
 
 function drawHumanoidBot(x, y, width, height, legAngle, facingRight, health, maxHealth) {
@@ -4411,23 +4138,24 @@ function drawBatBot(bat) {
     if (sx < camX - 80 || sx > camX + canvas.width + 80) return;
     const now = Date.now();
     const dir = bat.facingRight ? 1 : -1;
-    
+
     ctx.save();
     ctx.translate(sx, bat.y);
     ctx.scale(dir, 1);
-    
+
     // Wing flap
     const wingFlap = Math.sin(now * 0.012 + bat.wingAngle) * 0.4;
-    
+
     // === WINGS — angular stealth bomber style ===
     ctx.save();
+
     // Left wing
     ctx.save();
     ctx.rotate(-wingFlap - 0.1);
     const wingGrad = ctx.createLinearGradient(0, 0, -45, -5);
-    wingGrad.addColorStop(0, '#2a3040');
-    wingGrad.addColorStop(0.5, '#1a2030');
-    wingGrad.addColorStop(1, '#0e1520');
+    wingGrad.addColorStop(0, '#353d4a');   // steel grey, matches moon-metal ground
+    wingGrad.addColorStop(0.5, '#222830');
+    wingGrad.addColorStop(1, '#141820');
     ctx.fillStyle = wingGrad;
     ctx.beginPath();
     ctx.moveTo(-6, -2);
@@ -4438,18 +4166,24 @@ function drawBatBot(bat) {
     ctx.lineTo(-6, 3);
     ctx.closePath();
     ctx.fill();
-    // Wing strut lines
-    ctx.strokeStyle = 'rgba(100, 130, 170, 0.15)';
+
+    // Red circuit traces on wing
+    const tracePulse = 0.18 + Math.sin(now * 0.005) * 0.08;
+    ctx.strokeStyle = `rgba(220, 40, 30, ${tracePulse + 0.25})`;
     ctx.lineWidth = 0.6;
-    ctx.beginPath(); ctx.moveTo(-10, -2); ctx.lineTo(-35, -4); ctx.stroke();
-    // Thruster vent on wing
-    ctx.fillStyle = `rgba(255, 60, 30, ${0.3 + Math.sin(now * 0.008) * 0.15})`;
-    ctx.shadowColor = 'rgba(255, 40, 20, 0.5)';
-    ctx.shadowBlur = 5;
-    ctx.beginPath(); ctx.arc(-32, -2, 2, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(-10, -2); ctx.lineTo(-35, -4); ctx.stroke();       // main strut
+    ctx.beginPath(); ctx.moveTo(-18, -6); ctx.lineTo(-28, -6); ctx.stroke();       // cross trace
+    ctx.beginPath(); ctx.moveTo(-28, -6); ctx.lineTo(-28, -1); ctx.stroke();       // vertical trace
+    ctx.beginPath(); ctx.moveTo(-22, 1); ctx.lineTo(-32, 0); ctx.stroke();         // lower trace
+    // Node dots at trace junctions
+    ctx.fillStyle = `rgba(255, 50, 35, ${tracePulse + 0.3})`;
+    ctx.shadowColor = 'rgba(255, 30, 20, 0.5)';
+    ctx.shadowBlur = 3;
+    ctx.beginPath(); ctx.arc(-28, -4, 1.2, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(-32, -2, 1.2, 0, Math.PI * 2); ctx.fill();
     ctx.shadowBlur = 0;
     ctx.restore();
-    
+
     // Right wing
     ctx.save();
     ctx.rotate(wingFlap + 0.1);
@@ -4463,22 +4197,28 @@ function drawBatBot(bat) {
     ctx.lineTo(6, 3);
     ctx.closePath();
     ctx.fill();
-    ctx.strokeStyle = 'rgba(100, 130, 170, 0.15)';
+
+    // Red circuit traces on right wing
+    ctx.strokeStyle = `rgba(220, 40, 30, ${tracePulse + 0.25})`;
     ctx.lineWidth = 0.6;
     ctx.beginPath(); ctx.moveTo(10, -2); ctx.lineTo(35, -4); ctx.stroke();
-    ctx.fillStyle = `rgba(255, 60, 30, ${0.3 + Math.sin(now * 0.008 + 1) * 0.15})`;
-    ctx.shadowColor = 'rgba(255, 40, 20, 0.5)';
-    ctx.shadowBlur = 5;
-    ctx.beginPath(); ctx.arc(32, -2, 2, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(18, -6); ctx.lineTo(28, -6); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(28, -6); ctx.lineTo(28, -1); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(22, 1); ctx.lineTo(32, 0); ctx.stroke();
+    ctx.fillStyle = `rgba(255, 50, 35, ${tracePulse + 0.3})`;
+    ctx.shadowColor = 'rgba(255, 30, 20, 0.5)';
+    ctx.shadowBlur = 3;
+    ctx.beginPath(); ctx.arc(28, -4, 1.2, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(32, -2, 1.2, 0, Math.PI * 2); ctx.fill();
     ctx.shadowBlur = 0;
     ctx.restore();
     ctx.restore();
-    
-    // === BODY — compact angular fuselage ===
+
+    // === BODY — steel-grey angular fuselage ===
     const bodyGrad = ctx.createLinearGradient(-10, -10, 10, 10);
-    bodyGrad.addColorStop(0, '#3a4458');
-    bodyGrad.addColorStop(0.5, '#242e3e');
-    bodyGrad.addColorStop(1, '#141c28');
+    bodyGrad.addColorStop(0, '#444d5c');   // moon-metal steel grey
+    bodyGrad.addColorStop(0.5, '#2c3340');
+    bodyGrad.addColorStop(1, '#1a1f28');
     ctx.fillStyle = bodyGrad;
     ctx.beginPath();
     ctx.moveTo(-8, -8);
@@ -4489,30 +4229,49 @@ function drawBatBot(bat) {
     ctx.lineTo(-10, 4);
     ctx.closePath();
     ctx.fill();
-    
+
     // Edge highlight
-    ctx.strokeStyle = 'rgba(140, 170, 210, 0.12)';
+    ctx.strokeStyle = 'rgba(160, 190, 220, 0.18)';
     ctx.lineWidth = 0.8;
     ctx.stroke();
-    
-    // === EYES — dual red glowing sensors ===
-    const eyePulse = 0.6 + Math.sin(now * 0.006) * 0.25;
-    ctx.shadowColor = `rgba(255, 30, 20, ${eyePulse})`;
-    ctx.shadowBlur = 8;
-    ctx.fillStyle = `rgba(255, 40, 25, ${eyePulse + 0.15})`;
-    ctx.beginPath(); ctx.arc(-4, -3, 2, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.arc(4, -3, 2, 0, Math.PI * 2); ctx.fill();
+
+    // Body circuit detail — single horizontal trace across chest
+    ctx.strokeStyle = 'rgba(120, 180, 200, 0.25)';
+    ctx.lineWidth = 0.5;
+    ctx.beginPath(); ctx.moveTo(-6, 0); ctx.lineTo(6, 0); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0, 4); ctx.stroke();
+
+    // === SENSOR ANTENNA — small radar spike on top of fuselage ===
+    ctx.strokeStyle = 'rgba(180, 200, 220, 0.6)';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(0, -12); ctx.lineTo(0, -18); ctx.stroke();   // spike
+    ctx.beginPath(); ctx.moveTo(-3, -16); ctx.lineTo(3, -16); ctx.stroke();  // crossbar
+    // Blinking tip
+    const blinkAlpha = 0.5 + Math.sin(now * 0.004) * 0.45;
+    ctx.fillStyle = `rgba(255, 40, 30, ${blinkAlpha})`;
+    ctx.shadowColor = 'rgba(255, 30, 20, 0.8)';
+    ctx.shadowBlur = 4;
+    ctx.beginPath(); ctx.arc(0, -18, 1.2, 0, Math.PI * 2); ctx.fill();
     ctx.shadowBlur = 0;
-    
+
+    // === EYES — dual red sensors (subtle) ===
+    const eyePulse = 0.35 + Math.sin(now * 0.006) * 0.15;
+    ctx.shadowColor = `rgba(255, 30, 20, ${eyePulse})`;
+    ctx.shadowBlur = 4;
+    ctx.fillStyle = `rgba(220, 35, 25, ${eyePulse + 0.2})`;
+    ctx.beginPath(); ctx.arc(-4, -3, 1.5, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(4, -3, 1.5, 0, Math.PI * 2); ctx.fill();
+    ctx.shadowBlur = 0;
+
     // === HEALTH BAR ===
     const hpPct = bat.health / bat.maxHealth;
     if (hpPct < 1) {
         ctx.fillStyle = '#300000';
-        ctx.fillRect(-15, -18, 30, 3);
+        ctx.fillRect(-15, -22, 30, 3);
         ctx.fillStyle = hpPct > 0.5 ? '#ff4444' : '#ff0000';
-        ctx.fillRect(-15, -18, 30 * hpPct, 3);
+        ctx.fillRect(-15, -22, 30 * hpPct, 3);
     }
-    
+
     ctx.restore();
 }
 
