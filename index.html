@@ -986,7 +986,7 @@ let isMoving = false, isFiring = false, lastFireTime = -1e9;
 let paused = false;
 let mobileMoveHeld = false;
 let lmbDownTime = 0, lmbDownX = 0, lmbDownY = 0;
-const fireRate = 1300;
+const fireRate = 2500;
 
 // Detect mobile/touch device and show appropriate instructions
 
@@ -4558,8 +4558,8 @@ function fireRocketFromPlayerOnce() {
     }
     
     // Additional safeguard: cap rockets array to prevent memory issues
-    if (rockets.length > 50) {
-        rockets = rockets.slice(-40);
+    if (rockets.length > 5) {
+        rockets = rockets.slice(-5);
     }
 
     if (now - lastFireTime <= fireRate) return;
