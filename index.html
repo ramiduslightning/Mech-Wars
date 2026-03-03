@@ -973,8 +973,8 @@ function resize() {
     canvas.height = Math.floor(window.innerHeight * r);
 }
 resize(); 
-window.addEventListener('blur', () => { isMoving = false; isFiring = false; mobileMoveHeld = false; lastFireTime = -1e9; dpadState.up = false; dpadState.down = false; dpadState.left = false; dpadState.right = false; syncDpadVisuals && syncDpadVisuals(); });
-document.addEventListener('visibilitychange', () => { if (document.hidden) { isMoving = false; isFiring = false; mobileMoveHeld = false; lastFireTime = -1e9; dpadState.up = false; dpadState.down = false; dpadState.left = false; dpadState.right = false; } });
+window.addEventListener('blur', () => { isMoving = false; isFiring = false; mobileMoveHeld = false; dpadState.up = false; dpadState.down = false; dpadState.left = false; dpadState.right = false; syncDpadVisuals && syncDpadVisuals(); });
+document.addEventListener('visibilitychange', () => { if (document.hidden) { isMoving = false; isFiring = false; mobileMoveHeld = false; dpadState.up = false; dpadState.down = false; dpadState.left = false; dpadState.right = false; } });
 window.addEventListener('resize', resize);
 
 const player = { x: 0, y: 0, targetX: 0, targetY: 0, width: 50, height: 80, health: 100, maxHealth: 100, speed: 5.5, isFlying: false, flyEndTime: 0, legAngle: 0, legDir: 1, isMoving: false, facingRight: true, screenShake: 0, armAngle: 0, invulnUntil: 0, shieldUntil: 0, shieldHits: 0, isJumping: false, jumpVY: 0, jumpVX: 0, damageBoostUntil: 0 };
@@ -4545,79 +4545,6 @@ function fireRocket(fromX, fromY, toX, toY) {
 }
 
 
-function fireRocketFromPlayerOnce() {
-    if (!gameRunning) return;
-
-    // D-pad movement override (hold-to-move)
-    updateMovementFromDpad();
-    const now = Date.now();
-
-    // Failsafe: if firing is held but something got stuck, unlock after 600ms
-    if (isFiring && lastFireTime > 0 && (now - lastFireTime) > 600) {
-        lastFireTime = -1e9;
-    }
-    
-    // Additional safeguard: cap rockets array to prevent memory issues
-    if (rockets.length > 5) {
-        rockets = rockets.slice(-5);
-    }
-
-    if (now - lastFireTime <= fireRate) return;
-
-    // Aim is stored in screen coords; convert to world coords for projectiles.
-    let aimXw = (Number.isFinite(aimX) ? aimX : mouseX) + camX;
-    let aimYw = (Number.isFinite(aimY) ? aimY : mouseY);
-
-    // Harden against rare NaN / Infinity input states (trackpads, pointer cancel, flight toggles).
-    if (!Number.isFinite(aimXw) || !Number.isFinite(aimYw)) {
-        aimXw = player.x + (player.facingRight ? 420 : -420);
-        aimYw = player.y - player.height * 0.35;
-    }
-
-    // Fire from the actual GUN BARREL (top barrel) - matches where gun visually points
-    const torsoW = player.width * 0.62;
-    const torsoY = -player.height * 0.34;
-    
-    // Shoulder position in LOCAL player coordinates
-    const shoulderX = torsoW/2 - 10;
-    const shoulderY = torsoY + 18;
-    
-    // EXTENDED barrel muzzle position in rotated arm space
-    const muzzleX = 132;  // Extended barrel tip
-    const muzzleY = 0;   // Single barrel center
-    
-    // Use arm angle directly - sprite flip handles left/right orientation
-    const clampedArmAngle = Math.max(-1.57, Math.min(1.57, player.armAngle));
-    
-    // Apply rotation to muzzle position (standard 2D rotation)
-    const rotatedMuzzleX = muzzleX * Math.cos(clampedArmAngle) - muzzleY * Math.sin(clampedArmAngle);
-    const rotatedMuzzleY = muzzleX * Math.sin(clampedArmAngle) + muzzleY * Math.cos(clampedArmAngle);
-    
-    // Add shoulder offset to get position relative to player origin
-    const gunLocalX = shoulderX + rotatedMuzzleX;
-    const gunLocalY = shoulderY + rotatedMuzzleY;
-    
-    // Convert to world coordinates
-    const gunX = player.x + (player.facingRight ? gunLocalX : -gunLocalX);
-    const gunY = player.y + gunLocalY;
-
-    // Fire in the EXACT direction the gun is visually pointing
-    const fireDistance = 2000;
-    let targetX, targetY;
-    
-    if (player.facingRight) {
-        targetX = gunX + Math.cos(clampedArmAngle) * fireDistance;
-        targetY = gunY + Math.sin(clampedArmAngle) * fireDistance;
-    } else {
-        targetX = gunX - Math.cos(clampedArmAngle) * fireDistance;
-        targetY = gunY + Math.sin(clampedArmAngle) * fireDistance;
-    }
-
-    fireRocket(gunX, gunY, targetX, targetY);
-    lastFireTime = now;
-}
-
-
 function activateFlight() {
     if (flyCharge >= FLY_CHARGE_MAX && !player.isFlying) {
         // Can't fly inside cave — you'd hit the ceiling!
@@ -6994,97 +6921,94 @@ function draw() {
             ctx.restore();
         }
         
-        // Shield visual - GOLD Energy bubble with lightning effects
+        // Shield visual — player body TRANSFORMS to vibrant gold with electrical arcs
         if (Date.now() < player.shieldUntil && player.shieldHits > 0) {
             const shieldTime = Date.now() * 0.003;
-            const centerX = player.x;
-            const centerY = player.y - player.height * 0.3;
-            const radiusX = player.width * 1.2;
-            const radiusY = player.height * 0.9;
-            
+            const cx = player.x;
+            const cy = player.y - player.height * 0.3;
+            const pulse = 0.7 + Math.sin(shieldTime * 3.5) * 0.3;
+
             ctx.save();
-            
-            // Outer energy glow (pulsing) - GOLD
-            const pulse = 0.6 + Math.sin(shieldTime * 2) * 0.2;
-            ctx.globalAlpha = pulse * 0.8;
-            ctx.strokeStyle = '#ffcc00';
-            ctx.lineWidth = 3;
-            ctx.shadowColor = '#ffaa00';
-            ctx.shadowBlur = 25;
+
+            // === GOLD BODY WASH — overlay on top of player to tint them gold ===
+            ctx.globalCompositeOperation = 'source-atop';
+            const bodyWash = ctx.createRadialGradient(cx, cy, 0, cx, cy, player.height * 0.8);
+            bodyWash.addColorStop(0,   `rgba(255, 220, 60, ${0.55 + pulse * 0.15})`);
+            bodyWash.addColorStop(0.5, `rgba(220, 160, 0,  ${0.4  + pulse * 0.1})`);
+            bodyWash.addColorStop(1,   `rgba(180, 110, 0,  0.15)`);
+            ctx.fillStyle = bodyWash;
             ctx.beginPath();
-            ctx.ellipse(centerX, centerY, radiusX, radiusY, 0, 0, Math.PI * 2);
-            ctx.stroke();
-            
-            // Inner bubble gradient - GOLD
-            ctx.globalAlpha = 0.15 + Math.sin(shieldTime * 3) * 0.05;
-            const bubbleGrad = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, radiusY);
-            bubbleGrad.addColorStop(0, 'rgba(255, 220, 100, 0.3)');
-            bubbleGrad.addColorStop(0.5, 'rgba(255, 180, 50, 0.15)');
-            bubbleGrad.addColorStop(0.8, 'rgba(200, 150, 0, 0.1)');
-            bubbleGrad.addColorStop(1, 'rgba(255, 200, 0, 0.3)');
-            ctx.fillStyle = bubbleGrad;
-            ctx.beginPath();
-            ctx.ellipse(centerX, centerY, radiusX * 0.95, radiusY * 0.95, 0, 0, Math.PI * 2);
+            ctx.ellipse(cx, cy, player.width * 1.1, player.height * 0.9, 0, 0, Math.PI * 2);
             ctx.fill();
-            
-            // Lightning arcs crawling on the shield surface - GOLD
-            ctx.globalAlpha = 0.7 + Math.random() * 0.3;
-            ctx.strokeStyle = '#ffffff';
-            ctx.shadowColor = '#ffaa00';
-            ctx.shadowBlur = 15;
-            ctx.lineWidth = 2;
-            
-            // Draw 3-5 lightning arcs
-            const numArcs = 3 + Math.floor(Math.random() * 3);
-            for (let a = 0; a < numArcs; a++) {
-                const startAngle = shieldTime + a * 1.5 + Math.random() * 0.5;
-                const arcLength = 0.5 + Math.random() * 0.8;
-                
-                ctx.beginPath();
-                let prevX = centerX + Math.cos(startAngle) * radiusX;
-                let prevY = centerY + Math.sin(startAngle) * radiusY;
-                ctx.moveTo(prevX, prevY);
-                
-                // Jagged lightning along the arc
-                const steps = 6 + Math.floor(Math.random() * 4);
-                for (let i = 1; i <= steps; i++) {
-                    const angle = startAngle + (i / steps) * arcLength;
-                    const jitterX = (Math.random() - 0.5) * 8;
-                    const jitterY = (Math.random() - 0.5) * 8;
-                    const x = centerX + Math.cos(angle) * radiusX + jitterX;
-                    const y = centerY + Math.sin(angle) * radiusY + jitterY;
-                    ctx.lineTo(x, y);
+            ctx.globalCompositeOperation = 'source-over';
+
+            // === OUTER GOLD AURA — tight glow hugging the body silhouette ===
+            ctx.globalAlpha = pulse * 0.65;
+            ctx.shadowColor = '#ffcc00';
+            ctx.shadowBlur = 40;
+            ctx.strokeStyle = `rgba(255, 210, 30, ${pulse * 0.9})`;
+            ctx.lineWidth = 2.5;
+            ctx.beginPath();
+            ctx.ellipse(cx, cy, player.width * 0.85, player.height * 0.78, 0, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.shadowBlur = 0;
+            ctx.globalAlpha = 1;
+
+            // === ELECTRICAL ARCS — originate from body, not orbiting bubble ===
+            // Fixed anchor points on the player's body (head, shoulders, hands, feet)
+            const anchors = [
+                { x: cx,                          y: cy - player.height * 0.55 }, // head
+                { x: cx - player.width * 0.55,    y: cy - player.height * 0.15 }, // left shoulder
+                { x: cx + player.width * 0.55,    y: cy - player.height * 0.15 }, // right shoulder
+                { x: cx - player.width * 0.3,     y: cy + player.height * 0.55 }, // left foot
+                { x: cx + player.width * 0.3,     y: cy + player.height * 0.55 }, // right foot
+            ];
+
+            ctx.lineWidth = 1.5;
+            ctx.shadowBlur = 10;
+
+            anchors.forEach((anchor, i) => {
+                // Each anchor fires 1-2 short arcs outward
+                const numBolts = 1 + (i % 2);
+                for (let b = 0; b < numBolts; b++) {
+                    const baseAngle = shieldTime * 2.2 + i * 1.26 + b * 2.1;
+                    const arcReach = 18 + Math.random() * 22;
+                    const segments = 4 + Math.floor(Math.random() * 3);
+
+                    // Alternate white-hot core and gold outer arc
+                    const isCore = (b === 0);
+                    ctx.strokeStyle = isCore ? `rgba(255,255,200,${0.85 + Math.random()*0.15})` : `rgba(255,190,30,${0.5 + Math.random()*0.3})`;
+                    ctx.shadowColor  = isCore ? '#ffffff' : '#ffcc00';
+                    ctx.globalAlpha  = 0.6 + Math.random() * 0.4;
+
+                    ctx.beginPath();
+                    ctx.moveTo(anchor.x, anchor.y);
+                    let bx = anchor.x, by = anchor.y;
+                    for (let s = 1; s <= segments; s++) {
+                        const t = s / segments;
+                        const angle = baseAngle + (Math.random() - 0.5) * 1.4;
+                        bx += Math.cos(angle) * (arcReach / segments) + (Math.random() - 0.5) * 7;
+                        by += Math.sin(angle) * (arcReach / segments) + (Math.random() - 0.5) * 7;
+                        ctx.lineTo(bx, by);
+                    }
+                    ctx.stroke();
                 }
-                ctx.stroke();
-            }
-            
-            // Occasional bright flash/spark - GOLD
-            if (Math.random() < 0.15) {
-                const sparkAngle = Math.random() * Math.PI * 2;
-                const sparkX = centerX + Math.cos(sparkAngle) * radiusX * 0.9;
-                const sparkY = centerY + Math.sin(sparkAngle) * radiusY * 0.9;
-                
+            });
+
+            // === OCCASIONAL BRIGHT SPARK at random body point ===
+            if (Math.random() < 0.25) {
+                const spark = anchors[Math.floor(Math.random() * anchors.length)];
+                ctx.globalAlpha = 0.9;
                 ctx.fillStyle = '#ffffff';
-                ctx.shadowColor = '#ffcc00';
-                ctx.shadowBlur = 20;
+                ctx.shadowColor = '#ffee44';
+                ctx.shadowBlur = 18;
                 ctx.beginPath();
-                ctx.arc(sparkX, sparkY, 3 + Math.random() * 3, 0, Math.PI * 2);
+                ctx.arc(spark.x + (Math.random()-0.5)*12, spark.y + (Math.random()-0.5)*12, 2.5, 0, Math.PI * 2);
                 ctx.fill();
             }
-            
-            // Energy field lines (subtle hexagonal pattern) - GOLD
-            ctx.globalAlpha = 0.1;
-            ctx.strokeStyle = '#ffaa00';
-            ctx.lineWidth = 1;
+
             ctx.shadowBlur = 0;
-            for (let i = 0; i < 8; i++) {
-                const angle = (i / 8) * Math.PI * 2 + shieldTime * 0.2;
-                ctx.beginPath();
-                ctx.moveTo(centerX, centerY);
-                ctx.lineTo(centerX + Math.cos(angle) * radiusX * 0.9, centerY + Math.sin(angle) * radiusY * 0.9);
-                ctx.stroke();
-            }
-            
+            ctx.globalAlpha = 1;
             ctx.restore();
         }
     }    ctx.restore();
