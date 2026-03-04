@@ -1203,13 +1203,17 @@ function drawPlayer(x, y, width, height, legAngle, isFlying, facingRight, armAng
     ctx.scale(s, s);
 
     const ch = getChar();
-    const steelDark = '#0b111a';
-    const steelMid  = '#223246';
-    const steelLite = '#4e6a86';
-    const trim      = ch.trim;
-    // Bold center glow to match character's color
-    ctx.shadowColor = `rgba(${ch.trimRGB}, 0.95)`;
-    ctx.shadowBlur = 28;
+    const isPoweredUp = Date.now() < player.damageBoostUntil;
+
+    // When powered up: armor plates turn gold, glow shifts to gold
+    const steelDark = isPoweredUp ? '#1a1100' : '#0b111a';
+    const steelMid  = isPoweredUp ? '#3a2800' : '#223246';
+    const steelLite = isPoweredUp ? '#7a5a00' : '#4e6a86';
+    const trim      = isPoweredUp ? '#ffcc00' : ch.trim;
+
+    // Powered-up: gold glow at normal intensity (not cranked — matches standard electricity)
+    ctx.shadowColor = isPoweredUp ? 'rgba(255, 200, 0, 0.95)' : `rgba(${ch.trimRGB}, 0.95)`;
+    ctx.shadowBlur  = 28;
     ctx.shadowOffsetX = 0;
     ctx.shadowOffsetY = 0;
     const visorGold = '#ffcc40';
@@ -1715,106 +1719,67 @@ function drawPlayer(x, y, width, height, legAngle, isFlying, facingRight, armAng
     const elecTime = Date.now();
     const elecChance = Math.sin(elecTime * 0.002) * Math.cos(elecTime * 0.001);
     const boosted = (elecTime < player.damageBoostUntil);
-    
-    // During overcharge: constant arcs, much larger, gold/orange color
-    const arcFreq = boosted ? 0.7 : 0.25;
-    const arcThreshold = boosted ? -0.5 : 0.3;
-    
+
+    // Boosted uses same frequency/size as normal — just gold instead of cyan
+    const arcFreq      = 0.25;
+    const arcThreshold = 0.3;
+
     if (elecChance > arcThreshold && Math.random() < arcFreq) {
         ctx.save();
-        const arcColor = boosted ? '#ffaa00' : '#00ffff';
-        const arcColor2 = boosted ? '#ffcc44' : '#00ffff';
+        const arcColor  = boosted ? '#ffcc00' : '#00ffff';
+        const arcColor2 = boosted ? '#ffdd44' : '#00ffff';
         ctx.strokeStyle = arcColor;
         ctx.shadowColor = arcColor;
-        ctx.shadowBlur = boosted ? 35 : 20;
-        ctx.lineWidth = boosted ? 3 : 2;
+        ctx.shadowBlur  = 20;
+        ctx.lineWidth   = 2;
         ctx.globalAlpha = 0.8 + Math.random() * 0.2;
-        
-        // Draw arcs — more and bigger when boosted
-        const numArcs = boosted ? (2 + Math.floor(Math.random() * 3)) : (1 + Math.floor(Math.random() * 2));
+
+        const numArcs = 1 + Math.floor(Math.random() * 2);
         for (let a = 0; a < numArcs; a++) {
-            const reach = boosted ? 2.5 : 1.2;
-            const startX = (Math.random() - 0.5) * width * reach;
+            const startX = (Math.random() - 0.5) * width * 1.2;
             const startY = torsoY + Math.random() * torsoH;
-            
+
             ctx.beginPath();
             ctx.moveTo(startX, startY);
-            
+
             let px = startX, py = startY;
-            const segments = boosted ? (5 + Math.floor(Math.random() * 4)) : (3 + Math.floor(Math.random() * 3));
-            const jitter = boosted ? 35 : 20;
+            const segments = 3 + Math.floor(Math.random() * 3);
             for (let i = 0; i < segments; i++) {
-                const nx = px + (Math.random() - 0.5) * jitter;
-                const ny = py + (Math.random() - 0.5) * jitter * 1.2;
+                const nx = px + (Math.random() - 0.5) * 20;
+                const ny = py + (Math.random() - 0.5) * 20 * 1.2;
                 ctx.lineTo(nx, ny);
                 px = nx; py = ny;
             }
             ctx.stroke();
-            
+
             // Spark at end
-            ctx.fillStyle = boosted ? '#ffffff' : '#ffffff';
+            ctx.fillStyle = '#ffffff';
             ctx.beginPath();
-            ctx.arc(px, py, boosted ? (3 + Math.random() * 3) : (2 + Math.random() * 2), 0, Math.PI * 2);
+            ctx.arc(px, py, 2 + Math.random() * 2, 0, Math.PI * 2);
             ctx.fill();
-        }
-        
-        // Boosted: extra arcs extending from weapon barrel and legs
-        if (boosted) {
-            ctx.strokeStyle = arcColor2;
-            ctx.lineWidth = 2;
-            // Weapon arc
-            const barrelX = shoulderX + 50;
-            ctx.beginPath();
-            ctx.moveTo(barrelX, shoulderY);
-            let bx = barrelX, by = shoulderY;
-            for (let i = 0; i < 4; i++) {
-                bx += 10 + Math.random() * 15;
-                by += (Math.random() - 0.5) * 20;
-                ctx.lineTo(bx, by);
-            }
-            ctx.stroke();
-            
-            // Leg arcs
-            for (const legSide of [-1, 1]) {
-                if (Math.random() < 0.4) {
-                    ctx.beginPath();
-                    const lx = legSide * width * 0.2;
-                    const ly = height * 0.3;
-                    ctx.moveTo(lx, ly);
-                    let lax = lx, lay = ly;
-                    for (let i = 0; i < 3; i++) {
-                        lax += (Math.random() - 0.5) * 25;
-                        lay += 8 + Math.random() * 12;
-                        ctx.lineTo(lax, lay);
-                    }
-                    ctx.stroke();
-                }
-            }
         }
         ctx.restore();
     }
-    
-    // Occasional big discharge
-    const bigThreshold = boosted ? 0.2 : 0.6;
-    const bigFreq = boosted ? 0.3 : 0.12;
+
+    // Occasional big discharge — same as normal
+    const bigThreshold = 0.6;
+    const bigFreq      = 0.12;
     if (elecChance > bigThreshold && Math.random() < bigFreq) {
         ctx.save();
         const bigColor = boosted ? '#ffdd44' : '#ffff00';
         ctx.strokeStyle = bigColor;
         ctx.shadowColor = bigColor;
-        ctx.shadowBlur = boosted ? 40 : 25;
-        ctx.lineWidth = boosted ? 4 : 3;
+        ctx.shadowBlur  = 25;
+        ctx.lineWidth   = 3;
         ctx.globalAlpha = 0.9;
-        
-        // Big arc across body (wider when boosted)
-        const arcWidth = boosted ? width * 1.2 : width * 0.6;
+
+        const arcWidth = width * 0.6;
         ctx.beginPath();
         ctx.moveTo(-arcWidth, torsoY + torsoH * 0.3);
         let px = -arcWidth, py = torsoY + torsoH * 0.3;
-        const bigSegs = boosted ? 12 : 8;
-        for (let i = 0; i < bigSegs; i++) {
-            px += (arcWidth * 2) / bigSegs;
-            py += (Math.random() - 0.5) * (boosted ? 30 : 20);
+        for (let i = 0; i < 8; i++) {
+            px += (arcWidth * 2) / 8;
+            py += (Math.random() - 0.5) * 20;
             ctx.lineTo(px, py);
         }
         ctx.stroke();
@@ -6889,25 +6854,83 @@ function draw() {
 
         drawPlayer(player.x, player.y, player.width, player.height, player.legAngle, player.isFlying, player.facingRight, player.armAngle);
         
-        // WEAPONS OVERCHARGE AURA — gold pulsing glow when active
-        if (Date.now() < player.damageBoostUntil) {
-            const boostRemain = player.damageBoostUntil - Date.now();
-            const boostPulse = 0.18 + Math.sin(Date.now() * 0.006) * 0.08;
-            // Flash faster when about to expire (last 5s)
-            const urgency = boostRemain < 5000 ? (0.1 + Math.sin(Date.now() * 0.02) * 0.1) : 0;
+        // SHIELD VISUAL — gold energy bubble when shield is active
+        if (Date.now() < player.shieldUntil && player.shieldHits > 0) {
+            const shieldTime = Date.now() * 0.003;
+            const cx = player.x;
+            const cy = player.y - player.height * 0.3;
+            const radiusX = player.width * 1.25;
+            const radiusY = player.height * 0.92;
+            const pulse = 0.55 + Math.sin(shieldTime * 2.5) * 0.2;
+
             ctx.save();
-            ctx.globalAlpha = boostPulse + urgency;
-            const auraGrad = ctx.createRadialGradient(player.x, player.y, 5, player.x, player.y, 60);
-            auraGrad.addColorStop(0, 'rgba(255, 200, 40, 0.4)');
-            auraGrad.addColorStop(0.5, 'rgba(255, 160, 20, 0.15)');
-            auraGrad.addColorStop(1, 'rgba(255, 120, 10, 0)');
-            ctx.fillStyle = auraGrad;
+
+            // Outer ring — gold
+            ctx.globalAlpha = pulse * 0.85;
+            ctx.strokeStyle = '#ffcc00';
+            ctx.lineWidth = 2.5;
+            ctx.shadowColor = '#ffaa00';
+            ctx.shadowBlur = 28;
             ctx.beginPath();
-            ctx.arc(player.x, player.y, 60, 0, Math.PI * 2);
+            ctx.ellipse(cx, cy, radiusX, radiusY, 0, 0, Math.PI * 2);
+            ctx.stroke();
+
+            // Inner fill — gold
+            ctx.globalAlpha = 0.1 + Math.sin(shieldTime * 3) * 0.03;
+            const bubbleGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, radiusY);
+            bubbleGrad.addColorStop(0,   'rgba(255, 220, 80, 0.35)');
+            bubbleGrad.addColorStop(0.6, 'rgba(220, 160, 20, 0.15)');
+            bubbleGrad.addColorStop(1,   'rgba(180, 120,  0, 0.05)');
+            ctx.fillStyle = bubbleGrad;
+            ctx.beginPath();
+            ctx.ellipse(cx, cy, radiusX * 0.95, radiusY * 0.95, 0, 0, Math.PI * 2);
             ctx.fill();
+
+            // Lightning arcs on surface — gold/white
+            ctx.globalAlpha = 0.7 + Math.random() * 0.3;
+            ctx.strokeStyle = '#fff5aa';
+            ctx.shadowColor = '#ffcc00';
+            ctx.shadowBlur = 12;
+            ctx.lineWidth = 1.5;
+            const numArcs = 3 + Math.floor(Math.random() * 3);
+            for (let a = 0; a < numArcs; a++) {
+                const startAngle = shieldTime + a * 1.5 + Math.random() * 0.5;
+                const arcLen = 0.5 + Math.random() * 0.8;
+                ctx.beginPath();
+                let px = cx + Math.cos(startAngle) * radiusX;
+                let py = cy + Math.sin(startAngle) * radiusY;
+                ctx.moveTo(px, py);
+                const steps = 5 + Math.floor(Math.random() * 4);
+                for (let i = 1; i <= steps; i++) {
+                    const ang = startAngle + (i / steps) * arcLen;
+                    px = cx + Math.cos(ang) * radiusX + (Math.random() - 0.5) * 7;
+                    py = cy + Math.sin(ang) * radiusY + (Math.random() - 0.5) * 7;
+                    ctx.lineTo(px, py);
+                }
+                ctx.stroke();
+            }
+
+            // Occasional gold spark
+            if (Math.random() < 0.18) {
+                const sa = Math.random() * Math.PI * 2;
+                ctx.globalAlpha = 0.9;
+                ctx.fillStyle = '#ffffff';
+                ctx.shadowColor = '#ffcc00';
+                ctx.shadowBlur = 18;
+                ctx.beginPath();
+                ctx.arc(
+                    cx + Math.cos(sa) * radiusX * 0.92,
+                    cy + Math.sin(sa) * radiusY * 0.92,
+                    2 + Math.random() * 2.5, 0, Math.PI * 2
+                );
+                ctx.fill();
+            }
+
+            ctx.shadowBlur = 0;
+            ctx.globalAlpha = 1;
             ctx.restore();
         }
-        
+
         // DEBUG: Draw bright cyan circle at calculated gun barrel position
         if (window.debugGunX && window.debugGunY) {
             ctx.save();
@@ -6921,96 +6944,6 @@ function draw() {
             ctx.restore();
         }
         
-        // Shield visual — player body TRANSFORMS to vibrant gold with electrical arcs
-        if (Date.now() < player.shieldUntil && player.shieldHits > 0) {
-            const shieldTime = Date.now() * 0.003;
-            const cx = player.x;
-            const cy = player.y - player.height * 0.3;
-            const pulse = 0.7 + Math.sin(shieldTime * 3.5) * 0.3;
-
-            ctx.save();
-
-            // === GOLD BODY WASH — overlay on top of player to tint them gold ===
-            ctx.globalCompositeOperation = 'source-atop';
-            const bodyWash = ctx.createRadialGradient(cx, cy, 0, cx, cy, player.height * 0.8);
-            bodyWash.addColorStop(0,   `rgba(255, 220, 60, ${0.55 + pulse * 0.15})`);
-            bodyWash.addColorStop(0.5, `rgba(220, 160, 0,  ${0.4  + pulse * 0.1})`);
-            bodyWash.addColorStop(1,   `rgba(180, 110, 0,  0.15)`);
-            ctx.fillStyle = bodyWash;
-            ctx.beginPath();
-            ctx.ellipse(cx, cy, player.width * 1.1, player.height * 0.9, 0, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.globalCompositeOperation = 'source-over';
-
-            // === OUTER GOLD AURA — tight glow hugging the body silhouette ===
-            ctx.globalAlpha = pulse * 0.65;
-            ctx.shadowColor = '#ffcc00';
-            ctx.shadowBlur = 40;
-            ctx.strokeStyle = `rgba(255, 210, 30, ${pulse * 0.9})`;
-            ctx.lineWidth = 2.5;
-            ctx.beginPath();
-            ctx.ellipse(cx, cy, player.width * 0.85, player.height * 0.78, 0, 0, Math.PI * 2);
-            ctx.stroke();
-            ctx.shadowBlur = 0;
-            ctx.globalAlpha = 1;
-
-            // === ELECTRICAL ARCS — originate from body, not orbiting bubble ===
-            // Fixed anchor points on the player's body (head, shoulders, hands, feet)
-            const anchors = [
-                { x: cx,                          y: cy - player.height * 0.55 }, // head
-                { x: cx - player.width * 0.55,    y: cy - player.height * 0.15 }, // left shoulder
-                { x: cx + player.width * 0.55,    y: cy - player.height * 0.15 }, // right shoulder
-                { x: cx - player.width * 0.3,     y: cy + player.height * 0.55 }, // left foot
-                { x: cx + player.width * 0.3,     y: cy + player.height * 0.55 }, // right foot
-            ];
-
-            ctx.lineWidth = 1.5;
-            ctx.shadowBlur = 10;
-
-            anchors.forEach((anchor, i) => {
-                // Each anchor fires 1-2 short arcs outward
-                const numBolts = 1 + (i % 2);
-                for (let b = 0; b < numBolts; b++) {
-                    const baseAngle = shieldTime * 2.2 + i * 1.26 + b * 2.1;
-                    const arcReach = 18 + Math.random() * 22;
-                    const segments = 4 + Math.floor(Math.random() * 3);
-
-                    // Alternate white-hot core and gold outer arc
-                    const isCore = (b === 0);
-                    ctx.strokeStyle = isCore ? `rgba(255,255,200,${0.85 + Math.random()*0.15})` : `rgba(255,190,30,${0.5 + Math.random()*0.3})`;
-                    ctx.shadowColor  = isCore ? '#ffffff' : '#ffcc00';
-                    ctx.globalAlpha  = 0.6 + Math.random() * 0.4;
-
-                    ctx.beginPath();
-                    ctx.moveTo(anchor.x, anchor.y);
-                    let bx = anchor.x, by = anchor.y;
-                    for (let s = 1; s <= segments; s++) {
-                        const t = s / segments;
-                        const angle = baseAngle + (Math.random() - 0.5) * 1.4;
-                        bx += Math.cos(angle) * (arcReach / segments) + (Math.random() - 0.5) * 7;
-                        by += Math.sin(angle) * (arcReach / segments) + (Math.random() - 0.5) * 7;
-                        ctx.lineTo(bx, by);
-                    }
-                    ctx.stroke();
-                }
-            });
-
-            // === OCCASIONAL BRIGHT SPARK at random body point ===
-            if (Math.random() < 0.25) {
-                const spark = anchors[Math.floor(Math.random() * anchors.length)];
-                ctx.globalAlpha = 0.9;
-                ctx.fillStyle = '#ffffff';
-                ctx.shadowColor = '#ffee44';
-                ctx.shadowBlur = 18;
-                ctx.beginPath();
-                ctx.arc(spark.x + (Math.random()-0.5)*12, spark.y + (Math.random()-0.5)*12, 2.5, 0, Math.PI * 2);
-                ctx.fill();
-            }
-
-            ctx.shadowBlur = 0;
-            ctx.globalAlpha = 1;
-            ctx.restore();
-        }
     }    ctx.restore();
 
     // Underwater blue tint overlay (screen-space, over everything)
