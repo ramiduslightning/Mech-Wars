@@ -423,7 +423,7 @@
             <div class="subtitle">◆ MISSION FAILED ◆</div>
             <div id="finalScore">0</div>
             <div class="instructions">TARGETS ELIMINATED</div>
-            <button class="start-btn" id="restartBtn" onclick="try{startGame();}catch(e){console.error(e);alert("Start error: "+e.message);}">↻ REDEPLOY</button>
+            <button class="start-btn" id="restartBtn">↻ REDEPLOY</button>
         </div>
     </div>
     
@@ -644,6 +644,69 @@ const AudioSystem = {
         clickGain.gain.exponentialRampToValueAtTime(0.001, t + 0.06);
         clickOsc.start(t);
         clickOsc.stop(t + 0.06);
+    },
+
+    playTurretCharge() {
+        if (!this.enabled || !this.ctx) return;
+        const t = this.ctx.currentTime;
+        // Rising alien whine — low to high over ~1.2s
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        const filter = this.ctx.createBiquadFilter();
+        osc.connect(filter); filter.connect(gain); gain.connect(this.ctx.destination);
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(80, t);
+        osc.frequency.exponentialRampToValueAtTime(1800, t + 1.1);
+        filter.type = 'bandpass';
+        filter.frequency.setValueAtTime(300, t);
+        filter.frequency.linearRampToValueAtTime(2200, t + 1.1);
+        filter.Q.setValueAtTime(5, t);
+        gain.gain.setValueAtTime(0.0, t);
+        gain.gain.linearRampToValueAtTime(0.22, t + 0.15);
+        gain.gain.setValueAtTime(0.22, t + 0.9);
+        gain.gain.exponentialRampToValueAtTime(0.01, t + 1.15);
+        osc.start(t); osc.stop(t + 1.2);
+        // Harmonic layer
+        const osc2 = this.ctx.createOscillator();
+        const gain2 = this.ctx.createGain();
+        osc2.connect(gain2); gain2.connect(this.ctx.destination);
+        osc2.type = 'square';
+        osc2.frequency.setValueAtTime(160, t);
+        osc2.frequency.exponentialRampToValueAtTime(3600, t + 1.1);
+        gain2.gain.setValueAtTime(0.0, t);
+        gain2.gain.linearRampToValueAtTime(0.06, t + 0.2);
+        gain2.gain.exponentialRampToValueAtTime(0.001, t + 1.15);
+        osc2.start(t); osc2.stop(t + 1.2);
+    },
+
+    playTurretFire() {
+        if (!this.enabled || !this.ctx) return;
+        const t = this.ctx.currentTime;
+        // Deep crack + sustained beam hiss
+        const noise = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        noise.connect(gain); gain.connect(this.ctx.destination);
+        noise.type = 'sawtooth';
+        noise.frequency.setValueAtTime(2200, t);
+        noise.frequency.exponentialRampToValueAtTime(200, t + 0.3);
+        gain.gain.setValueAtTime(0.35, t);
+        gain.gain.exponentialRampToValueAtTime(0.01, t + 0.4);
+        noise.start(t); noise.stop(t + 0.4);
+        // Beam sustain hiss
+        const buf = this.ctx.createBuffer(1, this.ctx.sampleRate * 1.2, this.ctx.sampleRate);
+        const d = buf.getChannelData(0);
+        for (let i = 0; i < d.length; i++) d[i] = (Math.random()*2-1) * (1 - i/d.length) * 0.6;
+        const src = this.ctx.createBufferSource();
+        src.buffer = buf;
+        const hissFilter = this.ctx.createBiquadFilter();
+        hissFilter.type = 'bandpass';
+        hissFilter.frequency.setValueAtTime(1800, t);
+        hissFilter.Q.setValueAtTime(2, t);
+        const hissGain = this.ctx.createGain();
+        src.connect(hissFilter); hissFilter.connect(hissGain); hissGain.connect(this.ctx.destination);
+        hissGain.gain.setValueAtTime(0.18, t);
+        hissGain.gain.exponentialRampToValueAtTime(0.01, t + 1.2);
+        src.start(t);
     },
 
     playSharkFire() {
@@ -892,6 +955,10 @@ let gameRunning = false, score = 0, kills = 0, flyCharge = 0, wave = 1;
 // Encounter-based spawning: enemies appear as you explore forward (no camping spawns)
 let nextEncounterX = 650; // world x threshold to trigger the next group
 let techPlatforms = [];   // floating platforms to jump on
+let turrets = [];         // stationary cannon towers (post-pool)
+let mines = [];           // proximity mines (post-pool)
+let nextTurretX = 13000; // first turret spawns after pool exit (~12500)
+let nextMineFieldX = 12200; // first mine field just after pool exit
 function getElevatorMaxRise() { return Math.min(200, (canvas.height - 120) * 0.45); }
 let healthPickups = [];   // collectible health crates
 let nextPlatformX = 1600;  // world x for next platform spawn
@@ -2710,6 +2777,9 @@ function spawnEnemy() {
     if (baseX > (czStart - 300) && baseX < (czEnd + 300)) {
         return;
     }
+    // Prevent enemies spawning near a turret — let player fight it 1v1
+    if (turrets.some(t => Math.abs(baseX - t.x) < 550)) return;
+
     const groundY = canvas.height - 120;  // Raised for mobile visibility
 
     const enemy = {
@@ -3093,6 +3163,532 @@ function spawnDrone() {
         lastShot: Date.now(),
         shotRate: 800 + Math.random() * 600 // Fire every 0.8-1.4 seconds
     });
+}
+
+// ============================================================
+// TURRET TOWERS — stationary cannons, appear after the pool
+// ============================================================
+function spawnTurret() {
+    const groundY = canvas.height - 120;
+    turrets.push({
+        x: nextTurretX,
+        y: groundY,
+        health: 350 + difficulty * 50,
+        maxHealth: 350 + difficulty * 50,
+        beamFiring: false,
+        beamStartTime: 0,
+        beamDuration: 1400,
+        nextFireTime: Date.now() + 2800,
+        cooldown: 4000 + Math.random() * 800,
+        barrelAngle: -Math.PI / 5,
+        hitFlash: 0,
+        chargeSoundPlayed: false,
+    });
+    nextTurretX += 3500 + Math.random() * 2000;
+}
+
+function drawTurret(t) {
+    if (t.x < camX - 500 || t.x > camX + canvas.width + 500) return;
+    const now = Date.now();
+    const groundY = canvas.height - 120;
+    const flash = t.hitFlash > now;
+    const gasTime = now * 0.0008;
+
+    // === SHARED GEOMETRY (must match AI exactly) ===
+    const legH   = 90, legSpread = 60;
+    const mountH = 42;
+    const barrelL = 115, barrelR = 8, barrelSep = 14; // double barrel separation
+    const hW = 58, hH = 34;   // housing width/height
+    const pivotY  = groundY - legH - mountH;
+    const pivotX  = t.x;
+
+    // Charge level (0-1) for visual buildup
+    const chargeT = t.beamFiring ? 1.0 : Math.max(0, 1 - (t.nextFireTime - now) / 1200);
+
+    ctx.save();
+
+    // =====================================================
+    // DOUBLE LASER BEAMS (drawn first, behind cannon)
+    // =====================================================
+    // DOUBLE LASER BEAMS (drawn first, behind cannon)
+    // =====================================================
+    if (t.beamFiring) {
+        const age  = now - t.beamStartTime;
+        const life = Math.max(0, 1 - age / t.beamDuration);
+        const ang  = t.barrelAngle;
+        const beamLen = 1600;
+        const shieldActive = Date.now() < player.shieldUntil && player.shieldHits > 0;
+
+        const perpX = -Math.sin(ang) * barrelSep;
+        const perpY =  Math.cos(ang) * barrelSep;
+        const barrelStartX = pivotX + Math.cos(ang) * (hW * 0.5);
+        const barrelStartY = pivotY + Math.sin(ang) * (hW * 0.5);
+
+        // If shield up, find where beam hits the bubble and stop there
+        let effectiveBeamLen = beamLen;
+        let shieldHitX = null, shieldHitY = null;
+        if (shieldActive) {
+            const scx = player.x, scy = player.y - player.height * 0.3;
+            const srx = player.width * 1.25, sry = player.height * 0.92;
+            const beamDX = Math.cos(ang), beamDY = Math.sin(ang);
+            const mx0 = barrelStartX + Math.cos(ang) * barrelL;
+            const my0 = barrelStartY + Math.sin(ang) * barrelL;
+            for (let tt = 0; tt < beamLen; tt += 6) {
+                const bx = mx0 + beamDX * tt, by = my0 + beamDY * tt;
+                const ndx = (bx - scx) / srx, ndy = (by - scy) / sry;
+                if (ndx*ndx + ndy*ndy < 1.05) {
+                    effectiveBeamLen = tt;
+                    shieldHitX = bx; shieldHitY = by;
+                    break;
+                }
+            }
+        }
+
+        for (const sign of [-1, 1]) {
+            const mx = barrelStartX + Math.cos(ang) * barrelL + perpX * sign;
+            const my = barrelStartY + Math.sin(ang) * barrelL + perpY * sign;
+            const ex = mx + Math.cos(ang) * effectiveBeamLen;
+            const ey = my + Math.sin(ang) * effectiveBeamLen;
+
+            ctx.save();
+            ctx.lineCap = 'round';
+
+            // Wide outer glow
+            ctx.globalAlpha = life * 0.20;
+            ctx.strokeStyle = '#ff1100';
+            ctx.lineWidth = 26;
+            ctx.shadowColor = '#ff0000'; ctx.shadowBlur = 50;
+            ctx.beginPath(); ctx.moveTo(mx, my); ctx.lineTo(ex, ey); ctx.stroke();
+
+            // Mid glow
+            ctx.globalAlpha = life * 0.55;
+            ctx.strokeStyle = '#ff3300';
+            ctx.lineWidth = 7;
+            ctx.shadowColor = '#ff2200'; ctx.shadowBlur = 18;
+            ctx.beginPath(); ctx.moveTo(mx, my); ctx.lineTo(ex, ey); ctx.stroke();
+
+            // Hot white core
+            ctx.globalAlpha = life * 0.95;
+            ctx.strokeStyle = '#fffaf0';
+            ctx.lineWidth = 1.8;
+            ctx.shadowColor = '#ff8866'; ctx.shadowBlur = 5;
+            ctx.beginPath(); ctx.moveTo(mx, my); ctx.lineTo(ex, ey); ctx.stroke();
+
+            // Jagged electrical fringes
+            ctx.globalAlpha = life * 0.35;
+            ctx.strokeStyle = '#ff5533';
+            ctx.lineWidth = 1; ctx.shadowBlur = 4;
+            for (let i = 0; i < 4; i++) {
+                const offset = (Math.random() - 0.5) * 10;
+                const ox = -Math.sin(ang) * offset, oy = Math.cos(ang) * offset;
+                ctx.beginPath(); ctx.moveTo(mx + ox, my + oy); ctx.lineTo(ex + ox * 0.2, ey + oy * 0.2); ctx.stroke();
+            }
+            ctx.restore();
+        }
+
+        // Shield deflection splash — gold starburst where beam stops at shield
+        if (shieldActive && shieldHitX !== null) {
+            ctx.save();
+            const sp = 0.6 + Math.sin(now * 0.02) * 0.4;
+            ctx.globalAlpha = life * sp;
+            ctx.shadowColor = '#ffcc00'; ctx.shadowBlur = 28;
+            ctx.strokeStyle = '#ffdd44'; ctx.lineWidth = 2.5;
+            for (let i = 0; i < 10; i++) {
+                const sa = (i / 10) * Math.PI * 2 + now * 0.004;
+                const sr = 16 + Math.sin(now * 0.015 + i) * 5;
+                ctx.beginPath();
+                ctx.moveTo(shieldHitX + Math.cos(sa)*4, shieldHitY + Math.sin(sa)*4);
+                ctx.lineTo(shieldHitX + Math.cos(sa)*sr, shieldHitY + Math.sin(sa)*sr);
+                ctx.stroke();
+            }
+            ctx.globalAlpha = life * 0.45;
+            ctx.fillStyle = 'rgba(255,220,60,0.55)';
+            ctx.beginPath(); ctx.arc(shieldHitX, shieldHitY, 13, 0, Math.PI*2); ctx.fill();
+            ctx.shadowBlur = 0;
+            ctx.restore();
+        }
+
+        // Travelling spiral rings
+        ctx.save();
+        ctx.globalAlpha = life * 0.55;
+        ctx.strokeStyle = '#ff4422';
+        ctx.shadowColor = '#ff2200'; ctx.shadowBlur = 10;
+        ctx.lineWidth = 2;
+        const mxMid = barrelStartX;
+        const myMid = barrelStartY;
+        for (let i = 0; i < 9; i++) {
+            const along = ((i / 9) + (now * 0.0014 % 1)) % 1;
+            const dist = barrelL + effectiveBeamLen * along;
+            if (dist > barrelL + effectiveBeamLen - 10) continue;
+            const rx = mxMid + Math.cos(ang) * dist;
+            const ry = myMid + Math.sin(ang) * dist;
+            const ringR = 8 + Math.sin(along * Math.PI) * 4;
+            ctx.save();
+            ctx.translate(rx, ry);
+            ctx.rotate(ang + Math.PI / 2);
+            ctx.beginPath();
+            ctx.ellipse(0, 0, ringR * 0.38, ringR, 0, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.restore();
+        }
+        ctx.restore();
+    }
+
+    // =====================================================
+    // BASE + Z-BRACKET MOUNT
+    // =====================================================
+    ctx.translate(t.x, 0);
+
+    // Foot base plate — wide, armored
+    const baseW = legSpread * 2 + 20;
+    const baseGrad = ctx.createLinearGradient(-baseW/2, groundY - 20, baseW/2, groundY);
+    baseGrad.addColorStop(0, '#1e1e28');
+    baseGrad.addColorStop(0.5, '#111118');
+    baseGrad.addColorStop(1, '#07070c');
+    ctx.fillStyle = baseGrad;
+    ctx.shadowColor = 'rgba(160,8,8,0.4)'; ctx.shadowBlur = 8;
+    ctx.beginPath(); ctx.roundRect(-baseW/2, groundY - 20, baseW, 22, 3); ctx.fill();
+    ctx.strokeStyle = 'rgba(140,8,8,0.5)'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.roundRect(-baseW/2, groundY - 20, baseW, 22, 3); ctx.stroke();
+    // Bevel highlight top edge
+    ctx.strokeStyle = 'rgba(80,80,100,0.25)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(-baseW/2 + 4, groundY - 19); ctx.lineTo(baseW/2 - 4, groundY - 19); ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    // Z-bracket lower leg
+    ctx.save();
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = '#181820'; ctx.lineWidth = 16;
+    ctx.shadowColor = 'rgba(150,8,8,0.3)'; ctx.shadowBlur = 8;
+    ctx.beginPath(); ctx.moveTo(0, groundY - 18); ctx.lineTo(-16, groundY - legH * 0.52); ctx.stroke();
+    // Upper arm to pivot
+    ctx.beginPath(); ctx.moveTo(-16, groundY - legH * 0.52); ctx.lineTo(12, pivotY); ctx.stroke();
+    ctx.shadowBlur = 0;
+    // Bevel edges on bracket
+    ctx.strokeStyle = 'rgba(70,70,90,0.3)'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(2, groundY - 18); ctx.lineTo(-14, groundY - legH * 0.52); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(-14, groundY - legH * 0.52); ctx.lineTo(14, pivotY); ctx.stroke();
+    // Knee joint
+    ctx.fillStyle = '#202030';
+    ctx.shadowColor = 'rgba(160,10,10,0.5)'; ctx.shadowBlur = 10;
+    ctx.beginPath(); ctx.arc(-16, groundY - legH * 0.52, 11, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = 'rgba(150,10,10,0.6)'; ctx.lineWidth = 2; ctx.stroke();
+    ctx.shadowBlur = 0;
+    // Knee bolt
+    ctx.fillStyle = '#0e0e16';
+    ctx.beginPath(); ctx.arc(-16, groundY - legH * 0.52, 5, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+
+    // =====================================================
+    // CANNON HOUSING + DOUBLE BARREL (rotate with angle)
+    // =====================================================
+    ctx.save();
+    ctx.translate(0, pivotY);
+    ctx.rotate(t.barrelAngle);
+
+    // --- HOUSING BODY ---
+    // Drop shadow for depth
+    ctx.shadowColor = 'rgba(0,0,0,0.7)'; ctx.shadowBlur = 18; ctx.shadowOffsetX = 5; ctx.shadowOffsetY = 5;
+    const hGrad = ctx.createLinearGradient(-hW/2, -hH/2, hW/2, hH/2);
+    hGrad.addColorStop(0, '#2a2a38');
+    hGrad.addColorStop(0.3, '#181824');
+    hGrad.addColorStop(0.7, '#0e0e18');
+    hGrad.addColorStop(1, '#06060e');
+    ctx.fillStyle = hGrad;
+    ctx.beginPath(); ctx.roundRect(-hW/2, -hH/2, hW, hH, 6); ctx.fill();
+    ctx.shadowOffsetX = 0; ctx.shadowOffsetY = 0; ctx.shadowBlur = 0;
+
+    // Housing border glow
+    ctx.strokeStyle = flash ? 'rgba(255,60,20,0.9)' : 'rgba(150,10,10,0.7)';
+    ctx.shadowColor = flash ? 'rgba(255,60,20,0.8)' : 'rgba(180,8,8,0.5)';
+    ctx.shadowBlur = flash ? 28 : 12;
+    ctx.lineWidth = 1.8; ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    // Bevel top-left highlight (fake 3D lighting)
+    ctx.strokeStyle = 'rgba(90,90,120,0.35)'; ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(-hW/2 + 6, -hH/2 + 2);
+    ctx.lineTo(hW/2 - 6, -hH/2 + 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(-hW/2 + 2, -hH/2 + 6);
+    ctx.lineTo(-hW/2 + 2, hH/2 - 6);
+    ctx.stroke();
+    // Bevel bottom-right shadow
+    ctx.strokeStyle = 'rgba(0,0,0,0.6)'; ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(-hW/2 + 6, hH/2 - 2);
+    ctx.lineTo(hW/2 - 6, hH/2 - 2);
+    ctx.stroke();
+
+    // Armour panel lines
+    ctx.strokeStyle = 'rgba(120,8,8,0.22)'; ctx.lineWidth = 0.8;
+    ctx.beginPath(); ctx.moveTo(-hW/2+10, -hH/2+6); ctx.lineTo(-hW/2+10, hH/2-6); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(hW/2-10, -hH/2+6); ctx.lineTo(hW/2-10, hH/2-6); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(-hW/2+10, 0); ctx.lineTo(hW/2-10, 0); ctx.stroke();
+
+    // === VOLUMETRIC RED SMOKE/FOG INSIDE HOUSING ===
+    ctx.save();
+    ctx.beginPath(); ctx.roundRect(-hW/2+2, -hH/2+2, hW-4, hH-4, 5); ctx.clip();
+
+    const baseFog = ctx.createLinearGradient(-hW/2, -hH/2, hW/2, hH/2);
+    baseFog.addColorStop(0, 'rgba(160,15,15,0.18)');
+    baseFog.addColorStop(0.5, 'rgba(200,20,20,0.22)');
+    baseFog.addColorStop(1, 'rgba(130,10,10,0.14)');
+    ctx.fillStyle = baseFog;
+    ctx.globalAlpha = 0.9;
+    ctx.fillRect(-hW/2, -hH/2, hW, hH);
+
+    // Drifting fog pockets
+    ctx.globalAlpha = 0.18;
+    for (let i = 0; i < 4; i++) {
+        const fx = -hW/3 + i * hW/4 + Math.sin(gasTime * 0.8 + i * 1.1) * hW * 0.2;
+        const fy = Math.cos(gasTime * 0.6 + i * 0.9) * hH * 0.3;
+        const fr = hH * 0.6;
+        const fg = ctx.createRadialGradient(fx, fy, 0, fx, fy, fr);
+        fg.addColorStop(0, 'rgba(255,40,40,0.7)');
+        fg.addColorStop(0.5, 'rgba(200,20,20,0.4)');
+        fg.addColorStop(1, 'rgba(140,8,8,0)');
+        ctx.fillStyle = fg;
+        ctx.beginPath(); ctx.arc(fx, fy, fr, 0, Math.PI * 2); ctx.fill();
+    }
+
+    // === RED ELECTRICAL ARCS INSIDE HOUSING ===
+    ctx.globalAlpha = 0.55 + Math.random() * 0.3;
+    ctx.strokeStyle = `rgba(255,${50+Math.random()*60},${20+Math.random()*20},${0.7+Math.random()*0.3})`;
+    ctx.shadowColor = '#ff2200'; ctx.shadowBlur = 8;
+    ctx.lineWidth = 1;
+    if (Math.random() < 0.7) {
+        const ax = -hW/2 + Math.random() * hW;
+        const ay = -hH/2 + Math.random() * hH;
+        ctx.beginPath(); ctx.moveTo(ax, ay);
+        let px2 = ax, py2 = ay;
+        for (let i = 0; i < 4; i++) {
+            px2 += (Math.random()-0.5)*14; py2 += (Math.random()-0.5)*10;
+            ctx.lineTo(px2, py2);
+        }
+        ctx.stroke();
+    }
+    ctx.shadowBlur = 0; ctx.globalAlpha = 1;
+    ctx.restore();
+
+    // --- DOUBLE BARREL ---
+    for (const sign of [-1, 1]) {
+        const bOffY = sign * barrelSep;
+
+        // Barrel outer — tapers slightly toward muzzle
+        const bGrad = ctx.createLinearGradient(hW/2, bOffY - barrelR, hW/2 + barrelL, bOffY + barrelR);
+        bGrad.addColorStop(0, '#222232');
+        bGrad.addColorStop(0.3, '#141420');
+        bGrad.addColorStop(1, '#08080e');
+        ctx.fillStyle = bGrad;
+        ctx.shadowColor = 'rgba(0,0,0,0.6)'; ctx.shadowBlur = 6; ctx.shadowOffsetY = sign * 3;
+        ctx.beginPath(); ctx.roundRect(hW/2, bOffY - barrelR, barrelL, barrelR * 2, 3); ctx.fill();
+        ctx.shadowOffsetY = 0; ctx.shadowBlur = 0;
+
+        // Barrel top bevel (light)
+        ctx.strokeStyle = 'rgba(75,75,100,0.3)'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(hW/2+2, bOffY - barrelR+1); ctx.lineTo(hW/2+barrelL-4, bOffY - barrelR+1); ctx.stroke();
+        // Barrel bottom shadow
+        ctx.strokeStyle = 'rgba(0,0,0,0.5)'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(hW/2+2, bOffY + barrelR-1); ctx.lineTo(hW/2+barrelL-4, bOffY + barrelR-1); ctx.stroke();
+
+        // Barrel border glow
+        ctx.strokeStyle = flash ? 'rgba(255,50,20,0.7)' : 'rgba(120,8,8,0.4)';
+        ctx.shadowColor = flash ? 'rgba(255,50,20,0.6)' : 'rgba(140,6,6,0.3)';
+        ctx.shadowBlur = flash ? 14 : 5;
+        ctx.lineWidth = 1; ctx.stroke();
+        ctx.shadowBlur = 0;
+
+        // Cooling ribs
+        ctx.strokeStyle = 'rgba(100,6,6,0.35)'; ctx.lineWidth = 2;
+        for (let r = hW/2 + 12; r < hW/2 + barrelL * 0.85; r += 11) {
+            ctx.beginPath(); ctx.moveTo(r, bOffY - barrelR - 2); ctx.lineTo(r, bOffY + barrelR + 2); ctx.stroke();
+        }
+        // Inner dark core
+        ctx.fillStyle = '#030308';
+        ctx.beginPath(); ctx.roundRect(hW/2+3, bOffY-barrelR+3, barrelL-7, barrelR*2-6, 2); ctx.fill();
+
+        // === VOLUMETRIC FOG INSIDE BARREL ===
+        ctx.save();
+        ctx.beginPath(); ctx.roundRect(hW/2+3, bOffY-barrelR+3, barrelL-7, barrelR*2-6, 2); ctx.clip();
+        ctx.globalAlpha = 0.25;
+        for (let i = 0; i < 3; i++) {
+            const bfx = hW/2 + 20 + i * 28 + Math.sin(gasTime * 1.2 + i * 1.3 + sign) * 15;
+            const bfg = ctx.createRadialGradient(bfx, bOffY, 0, bfx, bOffY, barrelR * 1.4);
+            bfg.addColorStop(0, 'rgba(255,30,20,0.55)');
+            bfg.addColorStop(0.5, 'rgba(180,15,10,0.3)');
+            bfg.addColorStop(1, 'rgba(120,8,5,0)');
+            ctx.fillStyle = bfg;
+            ctx.beginPath(); ctx.arc(bfx, bOffY, barrelR*1.4, 0, Math.PI*2); ctx.fill();
+        }
+        // Electrical arc inside barrel
+        if (Math.random() < 0.5) {
+            ctx.globalAlpha = 0.6;
+            ctx.strokeStyle = `rgba(255,${60+Math.random()*80},30,0.8)`;
+            ctx.shadowColor = '#ff1100'; ctx.shadowBlur = 6;
+            ctx.lineWidth = 0.8;
+            ctx.beginPath();
+            ctx.moveTo(hW/2 + 5, bOffY);
+            let ax2 = hW/2 + 5, ay2 = bOffY;
+            for (let i = 0; i < 5; i++) {
+                ax2 += 18 + Math.random()*8; ay2 += (Math.random()-0.5)*5;
+                ctx.lineTo(ax2, ay2);
+            }
+            ctx.stroke();
+            ctx.shadowBlur = 0;
+        }
+        ctx.globalAlpha = 1;
+        ctx.restore();
+
+        // === MUZZLE EMITTER — narrow, no orb ===
+        const muzzleX = hW/2 + barrelL;
+        const lg = chargeT;
+
+        // Muzzle ring
+        ctx.shadowColor = `rgba(255,20,10,${0.35+lg*0.6})`; ctx.shadowBlur = 6 + lg*18;
+        ctx.strokeStyle = `rgba(255,${25+lg*35},10,${0.4+lg*0.5})`;
+        ctx.lineWidth = 1.8;
+        ctx.beginPath(); ctx.arc(muzzleX, bOffY, 5 + lg*2.5, 0, Math.PI*2); ctx.stroke();
+        // Core nub
+        const mGrad = ctx.createRadialGradient(muzzleX-1, bOffY-1, 0, muzzleX, bOffY, 5);
+        mGrad.addColorStop(0, `rgba(${100+lg*155},${lg*18},${lg*8},1)`);
+        mGrad.addColorStop(1, '#050508');
+        ctx.fillStyle = mGrad;
+        ctx.beginPath(); ctx.arc(muzzleX, bOffY, 5, 0, Math.PI*2); ctx.fill();
+        // Hot pinpoint when firing
+        if (lg > 0.6) {
+            ctx.fillStyle = `rgba(255,220,200,${(lg-0.6)*2.5})`;
+            ctx.shadowColor = '#fff'; ctx.shadowBlur = 10;
+            ctx.beginPath(); ctx.arc(muzzleX, bOffY, 2, 0, Math.PI*2); ctx.fill();
+        }
+        ctx.shadowBlur = 0;
+    }
+
+    ctx.restore(); // end barrel rotate
+
+    // Pivot joint bolt (world space)
+    ctx.save();
+    ctx.translate(0, pivotY);
+    const pivotGrad = ctx.createRadialGradient(-4, -4, 1, 0, 0, 13);
+    pivotGrad.addColorStop(0, '#2e2e40');
+    pivotGrad.addColorStop(0.6, '#181824');
+    pivotGrad.addColorStop(1, '#0a0a12');
+    ctx.fillStyle = pivotGrad;
+    ctx.shadowColor = 'rgba(160,8,8,0.6)'; ctx.shadowBlur = 12;
+    ctx.beginPath(); ctx.arc(0, 0, 13, 0, Math.PI*2); ctx.fill();
+    ctx.strokeStyle = 'rgba(170,10,10,0.7)'; ctx.lineWidth = 2; ctx.stroke();
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = '#0a0a14';
+    ctx.beginPath(); ctx.arc(0, 0, 5, 0, Math.PI*2); ctx.fill();
+    ctx.restore();
+
+    // Health bar
+    const hpPct = t.health / t.maxHealth;
+    const barW = 84;
+    ctx.fillStyle = '#120000';
+    ctx.beginPath(); ctx.roundRect(-barW/2, pivotY - 30, barW, 6, 3); ctx.fill();
+    const hpColor = hpPct > 0.6 ? '#cc1111' : hpPct > 0.3 ? '#ff6600' : '#ff0000';
+    ctx.shadowColor = hpColor; ctx.shadowBlur = 6;
+    ctx.fillStyle = hpColor;
+    ctx.beginPath(); ctx.roundRect(-barW/2, pivotY - 30, barW * hpPct, 6, 3); ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = 'rgba(255,20,20,0.15)'; ctx.lineWidth = 0.5;
+    ctx.strokeRect(-barW/2, pivotY - 30, barW, 6);
+
+    ctx.restore();
+}
+
+// PROXIMITY MINES — scattered on ground, explode when touched
+// ============================================================
+function spawnMineField() {
+    const groundY = canvas.height - 120;
+    const count = 3 + Math.floor(Math.random() * 3); // 3-5 mines per field
+    const fieldStart = nextMineFieldX;
+    for (let i = 0; i < count; i++) {
+        mines.push({
+            x: fieldStart + i * (120 + Math.random() * 80) + Math.random() * 40,
+            y: groundY,
+            armed: true,
+            triggered: false,
+            explodeAt: 0,
+            pulsePhase: Math.random() * Math.PI * 2,
+        });
+    }
+    nextMineFieldX += 2200 + Math.random() * 1600;
+}
+
+function drawMine(mine) {
+    if (!mine.armed) return;
+    if (mine.x < camX - 60 || mine.x > camX + canvas.width + 60) return;
+    const now = Date.now();
+    const groundY = canvas.height - 120;
+    const mineR = 10;
+    const pulse = 0.5 + Math.sin(now * 0.006 + mine.pulsePhase) * 0.35;
+    // Flash faster when triggered (countdown)
+    const fastPulse = mine.triggered
+        ? (0.5 + Math.sin(now * 0.03 + mine.pulsePhase) * 0.5)
+        : pulse;
+
+    ctx.save();
+    ctx.translate(mine.x, groundY - mineR);
+
+    // Spike legs (3 legs)
+    ctx.strokeStyle = '#1a2030';
+    ctx.lineWidth = 2;
+    for (let i = 0; i < 3; i++) {
+        const a = -Math.PI / 2 + (i - 1) * 0.6;
+        ctx.beginPath();
+        ctx.moveTo(0, mineR * 0.6);
+        ctx.lineTo(Math.cos(a) * 14, mineR + 6);
+        ctx.stroke();
+    }
+
+    // Body
+    const bodyGrad = ctx.createRadialGradient(-3, -3, 1, 0, 0, mineR);
+    bodyGrad.addColorStop(0, '#2a3545');
+    bodyGrad.addColorStop(0.6, '#141c28');
+    bodyGrad.addColorStop(1, '#080c14');
+    ctx.shadowColor = mine.triggered
+        ? `rgba(255,80,20,${fastPulse})`
+        : `rgba(255,30,20,${pulse * 0.6})`;
+    ctx.shadowBlur = mine.triggered ? 18 : 8;
+    ctx.fillStyle = bodyGrad;
+    ctx.beginPath();
+    ctx.arc(0, 0, mineR, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Edge
+    ctx.strokeStyle = mine.triggered
+        ? `rgba(255,80,20,${fastPulse})`
+        : 'rgba(100,130,160,0.3)';
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.arc(0, 0, mineR, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    // Warning LED
+    ctx.shadowColor = mine.triggered
+        ? `rgba(255,100,20,${fastPulse})`
+        : `rgba(255,30,20,${pulse})`;
+    ctx.shadowBlur = mine.triggered ? 14 : 6;
+    ctx.fillStyle = mine.triggered
+        ? `rgba(255,120,30,${fastPulse})`
+        : `rgba(220,35,25,${pulse + 0.15})`;
+    ctx.beginPath();
+    ctx.arc(0, -3, 2.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+
+    // Skull icon (tiny — warns player)
+    ctx.fillStyle = 'rgba(200,210,220,0.25)';
+    ctx.font = '8px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('☠', 0, 4);
+
+    ctx.restore();
 }
 
 function drawDrone(drone) {
@@ -4583,12 +5179,20 @@ if (isOverWaterSurface && underwaterZone) {
 if (!isUnderwater && !isOverWaterSurface && !isInCave && player.x > nextEncounterX) {
         const count = 2 + Math.floor(Math.random()*2) + Math.floor(difficulty*0.25);
         for (let i=0;i<count;i++) spawnEnemy();
-        // Spawn drones occasionally (30% chance per encounter)
-        if (Math.random() < 0.3) {
+
+        // Post-pool escalation: ground bots resume ~14500, sky drones join ~16500
+        const droneChance = waterZonePassed
+            ? (player.x > 16500 ? 0.45 : 0.0)
+            : 0.3;
+        if (Math.random() < droneChance) {
             const droneCount = 1 + Math.floor(Math.random() * 2);
             for (let i = 0; i < droneCount; i++) spawnDrone();
         }
-        nextEncounterX += 650 + Math.random()*650;
+
+        // Post-pool waves spaced wider — room to deal with mines/turrets between fights
+        const spacing = waterZonePassed ? (800 + Math.random()*700) : (650 + Math.random()*650);
+        nextEncounterX += spacing;
+
         // Skip encounter zone past cave if it would land inside
         const ncS = (caveZone ? caveZone.startX : nextCaveEdgeX);
         const ncE = (caveZone ? caveZone.endX   : (nextCaveEdgeX + CAVE_LENGTH_MAX));
@@ -4742,8 +5346,10 @@ if (!isUnderwater && !isOverWaterSurface && !isInCave && player.x > nextEncounte
     // IMPORTANT: The pool itself stays in the world so you can cross it and come back later.
     if (underwaterZone && !waterZonePassed && player.x >= underwaterZone.endX) {
         waterZonePassed = true;
-        // Do NOT delete the pool or its enemies: this is a special location you can return to.
-        // We simply announce the far shore.
+        enemies = enemies.filter(e => e.x > player.x + 200);
+        drones = drones.filter(d => d.x > player.x + 200);
+        // Brief breather — mines appear first, then ground bots resume around x~14500, sky bots ~16500
+        nextEncounterX = player.x + 1800;
         showWaveAnnouncement('☀ FAR SHORE REACHED ☀', '#00ffaa');
     }
 
@@ -5282,15 +5888,18 @@ if (!isUnderwater && !isOverWaterSurface && !isInCave && player.x > nextEncounte
         }
         
         if (inCaveX && isInCave) {
-            // Spawn bat-bots progressively — moderate rate
+            // Spawn bat-bots progressively — hard cap on total spawned
             const caveProgress = (player.x - caveZone.startX) / caveZone.length;
-            const maxBats = Math.floor(2 + caveProgress * 3); // 2 to 5
-            if (!caveAllBatsCleared && batBots.length < maxBats && Math.random() < 0.01) {
+            const maxBats = Math.floor(2 + caveProgress * 3); // 2 to 5 on screen
+            const totalSpawnCap = 8; // never spawn more than 8 bats total per cave
+            if (!caveAllBatsCleared && batBots.length < maxBats && (caveZone._batsSpawned || 0) < totalSpawnCap && Math.random() < 0.01) {
                 spawnBatBot();
+                caveZone._batsSpawned = (caveZone._batsSpawned || 0) + 1;
             }
-            
-            // Notify player when all bats cleared
-            if (!caveAllBatsCleared && batBots.length === 0 && caveProgress > 0.3) {
+
+            // Cleared: all bats dead AND either past 30% OR hit the spawn cap
+            const spawnsDone = (caveZone._batsSpawned || 0) >= totalSpawnCap || caveProgress > 0.3;
+            if (!caveAllBatsCleared && batBots.length === 0 && spawnsDone) {
                 caveAllBatsCleared = true;
                 showWaveAnnouncement('✓ BAT-BOTS CLEARED — EXIT AHEAD →', '#00ffaa');
             }
@@ -5303,6 +5912,201 @@ if (!isUnderwater && !isOverWaterSurface && !isInCave && player.x > nextEncounte
         }
     }
     
+    // === TURRET TOWER SPAWNING (post-pool, well after mine fields) ===
+    if (waterZonePassed && !isInCave && player.x > nextTurretX - 400) {
+        spawnTurret();
+        // Push next encounter far past the cannon — let player focus on it
+        nextEncounterX = Math.max(nextEncounterX, nextTurretX + 1200);
+    }
+
+    // === MINE FIELD SPAWNING (post-pool, appears first before cannon) ===
+    if (waterZonePassed && !isInCave && player.x > nextMineFieldX - 300) {
+        spawnMineField();
+    }
+
+    // === TURRET AI UPDATE ===
+    const tNow = Date.now();
+    turrets = turrets.filter(t => {
+        if (t.x < camX - 300) return false; // cull offscreen left
+        if (t.health <= 0) {
+            createExplosion(t.x, t.y - 150, '#ff2200', 120, true);
+            createExplosion(t.x, t.y - 80, '#ff6622', 80, false);
+            AudioSystem.playExplosion && AudioSystem.playExplosion();
+            showWaveAnnouncement('✓ TURRET DESTROYED', '#ff6633');
+            return false;
+        }
+
+        // Geometry matches drawTurret exactly
+        const legH = 90, mountH = 42, barrelL = 115, barrelSep = 14, hW = 58;
+        const pivotX = t.x;
+        const pivotY = t.y - legH - mountH;
+
+        const dx = player.x - pivotX;
+        const dy = (player.y - player.height * 0.4) - pivotY;
+        t.barrelAngle = Math.atan2(dy, dx);
+        const distToPlayer = Math.sqrt(dx * dx + dy * dy);
+
+        if (!t.chargeSoundPlayed && !t.beamFiring && (t.nextFireTime - tNow) < 1200 && distToPlayer < 900) {
+            t.chargeSoundPlayed = true;
+            AudioSystem.playTurretCharge && AudioSystem.playTurretCharge();
+        }
+
+        if (!t.beamFiring && tNow > t.nextFireTime && distToPlayer < 900) {
+            t.beamFiring = true;
+            t.beamStartTime = tNow;
+            t.chargeSoundPlayed = false;
+            AudioSystem.playTurretFire && AudioSystem.playTurretFire();
+            // Muzzle blast from both barrels
+            const perpX = -Math.sin(t.barrelAngle) * barrelSep;
+            const perpY =  Math.cos(t.barrelAngle) * barrelSep;
+            const barrelStartX = pivotX + Math.cos(t.barrelAngle) * (hW * 0.5);
+            const barrelStartY = pivotY + Math.sin(t.barrelAngle) * (hW * 0.5);
+            for (const sign of [-1, 1]) {
+                const mx = barrelStartX + Math.cos(t.barrelAngle) * barrelL + perpX * sign;
+                const my = barrelStartY + Math.sin(t.barrelAngle) * barrelL + perpY * sign;
+                for (let s = 0; s < 10; s++) {
+                    sparks.push({
+                        x: mx, y: my,
+                        vx: Math.cos(t.barrelAngle) * (3 + Math.random()*5) + (Math.random()-0.5)*3,
+                        vy: Math.sin(t.barrelAngle) * (3 + Math.random()*5) + (Math.random()-0.5)*3,
+                        life: 0.4 + Math.random()*0.4, size: 2 + Math.random()*3,
+                        color: Math.random() < 0.5 ? '#ff3300' : '#ffffff'
+                    });
+                }
+            }
+        }
+
+        if (t.beamFiring) {
+            const age = tNow - t.beamStartTime;
+            if (age > t.beamDuration) {
+                t.beamFiring = false;
+                t.nextFireTime = tNow + t.cooldown;
+            } else {
+                // Check both beams against player
+                const perpX = -Math.sin(t.barrelAngle) * barrelSep;
+                const perpY =  Math.cos(t.barrelAngle) * barrelSep;
+                const barrelStartX = pivotX + Math.cos(t.barrelAngle) * (hW * 0.5);
+                const barrelStartY = pivotY + Math.sin(t.barrelAngle) * (hW * 0.5);
+                const beamDX = Math.cos(t.barrelAngle), beamDY = Math.sin(t.barrelAngle);
+                let hitBeam = false;
+                for (const sign of [-1, 1]) {
+                    const mx = barrelStartX + Math.cos(t.barrelAngle) * barrelL + perpX * sign;
+                    const my = barrelStartY + Math.sin(t.barrelAngle) * barrelL + perpY * sign;
+                    const toPX = player.x - mx, toPY = (player.y - player.height * 0.4) - my;
+                    const proj = toPX * beamDX + toPY * beamDY;
+                    const perpD = Math.sqrt((toPX - proj*beamDX)**2 + (toPY - proj*beamDY)**2);
+                    if (proj > 0 && proj < 1600 && perpD < 20) hitBeam = true;
+                }
+                if (hitBeam && tNow > player.invulnUntil) {
+                    const shielded = tNow < player.shieldUntil && player.shieldHits > 0;
+                    if (shielded) {
+                        player.shieldHits--;
+                        player.invulnUntil = tNow + 300;
+                        player.screenShake = Math.max(player.screenShake, 8);
+                        // Shield deflection sparks — gold burst around player
+                        for (let s = 0; s < 12; s++) {
+                            const a = Math.random() * Math.PI * 2;
+                            sparks.push({
+                                x: player.x + Math.cos(a) * player.width,
+                                y: (player.y - player.height * 0.3) + Math.sin(a) * player.height * 0.5,
+                                vx: Math.cos(a) * (3 + Math.random() * 4),
+                                vy: Math.sin(a) * (3 + Math.random() * 4) - 2,
+                                life: 0.5 + Math.random() * 0.3,
+                                size: 2 + Math.random() * 3,
+                                color: Math.random() < 0.6 ? '#ffcc00' : '#ffffff'
+                            });
+                        }
+                        t.beamBlockedByShield = true;
+                    } else {
+                        t.beamBlockedByShield = false;
+                        player.health -= 0.4;
+                        player.invulnUntil = tNow + 80;
+                        player.screenShake = Math.max(player.screenShake, 7);
+                        updateHUD();
+                        // Beam impact sparks on player
+                        if (Math.random() < 0.4) {
+                            for (let s = 0; s < 5; s++) {
+                                sparks.push({
+                                    x: player.x + (Math.random()-0.5) * player.width,
+                                    y: player.y - player.height * (0.2 + Math.random() * 0.6),
+                                    vx: (Math.random()-0.5) * 6,
+                                    vy: -Math.random() * 5,
+                                    life: 0.3 + Math.random() * 0.3,
+                                    size: 2 + Math.random() * 3,
+                                    color: Math.random() < 0.5 ? '#ff3300' : '#ffaa44'
+                                });
+                            }
+                        }
+                        if (player.health <= 0) {
+                            createExplosion(player.x, player.y, '#00ffcc', 60, true);
+                            AudioSystem.playExplosion(true); gameOver();
+                        }
+                    }
+                } else if (!hitBeam) {
+                    t.beamBlockedByShield = false;
+                }
+            }
+        }
+
+        return true;
+    });
+
+    // === MINE UPDATE ===
+    mines = mines.filter(mine => {
+        if (!mine.armed) return false;
+        if (mine.x < camX - 200) return false;
+
+        const dx = player.x - mine.x;
+        const dy = (player.y) - (mine.y - 10);
+        const dist = Math.sqrt(dx * dx + dy * dy);
+
+        // Trigger when player gets close
+        if (!mine.triggered && dist < 48) {
+            mine.triggered = true;
+            mine.explodeAt = Date.now() + 600; // 0.6s fuse
+        }
+
+        // Detonate
+        if (mine.triggered && Date.now() >= mine.explodeAt) {
+            mine.armed = false;
+            // Big explosion + ground sparks
+            createExplosion(mine.x, mine.y - 10, '#ff6622', 80, false);
+            createExplosion(mine.x, mine.y - 10, '#ffaa33', 40, false);
+            // Spray ground sparks outward
+            for (let s = 0; s < 20; s++) {
+                sparks.push({
+                    x: mine.x, y: mine.y - 10,
+                    vx: (Math.random() - 0.5) * 12,
+                    vy: -Math.random() * 9 - 2,
+                    life: 0.8 + Math.random() * 0.4,
+                    size: 3 + Math.random() * 4,
+                    color: Math.random() < 0.5 ? '#ff8833' : '#ffcc44'
+                });
+            }
+            AudioSystem.playExplosion();
+            player.screenShake = Math.max(player.screenShake, 14);
+            // Damage player if still in blast radius
+            const blastDx = player.x - mine.x;
+            const blastDy = player.y - mine.y;
+            if (Math.sqrt(blastDx * blastDx + blastDy * blastDy) < 70) {
+                const now2 = Date.now();
+                if (now2 > player.invulnUntil) {
+                    const shielded = now2 < player.shieldUntil && player.shieldHits > 0;
+                    if (shielded) {
+                        player.shieldHits--;
+                    } else {
+                        player.health -= 18;
+                        player.invulnUntil = now2 + 600;
+                        updateHUD();
+                    }
+                }
+            }
+            return false;
+        }
+
+        return true;
+    });
+
     // === BAT-BOT AI UPDATE ===
     const bNow = Date.now();
     batBots = batBots.filter(bat => {
@@ -5475,19 +6279,18 @@ if (!isUnderwater && !isOverWaterSurface && !isInCave && player.x > nextEncounte
             if (kind === 'health') {
                 if (player.health >= player.maxHealth) {
                     // Full health — give fuel instead
-                    flyCharge = Math.min(FLY_CHARGE_MAX, flyCharge + FLY_CHARGE_MAX * 0.5);
+                    flyCharge = FLY_CHARGE_MAX;
                     createExplosion(hp.x, hp.y, '#ffcc00', 25);
-                    showWaveAnnouncement('⚡ +50% FUEL ⚡', '#ffcc00');
+                    showWaveAnnouncement('⚡ FUEL FULLY RESTORED ⚡', '#ffcc00');
                 } else {
-                    const healAmt = Math.floor(player.maxHealth * 0.35);
-                    player.health = Math.min(player.maxHealth, player.health + healAmt);
+                    player.health = player.maxHealth;
                     createExplosion(hp.x, hp.y, '#00ff88', 25);
-                    showWaveAnnouncement('⚡ +35% HEALTH ⚡', '#00ff88');
+                    showWaveAnnouncement('⚡ HEALTH FULLY RESTORED ⚡', '#00ff88');
                 }
             } else if (kind === 'fuel') {
-                flyCharge = Math.min(FLY_CHARGE_MAX, flyCharge + FLY_CHARGE_MAX * 0.6);
+                flyCharge = FLY_CHARGE_MAX;
                 createExplosion(hp.x, hp.y, '#ffcc00', 30);
-                showWaveAnnouncement('⚡ +60% FUEL ⚡', '#ffcc00');
+                showWaveAnnouncement('⚡ FUEL FULLY RESTORED ⚡', '#ffcc00');
             } else if (kind === 'damage') {
                 player.damageBoostUntil = Date.now() + 30000; // 30 seconds
                 createExplosion(hp.x, hp.y, '#ffcc00', 40);
@@ -5816,6 +6619,19 @@ if (player.isFlying && Date.now() > player.flyEndTime) { player.isFlying = false
         rocket.x += rocket.vx;
         rocket.y += rocket.vy;
         rocket.life--;
+
+        // Rocket vs turret — hit the housing
+        for (let i = turrets.length - 1; i >= 0; i--) {
+            const t = turrets[i];
+            const tPivotY = t.y - 90 - 42;
+            if (Math.abs(rocket.x - t.x) < 60 && Math.abs(rocket.y - tPivotY) < 28) {
+                const dmgMult = (Date.now() < player.damageBoostUntil) ? 3 : 1;
+                t.health -= 30 * dmgMult;
+                t.hitFlash = Date.now() + 200;
+                createExplosion(rocket.x, rocket.y, '#ff4422', 20);
+                return false;
+            }
+        }
 
         for (let i = enemies.length - 1; i >= 0; i--) {
             const enemy = enemies[i];
@@ -6495,7 +7311,15 @@ function draw() {
         ctx.fill();
     });
     ctx.shadowBlur = 0;
-    ctx.globalAlpha = 1;    // Enemy lasers - regular projectile lasers (drones only now)
+    ctx.globalAlpha = 1;
+
+    // Turret towers
+    turrets.forEach(t => drawTurret(t));
+
+    // Proximity mines
+    mines.forEach(m => drawMine(m));
+
+    // Enemy lasers - regular projectile lasers (drones only now)
     enemyLasers.forEach(lz => {
         ctx.save();
         // Make underwater shark shots punch through the chemical haze
@@ -7084,6 +7908,36 @@ function actualStartGame() {
     isInCave = false; caveZoneUsed = false; caveSkippedByFlight = false; caveZone = null; nextCaveEdgeX = 5500; batBots = []; sonicRings = []; caveBarrel = null; caveAllBatsCleared = false;
     waterEncounterSpawned = false; waterEncounterCleared = false; waterZonePassed = false; waterWaveIndex = 0; waterTotalSpawned = 0; waterTotalKills = 0;
     techPlatforms = []; healthPickups = []; nextPlatformX = 1600;
+    turrets = []; mines = []; nextTurretX = 13800; nextMineFieldX = 12200;
+    // Pre-place mine fields
+    const preMinePositions = [12200, 15000, 18800];
+    for (const mx of preMinePositions) {
+        const count = 3 + Math.floor(Math.random() * 3);
+        for (let i = 0; i < count; i++) {
+            mines.push({
+                x: mx + i * (120 + Math.random()*80) + Math.random()*40,
+                y: canvas.height - 120,
+                armed: true, triggered: false, explodeAt: 0,
+                pulsePhase: Math.random() * Math.PI * 2,
+            });
+        }
+    }
+    nextMineFieldX = 22000;
+    // Pre-place turrets at known positions so they're always in the world, never pop in
+    const prePlacedTurretPositions = [13800, 17500, 21500];
+    for (const tx of prePlacedTurretPositions) {
+        turrets.push({
+            x: tx, y: canvas.height - 120,
+            health: 350 + difficulty * 50,
+            maxHealth: 350 + difficulty * 50,
+            beamFiring: false, beamStartTime: 0, beamDuration: 1400,
+            nextFireTime: Date.now() + 2800,
+            cooldown: 4000 + Math.random() * 800,
+            barrelAngle: -Math.PI / 5,
+            hitFlash: 0, chargeSoundPlayed: false,
+        });
+    }
+    nextTurretX = 25000;
     spawnTimer = 0; difficulty = 1; spawnInterval = 2800;
 
     initPlayer(); updateHUD();
@@ -7122,9 +7976,11 @@ function showCharacterSelect(onComplete) {
     const isLandscapePhone = isTouchDevice && W > H;
     const cols = (isMobile && !isLandscapePhone) ? 2 : 4;
     const rows = (isMobile && !isLandscapePhone) ? 2 : 1;
+    // On desktop give the title more vertical room
+    const titleH = isMobile ? 50 : 70;
     // Calculate card size to GUARANTEE deploy button fits on screen
     // On phones, browser chrome eats ~100px. Reserve space generously.
-    const reservedH = 110; // title(35) + deployBtn(45) + gaps(30)
+    const reservedH = isMobile ? 110 : 130; // title + deployBtn + gaps
     const availForCards = H - reservedH;
     const maxCardH = (rows === 2) ? (availForCards / 2 - 6) : (availForCards - 6);
     const maxCardW = (W - 40) / cols - 10;
@@ -7136,7 +7992,7 @@ function showCharacterSelect(onComplete) {
     const gapY = 8;
     const totalW = cols * cardW + (cols - 1) * gapX;
     const startX = (W - totalW) / 2;
-    const cardStartY = 38;
+    const cardStartY = isMobile ? 38 : titleH;
 
     function getCardRect(i) {
         const col = i % cols;
@@ -7360,12 +8216,12 @@ function showCharacterSelect(onComplete) {
         // Title
         ctx.textAlign = 'center';
         ctx.fillStyle = '#c0e8ff';
-        ctx.font = `800 ${H < 400 ? 12 : (isMobile ? 14 : 24)}px system-ui, -apple-system, Arial`;
-        ctx.fillText('SELECT OPERATIVE', W / 2, 16);
+        ctx.font = `800 ${H < 400 ? 12 : (isMobile ? 14 : 30)}px system-ui, -apple-system, Arial`;
+        ctx.fillText('SELECT OPERATIVE', W / 2, isMobile ? 16 : 36);
 
-        ctx.font = `400 ${H < 400 ? 8 : (isMobile ? 9 : 13)}px system-ui, Arial`;
+        ctx.font = `400 ${H < 400 ? 8 : (isMobile ? 9 : 14)}px system-ui, Arial`;
         ctx.fillStyle = 'rgba(180, 210, 240, 0.5)';
-        ctx.fillText('Choose your mech suit', W / 2, 30);
+        ctx.fillText('Choose your mech suit', W / 2, isMobile ? 30 : 56);
 
         // Draw character cards
         for (let i = 0; i < CHARACTERS.length; i++) {
@@ -7400,7 +8256,7 @@ function showCharacterSelect(onComplete) {
             ctx.beginPath();
             ctx.roundRect(r.x + 1, r.y + 1, r.w - 2, r.h - 2, 9);
             ctx.clip();
-            const previewScale = Math.min(cardW / 120, 0.75);
+            const previewScale = isMobile ? Math.min(cardW / 120, 0.75) : Math.min(cardW / 80, 1.4);
             const prevX = r.x + r.w / 2;
             const prevY = r.y + r.h * 0.48;
             const idleAngle = Math.sin(Date.now() * 0.002 + i * 1.5) * 0.12;
@@ -7666,13 +8522,13 @@ function playIntroCinematic(onComplete) {
         const thudOsc = ac.createOscillator();
         const thudGain = ac.createGain();
         thudOsc.type = 'sine';
-        thudOsc.frequency.setValueAtTime(60, t0 + 25);
-        thudOsc.frequency.exponentialRampToValueAtTime(25, t0 + 25.6);
+        thudOsc.frequency.setValueAtTime(60, t0 + 24.5);
+        thudOsc.frequency.exponentialRampToValueAtTime(25, t0 + 25.1);
         thudOsc.connect(thudGain); thudGain.connect(ac.destination);
         thudGain.gain.setValueAtTime(0, t0);
-        thudGain.gain.setValueAtTime(0.3, t0 + 25);
-        thudGain.gain.exponentialRampToValueAtTime(0.01, t0 + 25.8);
-        thudOsc.start(t0 + 25); thudOsc.stop(t0 + 26);
+        thudGain.gain.setValueAtTime(0.3, t0 + 24.5);
+        thudGain.gain.exponentialRampToValueAtTime(0.01, t0 + 25.3);
+        thudOsc.start(t0 + 24.5); thudOsc.stop(t0 + 25.5);
         introNodes.push(thudOsc);
         // Thud noise burst
         const thudNBuf = ac.createBuffer(1, ac.sampleRate * 0.5, ac.sampleRate);
@@ -7683,12 +8539,12 @@ function playIntroCinematic(onComplete) {
         const thudNGain = ac.createGain();
         const thudNFilter = ac.createBiquadFilter();
         thudNFilter.type = 'lowpass';
-        thudNFilter.frequency.setValueAtTime(300, t0 + 25);
+        thudNFilter.frequency.setValueAtTime(300, t0 + 24.5);
         thudNoise.connect(thudNFilter); thudNFilter.connect(thudNGain);
         thudNGain.connect(ac.destination);
-        thudNGain.gain.setValueAtTime(0.15, t0 + 25);
-        thudNGain.gain.exponentialRampToValueAtTime(0.01, t0 + 25.6);
-        thudNoise.start(t0 + 25);
+        thudNGain.gain.setValueAtTime(0.15, t0 + 24.5);
+        thudNGain.gain.exponentialRampToValueAtTime(0.01, t0 + 25.1);
+        thudNoise.start(t0 + 24.5);
         introNodes.push(thudNoise);
 
         // 5) Text reveal shimmer at each story beat
@@ -8421,6 +9277,23 @@ const keysHeld = {};
 document.addEventListener('keydown', (e) => {
     if (e.repeat) return; // Ignore key repeat
     keysHeld[e.code] = true;
+
+    // DEV WARP: press T to teleport to turret/mine test zone
+    if (e.code === 'KeyT' && gameRunning) {
+        player.x = 12500;
+        camX = player.x - canvas.width * 0.35;
+        player.y = canvas.height - 120;
+        player.health = player.maxHealth;
+        flyCharge = FLY_CHARGE_MAX;
+        waterZonePassed = true;
+        nextTurretX = 13800;
+        nextMineFieldX = 12600;
+        turrets = []; mines = [];
+        enemies = []; drones = [];
+        nextEncounterX = player.x + 3000; // no enemy flood on arrival
+        showWaveAnnouncement('⚡ WARPED TO TEST ZONE ⚡', '#00ffcc');
+        return;
+    }
     
     if (e.code === 'KeyP' || e.code === 'Escape') { e.preventDefault(); togglePause(); return; }
     if (e.code === 'Space') { e.preventDefault(); activateFlight(); }
@@ -8864,7 +9737,7 @@ canvas.addEventListener('touchstart', (e) => {
 
 document.getElementById('soundToggle').addEventListener('click', () => { AudioSystem.enabled = !AudioSystem.enabled; document.getElementById('soundToggle').textContent = AudioSystem.enabled ? '🔊 SOUND ON' : '🔇 SOUND OFF'; });
 document.getElementById('startBtn').addEventListener('click', () => { try { startGame(); } catch(e){ console.error(e); alert('Start error: ' + (e && e.message ? e.message : e)); } });
-document.getElementById('restartBtn').addEventListener('click', () => { try { startGame(); } catch(e){ console.error(e); alert('Start error: ' + (e && e.message ? e.message : e)); } });
+document.getElementById('restartBtn').addEventListener('click', () => { try { document.getElementById('gameOverScreen').style.display = 'none'; showCharacterSelect(function(){ startGame(); }); } catch(e){ console.error(e); alert('Start error: ' + (e && e.message ? e.message : e)); } });
 // Hide mobile controls on initial load (start screen visible)
 hideMobileControls();
 
