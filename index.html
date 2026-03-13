@@ -382,7 +382,7 @@
         <div id="hud">
             <div class="hud-panel"><div class="hud-label">SCORE</div><div class="hud-value" id="scoreDisplay">0</div></div>
             <div class="hud-panel"><div class="hud-label">KILLS</div><div class="hud-value" id="killsDisplay">0</div></div>
-            <div class="hud-panel" id="statusPanel"><div class="hud-label">SUIT INTEGRITY</div><div id="healthBar"><div id="healthFill" style="width: 100%"></div></div><div class="hud-label" style="margin-top: 10px">◆ SPECIALTY FUEL ◆</div><div id="flyMeter"><div id="flyFill"></div></div></div>
+            <div class="hud-panel" id="statusPanel"><div class="hud-label">SUIT INTEGRITY</div><div id="healthBar"><div id="healthFill" style="width: 100%"></div></div><div class="hud-label" style="margin-top: 10px">◆ SPECIALTY FUEL ◆</div><div id="flyMeter"><div id="flyFill"></div></div><div id="widowHUD" style="display:none; margin-top:10px;"><div class="hud-label" style="color:#ffffff; text-shadow:0 0 8px rgba(200,200,255,0.8);">🕷 BLACK WIDOW MODE</div><div id="widowShots" style="font-family:'Orbitron',sans-serif; font-size:18px; font-weight:900; color:#ffffff; text-shadow:0 0 10px rgba(200,200,255,0.9); letter-spacing:2px;">●●●</div></div></div>
         
 </div>
             <div class="hud-abilities">
@@ -1052,7 +1052,7 @@ window.addEventListener('blur', () => { isMoving = false; isFiring = false; mobi
 document.addEventListener('visibilitychange', () => { if (document.hidden) { isMoving = false; isFiring = false; mobileMoveHeld = false; dpadState.up = false; dpadState.down = false; dpadState.left = false; dpadState.right = false; } });
 window.addEventListener('resize', resize);
 
-const player = { x: 0, y: 0, targetX: 0, targetY: 0, width: 50, height: 80, health: 100, maxHealth: 100, speed: 5.5, isFlying: false, flyEndTime: 0, legAngle: 0, legDir: 1, isMoving: false, facingRight: true, screenShake: 0, armAngle: 0, invulnUntil: 0, shieldUntil: 0, shieldHits: 0, isJumping: false, jumpVY: 0, jumpVX: 0, damageBoostUntil: 0 };
+const player = { x: 0, y: 0, targetX: 0, targetY: 0, width: 50, height: 80, health: 100, maxHealth: 100, speed: 5.5, isFlying: false, flyEndTime: 0, legAngle: 0, legDir: 1, isMoving: false, facingRight: true, screenShake: 0, armAngle: 0, invulnUntil: 0, shieldUntil: 0, shieldHits: 0, isJumping: false, jumpVY: 0, jumpVX: 0, damageBoostUntil: 0, blackWidowUntil: 0, widowShotsLeft: 0 };
 let rockets = [], enemies = [], enemyLasers = [], particles = [], sparks = [], smokeTrails = [], debris = [], spawnTimer = 0, spawnInterval = 2500, difficulty = 1;
 // Pointer position (for reference) + separate aim reticle position (click-to-place)
 let mouseX = 400, mouseY = 400;
@@ -1156,6 +1156,8 @@ function initPlayer() {
     player.jumpVX = 0;
     player._onPlatform = null;
     player.damageBoostUntil = 0;
+    player.blackWidowUntil = 0;
+    player.widowShotsLeft = 0;
     nextEncounterX = player.x + 650;
     
     // Initialize position tracking for jump prevention
@@ -1279,15 +1281,20 @@ function drawPlayer(x, y, width, height, legAngle, isFlying, facingRight, armAng
 
     const ch = getChar();
     const isPoweredUp = Date.now() < player.damageBoostUntil;
+    const isBlackWidow = Date.now() < player.blackWidowUntil;
 
-    // When powered up: armor plates turn gold, glow shifts to gold
-    const steelDark = isPoweredUp ? '#1a1100' : '#0b111a';
-    const steelMid  = isPoweredUp ? '#3a2800' : '#223246';
-    const steelLite = isPoweredUp ? '#7a5a00' : '#4e6a86';
-    const trim      = isPoweredUp ? '#ffcc00' : ch.trim;
+    // Black Widow overrides — suppress ALL character color so mech reads as pure black
+    const glowRGB  = isBlackWidow ? '0,0,0'    : ch.glowRGB;
+    const glow2RGB = isBlackWidow ? '0,0,0'    : ch.glow2RGB;
+    const trimRGB  = isBlackWidow ? '8,8,8'    : ch.trimRGB;
 
-    // Powered-up: gold glow at normal intensity (not cranked — matches standard electricity)
-    ctx.shadowColor = isPoweredUp ? 'rgba(255, 200, 0, 0.95)' : `rgba(${ch.trimRGB}, 0.95)`;
+    const steelDark = isPoweredUp ? '#1a1100' : (isBlackWidow ? '#000000' : '#0b111a');
+    const steelMid  = isPoweredUp ? '#3a2800' : (isBlackWidow ? '#020202' : '#223246');
+    const steelLite = isPoweredUp ? '#7a5a00' : (isBlackWidow ? '#060606' : '#4e6a86');
+    const trim      = isPoweredUp ? '#ffcc00' : (isBlackWidow ? '#0a0a0a' : ch.trim);
+
+    // Glow: gold overcharge / soft white whisper for widow / normal otherwise
+    ctx.shadowColor = isPoweredUp ? 'rgba(255, 200, 0, 0.95)' : (isBlackWidow ? 'rgba(200, 220, 255, 0.22)' : `rgba(${trimRGB}, 0.95)`);
     ctx.shadowBlur  = 28;
     ctx.shadowOffsetX = 0;
     ctx.shadowOffsetY = 0;
@@ -1306,8 +1313,8 @@ function drawPlayer(x, y, width, height, legAngle, isFlying, facingRight, armAng
         ctx.save();
         ctx.globalAlpha = 0.35;
         const g = ctx.createRadialGradient(0, height*0.55, 0, 0, height*0.55, 110);
-        g.addColorStop(0, `rgba(${ch.glowRGB},0.18)`);
-        g.addColorStop(0.4, `rgba(${ch.glow2RGB},0.12)`);
+        g.addColorStop(0, `rgba(${glowRGB},0.18)`);
+        g.addColorStop(0.4, `rgba(${glow2RGB},0.12)`);
         g.addColorStop(1, 'rgba(0,0,0,0)');
         ctx.fillStyle = g;
         ctx.beginPath();
@@ -1367,7 +1374,7 @@ function drawPlayer(x, y, width, height, legAngle, isFlying, facingRight, armAng
             ctx.fill();
             ctx.save();
             ctx.shadowColor = trim; ctx.shadowBlur = 14;
-            ctx.fillStyle = `rgba(${ch.glowRGB},0.75)`;
+            ctx.fillStyle = `rgba(${glowRGB},0.75)`;
             ctx.beginPath();
             ctx.arc(0, upperH + 2, 4, 0, Math.PI * 2);
             ctx.fill();
@@ -1476,7 +1483,7 @@ function drawPlayer(x, y, width, height, legAngle, isFlying, facingRight, armAng
         ctx.fill();
 
         // Waist belt/accent (bright, visible even small)
-        ctx.strokeStyle = `rgba(${ch.trimRGB}, 0.5)`;
+        ctx.strokeStyle = `rgba(${trimRGB}, 0.5)`;
         ctx.lineWidth = 2;
         ctx.beginPath();
         ctx.moveTo(-ww - 3, tMid);
@@ -1519,8 +1526,8 @@ function drawPlayer(x, y, width, height, legAngle, isFlying, facingRight, armAng
     ctx.save();
     ctx.shadowColor = trim; ctx.shadowBlur = 26;
     const core = ctx.createRadialGradient(0, torsoY + torsoH*0.55, 0, 0, torsoY + torsoH*0.55, 36);
-    core.addColorStop(0, `rgba(${ch.glowRGB},0.85)`);
-    core.addColorStop(0.4, `rgba(${ch.glow2RGB},0.35)`);
+    core.addColorStop(0, `rgba(${glowRGB},0.85)`);
+    core.addColorStop(0.4, `rgba(${glow2RGB},0.35)`);
     core.addColorStop(1, 'rgba(0,0,0,0)');
     ctx.fillStyle = core;
     ctx.beginPath();
@@ -1532,7 +1539,7 @@ function drawPlayer(x, y, width, height, legAngle, isFlying, facingRight, armAng
     ctx.beginPath();
     ctx.arc(0, torsoY + torsoH*0.55, 16, 0, Math.PI*2);
     ctx.fill();
-    ctx.fillStyle = `rgba(${ch.glowRGB},0.75)`;
+    ctx.fillStyle = `rgba(${glowRGB},0.75)`;
     ctx.beginPath();
     ctx.arc(0, torsoY + torsoH*0.55, 6, 0, Math.PI*2);
     ctx.fill();
@@ -1558,7 +1565,7 @@ function drawPlayer(x, y, width, height, legAngle, isFlying, facingRight, armAng
         ctx.moveTo(16, headY); ctx.lineTo(26, headY - 10);
         ctx.lineTo(18, headY + 6); ctx.closePath(); ctx.fill();
         // Edge highlight
-        ctx.strokeStyle = `rgba(${ch.trimRGB}, 0.25)`;
+        ctx.strokeStyle = `rgba(${trimRGB}, 0.25)`;
         ctx.lineWidth = 0.8;
         ctx.beginPath(); ctx.moveTo(-16, headY - 2); ctx.lineTo(0, headY - 6); ctx.lineTo(16, headY - 2); ctx.stroke();
     } else if (ch.helmet === 'heavy') {
@@ -1625,7 +1632,7 @@ function drawPlayer(x, y, width, height, legAngle, isFlying, facingRight, armAng
             ctx.quadraticCurveTo(-1 + sway * 0.6, hairBase + 20, -2 + sway * 1.1, hairBase + 40);
             ctx.stroke();
             // Highlight strand
-            ctx.strokeStyle = `rgba(${ch.trimRGB}, 0.12)`;
+            ctx.strokeStyle = `rgba(${trimRGB}, 0.12)`;
             ctx.lineWidth = 1.5;
             ctx.beginPath();
             ctx.moveTo(1, hairBase + 3);
@@ -1794,15 +1801,15 @@ function drawPlayer(x, y, width, height, legAngle, isFlying, facingRight, armAng
     const elecTime = Date.now();
     const elecChance = Math.sin(elecTime * 0.002) * Math.cos(elecTime * 0.001);
     const boosted = (elecTime < player.damageBoostUntil);
+    const widowActive = (elecTime < player.blackWidowUntil);
 
-    // Boosted uses same frequency/size as normal — just gold instead of cyan
     const arcFreq      = 0.25;
     const arcThreshold = 0.3;
 
     if (elecChance > arcThreshold && Math.random() < arcFreq) {
         ctx.save();
-        const arcColor  = boosted ? '#ffcc00' : '#00ffff';
-        const arcColor2 = boosted ? '#ffdd44' : '#00ffff';
+        const arcColor  = boosted ? '#ffcc00' : (widowActive ? '#ffffff' : '#00ffff');
+        const arcColor2 = boosted ? '#ffdd44' : (widowActive ? '#ddddff' : '#00ffff');
         ctx.strokeStyle = arcColor;
         ctx.shadowColor = arcColor;
         ctx.shadowBlur  = 20;
@@ -1841,7 +1848,7 @@ function drawPlayer(x, y, width, height, legAngle, isFlying, facingRight, armAng
     const bigFreq      = 0.12;
     if (elecChance > bigThreshold && Math.random() < bigFreq) {
         ctx.save();
-        const bigColor = boosted ? '#ffdd44' : '#ffff00';
+        const bigColor = boosted ? '#ffdd44' : (widowActive ? '#eeeeff' : '#ffff00');
         ctx.strokeStyle = bigColor;
         ctx.shadowColor = bigColor;
         ctx.shadowBlur  = 25;
@@ -2653,6 +2660,91 @@ function drawRocket(rocket) {
         ctx.fill();
         
         ctx.shadowBlur = 0;
+    } else if (rocket.webShot) {
+        // === WEB SHOT — organic asymmetric net projectile ===
+        const ang2 = Math.atan2(rocket.vy, rocket.vx);
+        ctx.rotate(-ang2); // keep net upright in world space
+
+        const now = Date.now();
+        const slowSpin = (now * 0.0008) % (Math.PI * 2);
+
+        // Silk thread trail
+        ctx.save();
+        ctx.rotate(ang2);
+        ctx.globalAlpha = 0.5;
+        const tg = ctx.createLinearGradient(-60, 0, -10, 0);
+        tg.addColorStop(0, 'rgba(255,255,255,0)');
+        tg.addColorStop(0.6, 'rgba(220,230,255,0.2)');
+        tg.addColorStop(1, 'rgba(255,255,255,0.6)');
+        ctx.strokeStyle = tg;
+        ctx.lineWidth = 2.5;
+        ctx.lineCap = 'round';
+        ctx.beginPath(); ctx.moveTo(-58, 0); ctx.lineTo(-10, 0); ctx.stroke();
+        ctx.restore();
+
+        ctx.rotate(slowSpin);
+
+        // Seeded irregular spoke lengths — same each frame so it looks consistent
+        const NUM_SPOKES = 9;
+        const spokeR = [22, 18, 24, 16, 20, 25, 17, 21, 19]; // uneven radii per spoke
+        const spokeA = [];
+        for (let i = 0; i < NUM_SPOKES; i++) spokeA.push(i * (Math.PI * 2 / NUM_SPOKES));
+
+        ctx.shadowColor = 'rgba(255,255,255,0.7)';
+        ctx.shadowBlur = 10;
+        ctx.strokeStyle = 'rgba(255,255,255,0.92)';
+        ctx.lineWidth = 1.1;
+
+        // Draw spokes
+        for (let i = 0; i < NUM_SPOKES; i++) {
+            ctx.beginPath();
+            ctx.moveTo(0, 0);
+            ctx.lineTo(Math.cos(spokeA[i]) * spokeR[i], Math.sin(spokeA[i]) * spokeR[i]);
+            ctx.stroke();
+        }
+
+        // Draw 4 ring levels — connect adjacent spoke tips with slightly curved segments
+        // giving an organic web look, not a circle
+        const ringFracs = [0.28, 0.52, 0.74, 1.0];
+        for (const frac of ringFracs) {
+            ctx.beginPath();
+            for (let i = 0; i <= NUM_SPOKES; i++) {
+                const idx = i % NUM_SPOKES;
+                const r = spokeR[idx] * frac;
+                const x = Math.cos(spokeA[idx]) * r;
+                const y = Math.sin(spokeA[idx]) * r;
+                if (i === 0) ctx.moveTo(x, y);
+                else {
+                    // Slight inward pull midpoint for organic sag
+                    const prevIdx = (i - 1) % NUM_SPOKES;
+                    const pr = spokeR[prevIdx] * frac;
+                    const midR = r * 0.88; // sag inward slightly
+                    const midA = (spokeA[prevIdx] + spokeA[idx]) / 2;
+                    ctx.quadraticCurveTo(
+                        Math.cos(midA) * midR, Math.sin(midA) * midR,
+                        x, y
+                    );
+                }
+            }
+            ctx.closePath();
+            ctx.stroke();
+        }
+
+        // Sticky droplets at outer ring nodes
+        ctx.shadowBlur = 8;
+        ctx.fillStyle = 'rgba(255,255,255,0.85)';
+        for (let i = 0; i < NUM_SPOKES; i++) {
+            const x = Math.cos(spokeA[i]) * spokeR[i];
+            const y = Math.sin(spokeA[i]) * spokeR[i];
+            ctx.beginPath(); ctx.arc(x, y, 2, 0, Math.PI * 2); ctx.fill();
+        }
+
+        // Center anchor
+        ctx.shadowBlur = 16;
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath(); ctx.arc(0, 0, 3.5, 0, Math.PI * 2); ctx.fill();
+
+        ctx.shadowBlur = 0;
     } else {
         // === STANDARD ROCKET ===
 
@@ -2849,12 +2941,12 @@ function spawnPlatformsAndObstacles() {
             elevating: false, elevateT: 0, elevateDir: 0
         });
         // Pickup placed at the TOP of elevator travel — player must ride up or jump to grab
-        const pickupTypes = ['health', 'fuel', 'damage'];
+        const pickupTypes = ['health', 'fuel', 'damage', 'widow'];
         const pickType = pickupTypes[Math.floor(Math.random() * pickupTypes.length)];
         healthPickups.push({
             x: worldX + platW / 2, y: platY - maxRise - 30,
             collected: false, bobPhase: Math.random() * Math.PI * 2,
-            kind: pickType
+            kind: pickType, spawnedAt: Date.now()
         });
         nextPlatformX += 1400 + Math.random() * 1800;
     } else {
@@ -2882,7 +2974,7 @@ function spawnPlatformsAndObstacles() {
                 healthPickups.push({
                     x: platX + platW / 2, y: platY - 28,
                     collected: false, bobPhase: Math.random() * Math.PI * 2,
-                    kind: pickType
+                    kind: pickType, spawnedAt: Date.now()
                 });
             }
         }
@@ -3069,10 +3161,129 @@ function drawHealthPickup(hp) {
     const sx = hp.x;
     if (sx < camX - 50 || sx > camX + canvas.width + 50) return;
     const now = Date.now();
+
+    // Widow pickups expire after 30s — fade out and skip
+    const WIDOW_EXPIRE_MS = 30000;
+    if (hp.kind === 'widow' && hp.spawnedAt) {
+        const age = now - hp.spawnedAt;
+        if (age > WIDOW_EXPIRE_MS) { hp.collected = true; return; }
+    }
+
+    // === WIDOW PICKUP — floating spider icon, completely separate from crate ===
+    if (hp.kind === 'widow') {
+        const age = hp.spawnedAt ? (now - hp.spawnedAt) : 0;
+        let globalFade = 1;
+        if (age > WIDOW_EXPIRE_MS - 8000) globalFade = Math.max(0, (WIDOW_EXPIRE_MS - age) / 8000);
+
+        const bob = Math.sin(now * 0.003 + hp.bobPhase) * 5;
+        const pulse = 0.6 + Math.sin(now * 0.006) * 0.3;
+        const spin = Math.sin(now * 0.0008) * 0.18; // gentle pendulum sway
+        const py = hp.y + bob;
+
+        ctx.save();
+        ctx.globalAlpha = globalFade;
+        ctx.translate(sx, py);
+        ctx.rotate(spin);
+
+        // Outer white web-silk glow ring
+        ctx.shadowColor = 'rgba(255,255,255,0.85)';
+        ctx.shadowBlur = 12 + pulse * 8;
+        ctx.strokeStyle = `rgba(255,255,255,${0.25 + pulse * 0.2})`;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(0, 0, 18, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Mini web strands around the icon
+        ctx.strokeStyle = `rgba(255,255,255,${0.2 + pulse * 0.15})`;
+        ctx.lineWidth = 0.7;
+        ctx.shadowBlur = 4;
+        for (let i = 0; i < 6; i++) {
+            const a = i * Math.PI / 3;
+            ctx.beginPath();
+            ctx.moveTo(Math.cos(a) * 10, Math.sin(a) * 10);
+            ctx.lineTo(Math.cos(a) * 18, Math.sin(a) * 18);
+            ctx.stroke();
+        }
+        for (const r of [12, 16]) {
+            ctx.beginPath();
+            for (let i = 0; i <= 6; i++) {
+                const a = i * Math.PI / 3;
+                if (i === 0) ctx.moveTo(Math.cos(a) * r, Math.sin(a) * r);
+                else ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+            }
+            ctx.closePath();
+            ctx.stroke();
+        }
+
+        // Spider body — large abdomen + small head, pure black silhouette with white glow
+        ctx.shadowColor = 'rgba(255,255,255,0.9)';
+        ctx.shadowBlur = 8 + pulse * 6;
+        ctx.fillStyle = '#0a0a0a';
+        ctx.strokeStyle = `rgba(255,255,255,${0.7 + pulse * 0.25})`;
+        ctx.lineWidth = 1.2;
+
+        // Abdomen
+        ctx.beginPath();
+        ctx.ellipse(0, 3, 5, 6, 0, 0, Math.PI * 2);
+        ctx.fill(); ctx.stroke();
+
+        // Head
+        ctx.beginPath();
+        ctx.ellipse(0, -5, 3, 3, 0, 0, Math.PI * 2);
+        ctx.fill(); ctx.stroke();
+
+        // Red hourglass
+        ctx.shadowColor = '#ff2233';
+        ctx.shadowBlur = 6;
+        ctx.fillStyle = `rgba(255,30,50,${0.85 + pulse * 0.15})`;
+        ctx.beginPath();
+        ctx.moveTo(-2, 1); ctx.lineTo(0, 4); ctx.lineTo(2, 1);
+        ctx.lineTo(0, 6); ctx.closePath();
+        ctx.fill();
+
+        // 8 legs — 4 each side, splayed naturally
+        ctx.shadowColor = 'rgba(255,255,255,0.6)';
+        ctx.shadowBlur = 4;
+        ctx.strokeStyle = `rgba(255,255,255,${0.65 + pulse * 0.2})`;
+        ctx.lineWidth = 1.0;
+        const legData = [
+            [-3, -3, -10, -8],
+            [-3, 0,  -11, -1],
+            [-3, 3,  -10,  5],
+            [-3, 5,  -8,   9],
+        ];
+        for (const [x1,y1,x2,y2] of legData) {
+            // Left side
+            ctx.beginPath(); ctx.moveTo(x1,y1); ctx.quadraticCurveTo(x1-3, (y1+y2)/2, x2, y2); ctx.stroke();
+            // Right side (mirror)
+            ctx.beginPath(); ctx.moveTo(-x1,y1); ctx.quadraticCurveTo(-x1+3, (y1+y2)/2, -x2, y2); ctx.stroke();
+        }
+
+        // Pulsing eyes
+        ctx.shadowBlur = 8; ctx.shadowColor = '#ff2233';
+        ctx.fillStyle = `rgba(255,40,60,${pulse})`;
+        ctx.beginPath(); ctx.arc(-1.2, -5.2, 1, 0, Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.arc(1.2, -5.2, 1, 0, Math.PI*2); ctx.fill();
+
+        ctx.shadowBlur = 0;
+        ctx.restore();
+        return; // skip crate drawing below
+    }
+
     const bob = Math.sin(now * 0.003 + hp.bobPhase) * 4;
     const pulse = 0.6 + Math.sin(now * 0.005) * 0.3;
     const py = hp.y + bob;
     const kind = hp.kind || 'health';
+
+    // Fade out widow pickup in last 8 seconds
+    let globalFade = 1;
+    if (kind === 'widow' && hp.spawnedAt) {
+        const age = now - hp.spawnedAt;
+        if (age > WIDOW_EXPIRE_MS - 8000) {
+            globalFade = Math.max(0, (WIDOW_EXPIRE_MS - age) / 8000);
+        }
+    }
     
     // Color schemes per type
     let glowR, glowG, glowB, bodyDark, bodyMid, bodyLight;
@@ -3088,6 +3299,7 @@ function drawHealthPickup(hp) {
     }
     
     ctx.save();
+    ctx.globalAlpha = globalFade;
     ctx.translate(sx, py);
     
     // Glow
@@ -3205,15 +3417,16 @@ function drawTurret(t) {
     // === SHARED GEOMETRY (must match AI exactly) ===
     const legH   = 90, legSpread = 60;
     const mountH = 42;
-    const barrelL = 115, barrelR = 8, barrelSep = 14; // double barrel separation
-    const hW = 58, hH = 34;   // housing width/height
+    const barrelL = 115, barrelR = 8, barrelSep = 14;
+    const hW = 58, hH = 34;
     const pivotY  = groundY - legH - mountH;
     const pivotX  = t.x;
 
-    // Charge level (0-1) for visual buildup
     const chargeT = t.beamFiring ? 1.0 : Math.max(0, 1 - (t.nextFireTime - now) / 1200);
 
     ctx.save();
+    // Hard-reset any shadow bleed from previous draw calls
+    ctx.shadowBlur = 0; ctx.shadowColor = 'transparent'; ctx.globalAlpha = 1;
 
     // =====================================================
     // DOUBLE LASER BEAMS (drawn first, behind cannon)
@@ -3259,6 +3472,10 @@ function drawTurret(t) {
             const ey = my + Math.sin(ang) * effectiveBeamLen;
 
             ctx.save();
+            // Clip to canvas so shadow doesn't arc at screen edges
+            ctx.beginPath();
+            ctx.rect(0, 0, canvas.width, canvas.height);
+            ctx.clip();
             ctx.lineCap = 'round';
 
             // Wide outer glow
@@ -3554,9 +3771,11 @@ function drawTurret(t) {
         const muzzleX = hW/2 + barrelL;
         const lg = chargeT;
 
-        // Muzzle ring
-        ctx.shadowColor = `rgba(255,20,10,${0.35+lg*0.6})`; ctx.shadowBlur = 6 + lg*18;
-        ctx.strokeStyle = `rgba(255,${25+lg*35},10,${0.4+lg*0.5})`;
+        // Muzzle ring — pure red, no green channel bleed
+        ctx.shadowColor = `rgba(255,10,10,${0.35+lg*0.6})`; ctx.shadowBlur = 6 + lg*18;
+        ctx.strokeStyle = `rgba(255,10,10,${0.4+lg*0.55})`;
+        ctx.lineWidth = 1.8;
+        ctx.beginPath(); ctx.arc(muzzleX, bOffY, 5 + lg*2.5, 0, Math.PI*2); ctx.stroke();
         ctx.lineWidth = 1.8;
         ctx.beginPath(); ctx.arc(muzzleX, bOffY, 5 + lg*2.5, 0, Math.PI*2); ctx.stroke();
         // Core nub
@@ -3695,6 +3914,93 @@ function drawMine(mine) {
     ctx.font = '8px sans-serif';
     ctx.textAlign = 'center';
     ctx.fillText('☠', 0, 4);
+
+    ctx.restore();
+}
+
+function drawWebbedOverlay(cx, cy, w, h, webLayers) {
+    const layers = webLayers || 1;
+    const now = Date.now();
+    const pulse = 0.7 + Math.sin(now * 0.005) * 0.15;
+    const spin = (now * 0.0006) % (Math.PI * 2);
+
+    ctx.save();
+    ctx.translate(cx, cy);
+
+    const rw = w * (0.6 + layers * 0.05);
+    const rh = h * (0.6 + layers * 0.05);
+
+    // Draw multiple web layers offset slightly for density
+    for (let layer = 0; layer < layers; layer++) {
+        const layerSpin = spin + layer * (Math.PI / layers);
+        const alpha = (0.65 + layer * 0.1) * pulse;
+        ctx.save();
+        ctx.rotate(layerSpin);
+
+        ctx.shadowColor = 'rgba(255,255,255,0.7)';
+        ctx.shadowBlur = 8 + layer * 3;
+        ctx.strokeStyle = `rgba(255, 255, 255, ${alpha})`;
+        ctx.lineWidth = 1.0 + layer * 0.2;
+
+        const NUM_SPOKES = 8 + layer; // more spokes per layer
+        const spokeVariants = [1.0, 0.88, 1.05, 0.92, 1.08, 0.85, 1.02, 0.95, 1.0, 0.9, 1.06];
+        const spokeAngles = [];
+        for (let i = 0; i < NUM_SPOKES; i++) spokeAngles.push(i * (Math.PI * 2 / NUM_SPOKES));
+
+        // Spokes
+        for (let i = 0; i < NUM_SPOKES; i++) {
+            const sr = rw * spokeVariants[i % spokeVariants.length];
+            const sr2 = rh * spokeVariants[(i + 2) % spokeVariants.length];
+            ctx.beginPath();
+            ctx.moveTo(0, 0);
+            ctx.lineTo(Math.cos(spokeAngles[i]) * sr, Math.sin(spokeAngles[i]) * sr2);
+            ctx.stroke();
+        }
+
+        // Organic rings — quadratic curves between spoke tips for natural sag
+        const ringFracs = [0.3, 0.55, 0.78, 1.0];
+        for (const frac of ringFracs) {
+            ctx.beginPath();
+            for (let i = 0; i <= NUM_SPOKES; i++) {
+                const idx = i % NUM_SPOKES;
+                const sr = rw * spokeVariants[idx % spokeVariants.length] * frac;
+                const sr2 = rh * spokeVariants[(idx + 2) % spokeVariants.length] * frac;
+                const x = Math.cos(spokeAngles[idx]) * sr;
+                const y = Math.sin(spokeAngles[idx]) * sr2;
+                if (i === 0) { ctx.moveTo(x, y); }
+                else {
+                    const prevIdx = (i - 1) % NUM_SPOKES;
+                    const psr = rw * spokeVariants[prevIdx % spokeVariants.length] * frac;
+                    const psr2 = rh * spokeVariants[(prevIdx + 2) % spokeVariants.length] * frac;
+                    const midA = (spokeAngles[prevIdx] + spokeAngles[idx]) / 2;
+                    const sagR = Math.sqrt(psr * psr2) * 0.82;
+                    ctx.quadraticCurveTo(
+                        Math.cos(midA) * sagR, Math.sin(midA) * sagR * (rh / rw),
+                        x, y
+                    );
+                }
+            }
+            ctx.closePath();
+            ctx.stroke();
+        }
+
+        // Sticky droplets at outer tips
+        ctx.fillStyle = `rgba(255,255,255,${alpha * 0.9})`;
+        ctx.shadowBlur = 5;
+        for (let i = 0; i < NUM_SPOKES; i++) {
+            const sr = rw * spokeVariants[i % spokeVariants.length];
+            const sr2 = rh * spokeVariants[(i + 2) % spokeVariants.length];
+            ctx.beginPath();
+            ctx.arc(Math.cos(spokeAngles[i]) * sr, Math.sin(spokeAngles[i]) * sr2, 1.5 + layer * 0.3, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        ctx.restore();
+    }
+
+    // Center anchor — grows with layers
+    ctx.shadowColor = '#ffffff'; ctx.shadowBlur = 12;
+    ctx.fillStyle = `rgba(255,255,255,${pulse})`;
+    ctx.beginPath(); ctx.arc(0, 0, 3 + layers, 0, Math.PI * 2); ctx.fill();
 
     ctx.restore();
 }
@@ -5074,7 +5380,8 @@ function drawCaveZone(startX, endX) {
 function fireRocket(fromX, fromY, toX, toY) {
     const angle = Math.atan2(toY - fromY, toX - fromX);
     const boosted = Date.now() < player.damageBoostUntil;
-    const speed = boosted ? 18 : 14;
+    const isWidow = (Date.now() < player.blackWidowUntil && player.widowShotsLeft > 0);
+    const speed = boosted ? 18 : (isWidow ? 10 : 14); // web shots move slower, arc-y feel
     rockets.push({
         x: fromX, y: fromY,
         vx: Math.cos(angle) * speed,
@@ -5083,21 +5390,29 @@ function fireRocket(fromX, fromY, toX, toY) {
         spin: 0,
         spinSpeed: 0,
         life: 180,
-        boosted: boosted
+        boosted: boosted,
+        webShot: isWidow
     });
-    if (boosted) {
+    if (isWidow) {
+        player.widowShotsLeft--;
+        if (player.widowShotsLeft <= 0) {
+            player.blackWidowUntil = 0;
+        }
+        updateHUD();
+        AudioSystem.playRocketLaunch();
+    } else if (boosted) {
         AudioSystem.playOverchargeLaunch();
     } else {
         AudioSystem.playRocketLaunch();
     }
 
     // Launch FX
-    const smokeColor = boosted ? 'rgba(255,180,40,0.4)' : 'rgba(210,220,235,0.22)';
-    const smokeColor2 = boosted ? 'rgba(255,200,60,0.5)' : 'rgba(210,220,235,0.30)';
+    const smokeColor = isWidow ? 'rgba(140,0,200,0.4)' : (boosted ? 'rgba(255,180,40,0.4)' : 'rgba(210,220,235,0.22)');
+    const smokeColor2 = isWidow ? 'rgba(100,0,160,0.5)' : (boosted ? 'rgba(255,200,60,0.5)' : 'rgba(210,220,235,0.30)');
     smokeTrails.push({
         x: fromX - Math.cos(angle) * 10,
         y: fromY - Math.sin(angle) * 10,
-        size: boosted ? 12 + Math.random() * 8 : 8 + Math.random() * 6,
+        size: isWidow ? 10 + Math.random() * 6 : (boosted ? 12 + Math.random() * 8 : 8 + Math.random() * 6),
         life: 1,
         color: smokeColor,
         vx: -Math.cos(angle) * 0.9 + (Math.random()*0.4-0.2),
@@ -5105,7 +5420,7 @@ function fireRocket(fromX, fromY, toX, toY) {
     });smokeTrails.push({
         x: fromX - Math.cos(angle) * 10,
         y: fromY - Math.sin(angle) * 10,
-        size: boosted ? 14 + Math.random() * 12 : 10 + Math.random() * 10,
+        size: isWidow ? 12 + Math.random() * 10 : (boosted ? 14 + Math.random() * 12 : 10 + Math.random() * 10),
         life: 1,
         color: smokeColor2,
         vx: -Math.cos(angle) * 1.2 + (Math.random()*0.8-0.4),
@@ -5147,7 +5462,14 @@ function activateShield() {
 function update(deltaTime) {
     if (paused) return;
     if (!gameRunning) return;
-    
+
+    // Auto-expire Black Widow mode when timer runs out (even if shots remain)
+    if (player.blackWidowUntil && Date.now() >= player.blackWidowUntil) {
+        player.blackWidowUntil = 0;
+        player.widowShotsLeft = 0;
+        updateHUD();
+    }
+
     // Process D-pad input for movement
     updateMovementFromDpad();
     
@@ -5394,7 +5716,14 @@ if (!isUnderwater && !isOverWaterSurface && !isInCave && player.x > nextEncounte
             }
 
             we.facingRight = player.x > we.x;
-            
+
+            // WEBBED — frozen, cannot move or fire
+            if (we.webbedUntil && wNow < we.webbedUntil) {
+                we.bobPhase = (we.bobPhase || 0) + 0.003;
+                we.y += Math.sin(we.bobPhase) * 0.1; // tiny float drift only
+                return;
+            }
+
             if (we.kind === 'torpedo') {
                 // Torpedo drones drift toward player slowly, keeping distance
                 const tdx = player.x - we.x;
@@ -5419,6 +5748,7 @@ if (!isUnderwater && !isOverWaterSurface && !isInCave && player.x > nextEncounte
                 
                 // Shoot at player (use horizontal range so sharks can fire down from above)
                 if (Math.abs(tdx) < 750 && wNow - we.lastShot > we.shotRate) {
+                    if (we.webbedUntil && wNow < we.webbedUntil) { /* webbed — cannot fire */ } else {
                     const ang = Math.atan2(tdy, tdx);
                     enemyLasers.push({
                         x: we.x + (we.facingRight ? 40 : -40),
@@ -5434,6 +5764,7 @@ if (!isUnderwater && !isOverWaterSurface && !isInCave && player.x > nextEncounte
                     we.lastShot = wNow;
                     createExplosion(we.x + (we.facingRight ? 40 : -40), we.y, '#ff3b30', 12);
                     AudioSystem.playSharkFire();
+                    } // end webbed guard
                 }
             } else if (we.kind === 'crab') {
                 // Crab walks toward player on sea floor
@@ -5551,26 +5882,63 @@ if (!isUnderwater && !isOverWaterSurface && !isInCave && player.x > nextEncounte
     updateWaterBubbles();
     
     // Update drones
-    drones.forEach(drone => {
-        // Move towards player horizontally
+    drones = drones.filter(drone => {
+        const droneNow = Date.now();
+
+        // Crashed drone — web expired, remove it and score the kill
+        if (drone.crashKill) {
+            kills++;
+            score += 150;
+            flyCharge = Math.min(FLY_CHARGE_MAX, flyCharge + 20);
+            updateHUD();
+            return false;
+        }
+
+        if (drone.webbedUntil && droneNow < drone.webbedUntil) {
+            if (drone.webCrashing) {
+                drone.crashVY = (drone.crashVY || 0) + 1.4;
+                drone.y += drone.crashVY;
+                const groundStop = canvas.height - 145;
+                if (drone.y >= groundStop) {
+                    drone.y = groundStop;
+                    drone.crashVY = 0;
+                    if (!drone.crashLanded) {
+                        drone.crashLanded = true;
+                        createExplosion(drone.x, drone.y, '#ff6622', 55, true);
+                        createExplosion(drone.x, drone.y - 25, '#ffaa00', 35, false);
+                        createExplosion(drone.x + (Math.random()-0.5)*50, drone.y - 5, '#ff3300', 28, false);
+                        AudioSystem.playExplosion && AudioSystem.playExplosion(true);
+                        drone.webbedUntil = Math.min(drone.webbedUntil, droneNow + 2000);
+                    }
+                }
+            } else {
+                drone.bobPhase += 0.004;
+                drone.y = drone.targetY + Math.sin(drone.bobPhase) * 1.5;
+            }
+            return true;
+        }
+
+        // Web just expired on a crashed drone — mark for removal next frame
+        if (drone.crashLanded) {
+            drone.crashKill = true;
+            return true;
+        }
+
+        // === NORMAL DRONE MOVEMENT ===
         const dx = player.x - drone.x;
-        const targetDistance = 350; // Hover at medium range
-        
+        const targetDistance = 350;
+
         if (Math.abs(dx) > targetDistance) {
-            // Move towards player if too far
             drone.x += Math.sign(dx) * drone.speed;
         } else if (Math.abs(dx) < targetDistance - 100) {
-            // Back away if too close
             drone.x -= Math.sign(dx) * drone.speed * 0.5;
         }
-        
-        // Bobbing motion
+
         drone.bobPhase += 0.03;
         drone.y = drone.targetY + Math.sin(drone.bobPhase) * 12;
-        // Hard clamp: never let drones go below sky area
         drone.y = Math.min(drone.y, canvas.height - 250);
-        
-        // Cave-zone safety: keep drones away from cave mound area
+
+        // Cave-zone safety
         const czS = (caveZone ? caveZone.startX : nextCaveEdgeX);
         const czE = (caveZone ? caveZone.endX   : (nextCaveEdgeX + CAVE_LENGTH_MAX));
         const cMarg = 280;
@@ -5578,44 +5946,33 @@ if (!isUnderwater && !isOverWaterSurface && !isInCave && player.x > nextEncounte
             if (drone.x < (czS + czE) / 2) drone.x = czS - cMarg;
             else drone.x = czE + cMarg;
         }
-        
+
         // Respawn if too far off screen
         if (drone.x < camX - 200 || drone.x > camX + canvas.width + 200) {
             let newX = player.x + 400 + Math.random() * 300;
-            // Don't respawn into cave zone
-            if (newX > czS - cMarg && newX < czE + cMarg) {
-                newX = czE + cMarg + 100;
-            }
+            if (newX > czS - cMarg && newX < czE + cMarg) newX = czE + cMarg + 100;
             drone.x = newX;
             drone.targetY = 40 + Math.random() * Math.max(60, Math.min(canvas.height - 280, 300) - 40);
         }
-        
-        // SHOOTING - drones fire at player MORE AGGRESSIVELY
+
+        // Shooting
         const now = Date.now();
         const distToPlayer = Math.hypot(drone.x - player.x, drone.y - player.y);
         if (distToPlayer < 700 && now - drone.lastShot > drone.shotRate) {
-            // Fire a laser bolt at player
-            const ang = Math.atan2((player.y - player.height * 0.3) - drone.y, player.x - drone.x);
-            const sp = 8;
-            enemyLasers.push({
-                x: drone.x, 
-                y: drone.y + 10,
-                vx: Math.cos(ang) * sp,
-                vy: Math.sin(ang) * sp,
-                life: 100,
-                w: 5, // Thicker laser beam
-                color: '#ff3333' // Red laser
-            });
-            drone.lastShot = now;
-            
-            // Flash effect for visibility
-            createExplosion(drone.x, drone.y + 10, '#ff3333', 6);
-            
-            // Play laser sound
-            AudioSystem.playHit();
+            if (!(drone.webbedUntil && now < drone.webbedUntil)) {
+                const ang = Math.atan2((player.y - player.height * 0.3) - drone.y, player.x - drone.x);
+                enemyLasers.push({ x: drone.x, y: drone.y + 10,
+                    vx: Math.cos(ang) * 8, vy: Math.sin(ang) * 8,
+                    life: 100, w: 5, color: '#ff3333' });
+                drone.lastShot = now;
+                createExplosion(drone.x, drone.y + 10, '#ff3333', 6);
+                AudioSystem.playHit();
+            }
         }
+
+        return true;
     });
-    
+
     // Remove dead drones (health checked in rocket collision)
     
     // Aiming: arm points toward bullseye target
@@ -5854,21 +6211,25 @@ if (!isUnderwater && !isOverWaterSurface && !isInCave && player.x > nextEncounte
     }
     
     // === CAVE ZONE (ONE-OFF EVENT) ===
+    // Only trigger cave creation when the player reaches the X threshold on foot (not flying over)
+    // Also guard against triggering when player has flown well past the entrance
     if (!caveZoneUsed && !caveZone && player.x >= nextCaveEdgeX) {
-        caveZone = createCaveZone(nextCaveEdgeX);
-        caveZoneUsed = true;
-        // Only enter cave if on the ground (not flying over)
         const caveRoofY = canvas.height - 120 - 100;
-        if (!player.isFlying && player.y >= caveRoofY) {
+        const onGround = !player.isFlying && player.y >= caveRoofY;
+        // If player is more than the full cave length past the entrance, they flew over and landed — skip it
+        const tooFarPast = player.x > nextCaveEdgeX + CAVE_LENGTH_MAX;
+
+        if (tooFarPast) {
+            // Flew over and landed way past — permanently mark cave as done, no entry
+            caveZoneUsed = true;
+            caveSkippedByFlight = true;
+        } else if (onGround) {
+            // Walked in — create cave and enter
+            caveZone = createCaveZone(nextCaveEdgeX);
+            caveZoneUsed = true;
             isInCave = true;
             showWaveAnnouncement('⚠ MOON CAVE — VISOR ON — BAT-BOTS DETECTED ⚠', '#ff6644');
-        } else {
-            isInCave = false;
-            caveSkippedByFlight = true;
-            showWaveAnnouncement('☁ FLYING OVER CAVE ZONE ☁', '#88ccff');
-        }
-        // Only spawn cave content if player walked in
-        if (!caveSkippedByFlight) {
+            // Spawn cave content
             enemies = enemies.filter(e => e.x < caveZone.startX - 100);
             drones = drones.filter(d => d.x < caveZone.startX - 100);
             for (let i = 0; i < 2; i++) spawnBatBot();
@@ -5880,10 +6241,11 @@ if (!isUnderwater && !isOverWaterSurface && !isInCave && player.x > nextEncounte
             healthPickups.push({ x: cavePickup2X, y: canvas.height - 150, kind: 'fuel', collected: false, bobPhase: Math.random() * Math.PI * 2 });
             caveAllBatsCleared = false;
         }
+        // If flying over — do NOT create or lock the cave yet, let player land and walk in
     }
     
-    // Cave zone active check — if skipped by flight, cave is permanently done
-    if (caveZone && !caveSkippedByFlight) {
+    // Cave zone active check
+    if (caveZone) {
         const inCaveX = player.x >= caveZone.startX && player.x < caveZone.endX;
         const caveRoofY = canvas.height - 120 - 100;
         const atGroundLevel = !player.isFlying && player.y >= caveRoofY;
@@ -5921,7 +6283,7 @@ if (!isUnderwater && !isOverWaterSurface && !isInCave && player.x > nextEncounte
     }
     
     // === TURRET TOWER SPAWNING (post-pool, well after mine fields) ===
-    if (waterZonePassed && !isInCave && player.x > nextTurretX - 400) {
+    if (waterZonePassed && !isInCave && player.x > nextTurretX - 1500) {
         spawnTurret();
         // Push next encounter far past the cannon — let player focus on it
         nextEncounterX = Math.max(nextEncounterX, nextTurretX + 1200);
@@ -5951,38 +6313,43 @@ if (!isUnderwater && !isOverWaterSurface && !isInCave && player.x > nextEncounte
 
         const dx = player.x - pivotX;
         const dy = (player.y - player.height * 0.4) - pivotY;
-        t.barrelAngle = Math.atan2(dy, dx);
         const distToPlayer = Math.sqrt(dx * dx + dy * dy);
 
-        if (!t.chargeSoundPlayed && !t.beamFiring && (t.nextFireTime - tNow) < 1200 && distToPlayer < 900) {
-            t.chargeSoundPlayed = true;
-            AudioSystem.playTurretCharge && AudioSystem.playTurretCharge();
-        }
+        // If webbed — frozen, cannot rotate barrels or fire
+        const turretWebbed = t.webbedUntil && tNow < t.webbedUntil;
 
-        if (!t.beamFiring && tNow > t.nextFireTime && distToPlayer < 900) {
-            t.beamFiring = true;
-            t.beamStartTime = tNow;
-            t.chargeSoundPlayed = false;
-            AudioSystem.playTurretFire && AudioSystem.playTurretFire();
-            // Muzzle blast from both barrels
-            const perpX = -Math.sin(t.barrelAngle) * barrelSep;
-            const perpY =  Math.cos(t.barrelAngle) * barrelSep;
-            const barrelStartX = pivotX + Math.cos(t.barrelAngle) * (hW * 0.5);
-            const barrelStartY = pivotY + Math.sin(t.barrelAngle) * (hW * 0.5);
-            for (const sign of [-1, 1]) {
-                const mx = barrelStartX + Math.cos(t.barrelAngle) * barrelL + perpX * sign;
-                const my = barrelStartY + Math.sin(t.barrelAngle) * barrelL + perpY * sign;
-                for (let s = 0; s < 10; s++) {
-                    sparks.push({
-                        x: mx, y: my,
-                        vx: Math.cos(t.barrelAngle) * (3 + Math.random()*5) + (Math.random()-0.5)*3,
-                        vy: Math.sin(t.barrelAngle) * (3 + Math.random()*5) + (Math.random()-0.5)*3,
-                        life: 0.4 + Math.random()*0.4, size: 2 + Math.random()*3,
-                        color: Math.random() < 0.5 ? '#ff3300' : '#ffffff'
-                    });
+        if (!turretWebbed) {
+            t.barrelAngle = Math.atan2(dy, dx);
+
+            if (!t.chargeSoundPlayed && !t.beamFiring && (t.nextFireTime - tNow) < 1200 && distToPlayer < 900) {
+                t.chargeSoundPlayed = true;
+                AudioSystem.playTurretCharge && AudioSystem.playTurretCharge();
+            }
+
+            if (!t.beamFiring && tNow > t.nextFireTime && distToPlayer < 900) {
+                t.beamFiring = true;
+                t.beamStartTime = tNow;
+                t.chargeSoundPlayed = false;
+                AudioSystem.playTurretFire && AudioSystem.playTurretFire();
+                const perpX = -Math.sin(t.barrelAngle) * barrelSep;
+                const perpY =  Math.cos(t.barrelAngle) * barrelSep;
+                const barrelStartX = pivotX + Math.cos(t.barrelAngle) * (hW * 0.5);
+                const barrelStartY = pivotY + Math.sin(t.barrelAngle) * (hW * 0.5);
+                for (const sign of [-1, 1]) {
+                    const mx = barrelStartX + Math.cos(t.barrelAngle) * barrelL + perpX * sign;
+                    const my = barrelStartY + Math.sin(t.barrelAngle) * barrelL + perpY * sign;
+                    for (let s = 0; s < 10; s++) {
+                        sparks.push({
+                            x: mx, y: my,
+                            vx: Math.cos(t.barrelAngle) * (3 + Math.random()*5) + (Math.random()-0.5)*3,
+                            vy: Math.sin(t.barrelAngle) * (3 + Math.random()*5) + (Math.random()-0.5)*3,
+                            life: 0.4 + Math.random()*0.4, size: 2 + Math.random()*3,
+                            color: Math.random() < 0.5 ? '#ff3300' : '#ffffff'
+                        });
+                    }
                 }
             }
-        }
+        } // end webbed guard
 
         if (t.beamFiring) {
             const age = tNow - t.beamStartTime;
@@ -6128,6 +6495,26 @@ if (!isUnderwater && !isOverWaterSurface && !isInCave && player.x > nextEncounte
         const dy = player.y - bat.y;
         const dist = Math.sqrt(dx * dx + dy * dy);
         const groundY = canvas.height - 120;
+
+        // WEBBED — bat crashes to cave floor
+        if (bat.webbedUntil && bNow < bat.webbedUntil) {
+            if (bat.webCrashing) {
+                bat.crashVY = (bat.crashVY || 0) + 1.0;
+                bat.y += bat.crashVY;
+                const floorStop = groundY - 30;
+                if (bat.y >= floorStop) {
+                    bat.y = floorStop;
+                    bat.crashVY = 0;
+                    if (!bat.crashLanded) {
+                        bat.crashLanded = true;
+                        createExplosion(bat.x, bat.y, '#ff6633', 40, true);
+                        createExplosion(bat.x, bat.y - 15, '#ffaa00', 22, false);
+                        AudioSystem.playExplosion && AudioSystem.playExplosion(true);
+                    }
+                }
+            }
+            return bat.health > 0;
+        }
         
         if (bat.state === 'fly') {
             // Patrol — weave toward player at moderate speed
@@ -6190,7 +6577,7 @@ if (!isUnderwater && !isOverWaterSurface && !isInCave && player.x > nextEncounte
         }
         
         // Fire red electricity bolt at player (consistent rate with other enemies)
-        if (bNow > bat.lastShot && dist < 450 && dist > 50) {
+        if (!(bat.webbedUntil && bNow < bat.webbedUntil) && bNow > bat.lastShot && dist < 450 && dist > 50) {
             bat.lastShot = bNow + bat.shotRate;
             const shotDx = player.x - bat.x;
             const shotDy = (player.y + 10) - bat.y;
@@ -6303,6 +6690,11 @@ if (!isUnderwater && !isOverWaterSurface && !isInCave && player.x > nextEncounte
                 player.damageBoostUntil = Date.now() + 30000; // 30 seconds
                 createExplosion(hp.x, hp.y, '#ffcc00', 40);
                 showWaveAnnouncement('⚡ WEAPONS OVERCHARGE — 30s ⚡', '#ffcc00');
+            } else if (kind === 'widow') {
+                player.blackWidowUntil = Date.now() + 30000; // 30 seconds
+                player.widowShotsLeft = 3;
+                createExplosion(hp.x, hp.y, '#ffffff', 40);
+                showWaveAnnouncement('🕷 BLACK WIDOW MODE — 3 WEB SHOTS 🕷', '#ffffff');
             }
             
             AudioSystem.playBarrelPickup();
@@ -6451,6 +6843,11 @@ if (player.isFlying && Date.now() > player.flyEndTime) { player.isFlying = false
         const dx = enemy.targetX - enemy.x, dy = enemy.targetY - enemy.y, dist = Math.sqrt(dx * dx + dy * dy);
         const distToPlayer = Math.hypot(enemy.x - player.x, enemy.y - player.y);
         
+        // WEBBED — completely frozen, can't move or charge
+        const enemyNow = Date.now();
+        const isEnemyWebbed = enemy.webbedUntil && enemyNow < enemy.webbedUntil;
+
+        if (!isEnemyWebbed) {
         // Charge attack
         if (distToPlayer < 350 && !enemy.isCharging && Math.random() < 0.003) {
             enemy.isCharging = true;
@@ -6473,6 +6870,7 @@ if (player.isFlying && Date.now() > player.flyEndTime) { player.isFlying = false
             enemy.y += (dy / dist) * enemy.speed;
             enemy.legAngle += enemy.legDir * 0.12;
         }
+        } // end webbed guard
         
         if (Math.abs(enemy.legAngle) > 0.4) enemy.legDir *= -1;
         if (dist <= 20 || Math.random() < 0.008) {
@@ -6488,7 +6886,7 @@ if (player.isFlying && Date.now() > player.flyEndTime) { player.isFlying = false
 
             // Start telegraph if ready and not already telegraphing
             if (!enemy.telegraphUntil && (now - enemy.lastShot > enemy.shotRate)) {
-                // Fire from ACTUAL CANNON BARREL MUZZLE (rotates to aim at player)
+                if (enemy.webbedUntil && now < enemy.webbedUntil) { /* webbed — cannot fire */ } else {
                 const s = enemy.width / 100;  // Scale factor
                 const turretBaseX = enemy.x + (enemy.facingRight ? 60 * s : -60 * s);
                 const turretBaseY = enemy.y - 55 * s;
@@ -6512,6 +6910,7 @@ if (player.isFlying && Date.now() > player.flyEndTime) { player.isFlying = false
                 createExplosion(muzzleX, muzzleY, '#ff3355', 18);
                 // Add warning sound
                 AudioSystem.playHit();
+                } // end webbed guard
             }
 
             // Fire after telegraph
@@ -6633,10 +7032,23 @@ if (player.isFlying && Date.now() > player.flyEndTime) { player.isFlying = false
             const t = turrets[i];
             const tPivotY = t.y - 90 - 42;
             if (Math.abs(rocket.x - t.x) < 60 && Math.abs(rocket.y - tPivotY) < 28) {
-                const dmgMult = (Date.now() < player.damageBoostUntil) ? 3 : 1;
-                t.health -= 30 * dmgMult;
-                t.hitFlash = Date.now() + 200;
-                createExplosion(rocket.x, rocket.y, '#ff4422', 20);
+                if (rocket.webShot) {
+                    // Web hit — freeze turret, stop it firing
+                    if (t.webbedUntil && Date.now() < t.webbedUntil) {
+                        t.webbedUntil = Math.min(t.webbedUntil + 4000, Date.now() + 12000);
+                        t.webLayers = Math.min((t.webLayers || 1) + 1, 4);
+                    } else {
+                        t.webbedUntil = Date.now() + 7000;
+                        t.webLayers = 1;
+                        t.beamFiring = false; // cancel any active beam immediately
+                    }
+                    createExplosion(rocket.x, rocket.y, '#ffffff', 22);
+                } else {
+                    const dmgMult = (Date.now() < player.damageBoostUntil) ? 3 : 1;
+                    t.health -= 30 * dmgMult;
+                    t.hitFlash = Date.now() + 200;
+                    createExplosion(rocket.x, rocket.y, '#ff4422', 20);
+                }
                 return false;
             }
         }
@@ -6652,7 +7064,17 @@ if (player.isFlying && Date.now() > player.flyEndTime) { player.isFlying = false
             if (Math.abs(rocket.x - enemy.x) < hitboxW && Math.abs(rocket.y - hitboxCenterY) < hitboxH) {
                 const dmgMult = (Date.now() < player.damageBoostUntil) ? 3 : 1;
                 enemy.health -= 30 * dmgMult;
-                if (rocket.boosted) {
+                if (rocket.webShot) {
+                    // WEB HIT — if already webbed, stack/extend; otherwise fresh web
+                    if (enemy.webbedUntil && Date.now() < enemy.webbedUntil) {
+                        enemy.webbedUntil = Math.min(enemy.webbedUntil + 4000, Date.now() + 12000);
+                        enemy.webLayers = Math.min((enemy.webLayers || 1) + 1, 4);
+                    } else {
+                        enemy.webbedUntil = Date.now() + 7000;
+                        enemy.webLayers = 1;
+                    }
+                    createExplosion(rocket.x, rocket.y, '#ffffff', 22);
+                } else if (rocket.boosted) {
                     createExplosion(rocket.x, rocket.y, '#ffaa00', 40, true);
                 } else {
                     createExplosion(rocket.x, rocket.y, '#ff8844', 25);
@@ -6683,7 +7105,20 @@ if (player.isFlying && Date.now() > player.flyEndTime) { player.isFlying = false
             if (Math.abs(rocket.x - drone.x) < 25 && Math.abs(rocket.y - drone.y) < 20) {
                 const dmgMult = (Date.now() < player.damageBoostUntil) ? 3 : 1;
                 drone.health -= 30 * dmgMult;
-                createExplosion(rocket.x, rocket.y, rocket.boosted ? '#ffaa00' : '#00ccff', rocket.boosted ? 35 : 20, rocket.boosted);
+                if (rocket.webShot) {
+                    if (drone.webbedUntil && Date.now() < drone.webbedUntil) {
+                        drone.webbedUntil = Math.min(drone.webbedUntil + 4000, Date.now() + 12000);
+                        drone.webLayers = Math.min((drone.webLayers || 1) + 1, 4);
+                    } else {
+                        drone.webbedUntil = Date.now() + 7000;
+                        drone.webLayers = 1;
+                        drone.webCrashing = true; // drones fall from sky when webbed
+                        drone.crashVY = 0;
+                    }
+                    createExplosion(rocket.x, rocket.y, '#ffffff', 22);
+                } else {
+                    createExplosion(rocket.x, rocket.y, rocket.boosted ? '#ffaa00' : '#00ccff', rocket.boosted ? 35 : 20, rocket.boosted);
+                }
                 AudioSystem.playHit();
                 if (drone.health <= 0) {
                     createExplosion(drone.x, drone.y, '#ff6600', 40, true);
@@ -6702,18 +7137,32 @@ if (player.isFlying && Date.now() > player.flyEndTime) { player.isFlying = false
         for (let i = batBots.length - 1; i >= 0; i--) {
             const bat = batBots[i];
             if (Math.abs(rocket.x - bat.x) < 28 && Math.abs(rocket.y - bat.y) < 22) {
-                const dmgMult = (Date.now() < player.damageBoostUntil) ? 3 : 1;
-                bat.health -= 30 * dmgMult;
-                createExplosion(rocket.x, rocket.y, rocket.boosted ? '#ffaa00' : '#ff6633', rocket.boosted ? 30 : 18, rocket.boosted);
-                AudioSystem.playHit();
-                if (bat.health <= 0) {
-                    createExplosion(bat.x, bat.y, '#ff6633', 35, true);
-                    AudioSystem.playExplosion(true);
-                    batBots.splice(i, 1);
-                    kills++;
-                    score += 120;
-                    flyCharge = Math.min(FLY_CHARGE_MAX, flyCharge + 15);
-                    updateHUD();
+                if (rocket.webShot) {
+                    if (bat.webbedUntil && Date.now() < bat.webbedUntil) {
+                        bat.webbedUntil = Math.min(bat.webbedUntil + 4000, Date.now() + 12000);
+                        bat.webLayers = Math.min((bat.webLayers || 1) + 1, 4);
+                    } else {
+                        bat.webbedUntil = Date.now() + 7000;
+                        bat.webLayers = 1;
+                        bat.webCrashing = true;
+                        bat.crashVY = 0;
+                        bat.state = 'webcrash';
+                    }
+                    createExplosion(rocket.x, rocket.y, '#ffffff', 22);
+                } else {
+                    const dmgMult = (Date.now() < player.damageBoostUntil) ? 3 : 1;
+                    bat.health -= 30 * dmgMult;
+                    createExplosion(rocket.x, rocket.y, rocket.boosted ? '#ffaa00' : '#ff6633', rocket.boosted ? 30 : 18, rocket.boosted);
+                    AudioSystem.playHit();
+                    if (bat.health <= 0) {
+                        createExplosion(bat.x, bat.y, '#ff6633', 35, true);
+                        AudioSystem.playExplosion(true);
+                        batBots.splice(i, 1);
+                        kills++;
+                        score += 120;
+                        flyCharge = Math.min(FLY_CHARGE_MAX, flyCharge + 15);
+                        updateHUD();
+                    }
                 }
                 return false;
             }
@@ -6726,10 +7175,21 @@ if (player.isFlying && Date.now() > player.flyEndTime) { player.isFlying = false
             const hitH = we.kind === 'crab' ? 35 : 14;
             const hitY = we.kind === 'crab' ? we.y - we.height * 0.3 : we.y;
             if (Math.abs(rocket.x - we.x) < hitW && Math.abs(rocket.y - hitY) < hitH) {
-                const dmgMult = (Date.now() < player.damageBoostUntil) ? 3 : 1;
-                we.health -= 30 * dmgMult;
-                createExplosion(rocket.x, rocket.y, rocket.boosted ? '#ffaa00' : '#00ccff', rocket.boosted ? 35 : 20, rocket.boosted);
-                AudioSystem.playHit();
+                if (rocket.webShot) {
+                    if (we.webbedUntil && Date.now() < we.webbedUntil) {
+                        we.webbedUntil = Math.min(we.webbedUntil + 4000, Date.now() + 12000);
+                        we.webLayers = Math.min((we.webLayers || 1) + 1, 4);
+                    } else {
+                        we.webbedUntil = Date.now() + 7000;
+                        we.webLayers = 1;
+                    }
+                    createExplosion(rocket.x, rocket.y, '#ffffff', 22);
+                } else {
+                    const dmgMult = (Date.now() < player.damageBoostUntil) ? 3 : 1;
+                    we.health -= 30 * dmgMult;
+                    createExplosion(rocket.x, rocket.y, rocket.boosted ? '#ffaa00' : '#00ccff', rocket.boosted ? 35 : 20, rocket.boosted);
+                    AudioSystem.playHit();
+                }
                 return false;
             }
         }
@@ -7322,7 +7782,13 @@ function draw() {
     ctx.globalAlpha = 1;
 
     // Turret towers
-    turrets.forEach(t => drawTurret(t));
+    turrets.forEach(t => {
+        drawTurret(t);
+        if (t.webbedUntil && Date.now() < t.webbedUntil) {
+            const tPivotY = (canvas.height - 120) - 90 - 42;
+            drawWebbedOverlay(t.x, tPivotY, 120, 100, t.webLayers);
+        }
+    });
 
     // Proximity mines
     mines.forEach(m => drawMine(m));
@@ -7480,13 +7946,18 @@ function draw() {
         } else {
             drawHumanoidBot(enemy.x, enemy.y, enemy.width, enemy.height, enemy.legAngle, enemy.facingRight, enemy.health, enemy.maxHealth);
         }
-        // Laser warning tell - REMOVED (no dotted line)
-        // Warning is visual from charging barrel glow only
+        // Web overlay when enemy is webbed
+        if (enemy.webbedUntil && Date.now() < enemy.webbedUntil) {
+            drawWebbedOverlay(enemy.x, enemy.y - enemy.height * 0.5, enemy.width * 0.7, enemy.height * 0.7, enemy.webLayers);
+        }
     });
 
     // Drones (flying enemies)
     drones.forEach(drone => {
         drawDrone(drone);
+        if (drone.webbedUntil && Date.now() < drone.webbedUntil) {
+            drawWebbedOverlay(drone.x, drone.y, drone.width * 0.6, drone.height * 0.6, drone.webLayers);
+        }
     });
 
     // Cave zone rendering
@@ -7511,7 +7982,12 @@ function draw() {
     }
 
     // Bat-bots (cave enemies) — drawn after cave overlay so they're visible
-    batBots.forEach(bat => drawBatBot(bat));
+    batBots.forEach(bat => {
+        drawBatBot(bat);
+        if (bat.webbedUntil && Date.now() < bat.webbedUntil) {
+            drawWebbedOverlay(bat.x, bat.y, bat.width * 0.7, bat.height * 0.7, bat.webLayers);
+        }
+    });
     sonicRings.forEach(ring => drawSonicRing(ring));
     
     // Cave barrel (reward pickup)
@@ -7608,6 +8084,9 @@ function draw() {
                 drawTorpedoDrone(we.x, we.y, we.width, we.height, we.facingRight, we.health, we.maxHealth);
             } else if (we.kind === 'crab') {
                 drawCrabWalker(we.x, we.y, we.width, we.height, we.facingRight, we.legAngle, we.health, we.maxHealth, we.chargeProgress);
+            }
+            if (we.webbedUntil && Date.now() < we.webbedUntil) {
+                drawWebbedOverlay(we.x, we.y, we.width * 0.65, we.height * 0.65, we.webLayers);
             }
         });
         drawWaterBubbles();
@@ -7820,9 +8299,21 @@ function updateHUD() {
     document.getElementById('healthFill').style.width = Math.max(0, player.health / player.maxHealth * 100) + '%';
     const fuelPct = (flyCharge / FLY_CHARGE_MAX * 100) + '%';
     document.getElementById('flyFill').style.width = fuelPct;
-    // Update mobile fuel bar too
     const mf = document.getElementById('mobileFuelFill');
     if (mf) mf.style.width = fuelPct;
+
+    // Widow HUD indicator
+    const widowHUD = document.getElementById('widowHUD');
+    const widowShots = document.getElementById('widowShots');
+    if (widowHUD) {
+        const widowOn = Date.now() < player.blackWidowUntil && player.widowShotsLeft > 0;
+        widowHUD.style.display = widowOn ? 'block' : 'none';
+        if (widowShots) {
+            const filled = '●'.repeat(player.widowShotsLeft);
+            const empty  = '○'.repeat(Math.max(0, 3 - player.widowShotsLeft));
+            widowShots.textContent = filled + empty;
+        }
+    }
 
     // Enable/disable ability buttons (mobile)
     const ready = flyCharge >= FLY_CHARGE_MAX && !player.isFlying && Date.now() > player.shieldUntil;
@@ -8019,7 +8510,7 @@ function showCharacterSelect(onComplete) {
         ctx.scale(scale, scale);
 
         // Body glow
-        ctx.shadowColor = `rgba(${ch.trimRGB}, 0.7)`;
+        ctx.shadowColor = `rgba(${trimRGB}, 0.7)`;
         ctx.shadowBlur = 18;
 
         // Legs
@@ -8073,7 +8564,7 @@ function showCharacterSelect(onComplete) {
             ctx.closePath();
             ctx.fill();
             // Waist belt accent
-            ctx.strokeStyle = `rgba(${ch.trimRGB}, 0.5)`;
+            ctx.strokeStyle = `rgba(${trimRGB}, 0.5)`;
             ctx.lineWidth = 1.5;
             ctx.beginPath();
             ctx.moveTo(-9, 0);
@@ -8091,14 +8582,14 @@ function showCharacterSelect(onComplete) {
         ctx.shadowColor = ch.trim;
         ctx.shadowBlur = 16;
         const coreGrad = ctx.createRadialGradient(0, 2, 0, 0, 2, 18);
-        coreGrad.addColorStop(0, `rgba(${ch.glowRGB}, 0.8)`);
-        coreGrad.addColorStop(0.5, `rgba(${ch.glow2RGB}, 0.3)`);
+        coreGrad.addColorStop(0, `rgba(${glowRGB}, 0.8)`);
+        coreGrad.addColorStop(0.5, `rgba(${glow2RGB}, 0.3)`);
         coreGrad.addColorStop(1, 'rgba(0,0,0,0)');
         ctx.fillStyle = coreGrad;
         ctx.beginPath(); ctx.arc(0, 2, 18, 0, Math.PI * 2); ctx.fill();
         ctx.fillStyle = 'rgba(10,16,24,0.9)';
         ctx.beginPath(); ctx.arc(0, 2, 8, 0, Math.PI * 2); ctx.fill();
-        ctx.fillStyle = `rgba(${ch.glowRGB}, 0.8)`;
+        ctx.fillStyle = `rgba(${glowRGB}, 0.8)`;
         ctx.beginPath(); ctx.arc(0, 2, 3, 0, Math.PI * 2); ctx.fill();
         ctx.shadowBlur = 0;
 
@@ -8126,7 +8617,7 @@ function showCharacterSelect(onComplete) {
 
         // === HELMET (character-specific) ===
         const headY = -34;
-        ctx.shadowColor = `rgba(${ch.trimRGB}, 0.5)`;
+        ctx.shadowColor = `rgba(${trimRGB}, 0.5)`;
         ctx.shadowBlur = 8;
 
         if (ch.helmet === 'angular') {
@@ -8178,7 +8669,7 @@ function showCharacterSelect(onComplete) {
                 ctx.moveTo(0, headY + 4);
                 ctx.quadraticCurveTo(-1 + sway * 0.6, headY + 20, -2 + sway, headY + 36);
                 ctx.stroke();
-                ctx.strokeStyle = `rgba(${ch.trimRGB}, 0.15)`;
+                ctx.strokeStyle = `rgba(${trimRGB}, 0.15)`;
                 ctx.lineWidth = 1;
                 ctx.beginPath();
                 ctx.moveTo(1, headY + 5);
@@ -9298,8 +9789,17 @@ document.addEventListener('keydown', (e) => {
         nextMineFieldX = 12600;
         turrets = []; mines = [];
         enemies = []; drones = [];
-        nextEncounterX = player.x + 3000; // no enemy flood on arrival
+        nextEncounterX = player.x + 3000;
         showWaveAnnouncement('⚡ WARPED TO TEST ZONE ⚡', '#00ffcc');
+        return;
+    }
+
+    // DEV: press B to instantly activate Black Widow Mode
+    if (e.code === 'KeyB' && gameRunning) {
+        player.blackWidowUntil = Date.now() + 30000;
+        player.widowShotsLeft = 3;
+        updateHUD();
+        showWaveAnnouncement('🕷 BLACK WIDOW MODE — 3 WEB SHOTS 🕷', '#ffffff');
         return;
     }
     
