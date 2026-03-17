@@ -501,6 +501,61 @@ const AudioSystem = {
         noise.start(t);
     },
     
+    playWebShot() {
+        if (!this.enabled || !this.ctx) return;
+        const t = this.ctx.currentTime;
+
+        // Silky "thwip" — soft high sweep, like silk being thrown
+        const thwip = this.ctx.createOscillator();
+        const thwipGain = this.ctx.createGain();
+        thwip.connect(thwipGain);
+        thwipGain.connect(this.ctx.destination);
+        thwip.type = 'sine';
+        thwip.frequency.setValueAtTime(3200, t);
+        thwip.frequency.exponentialRampToValueAtTime(800, t + 0.18);
+        thwipGain.gain.setValueAtTime(0.0, t);
+        thwipGain.gain.linearRampToValueAtTime(0.18, t + 0.02);
+        thwipGain.gain.exponentialRampToValueAtTime(0.001, t + 0.22);
+        thwip.start(t); thwip.stop(t + 0.22);
+
+        // Soft airy shimmer — web unfurling in air
+        const shimmer = this.ctx.createOscillator();
+        const shimGain = this.ctx.createGain();
+        const shimFilter = this.ctx.createBiquadFilter();
+        shimmer.connect(shimFilter);
+        shimFilter.connect(shimGain);
+        shimGain.connect(this.ctx.destination);
+        shimmer.type = 'triangle';
+        shimmer.frequency.setValueAtTime(2400, t + 0.02);
+        shimmer.frequency.linearRampToValueAtTime(1200, t + 0.3);
+        shimFilter.type = 'bandpass';
+        shimFilter.frequency.setValueAtTime(2000, t);
+        shimFilter.Q.value = 2;
+        shimGain.gain.setValueAtTime(0.12, t + 0.02);
+        shimGain.gain.exponentialRampToValueAtTime(0.001, t + 0.35);
+        shimmer.start(t + 0.02); shimmer.stop(t + 0.35);
+
+        // Very soft white noise undertone — air displacement
+        const bufSize = this.ctx.sampleRate * 0.25;
+        const buf = this.ctx.createBuffer(1, bufSize, this.ctx.sampleRate);
+        const d = buf.getChannelData(0);
+        for (let i = 0; i < bufSize; i++) {
+            d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / bufSize, 2.5) * 0.4;
+        }
+        const ns = this.ctx.createBufferSource();
+        const nsFilter = this.ctx.createBiquadFilter();
+        const nsGain = this.ctx.createGain();
+        ns.buffer = buf;
+        ns.connect(nsFilter);
+        nsFilter.connect(nsGain);
+        nsGain.connect(this.ctx.destination);
+        nsFilter.type = 'highpass';
+        nsFilter.frequency.setValueAtTime(3500, t);
+        nsGain.gain.setValueAtTime(0.06, t);
+        nsGain.gain.exponentialRampToValueAtTime(0.001, t + 0.25);
+        ns.start(t);
+    },
+
     playOverchargeLaunch() {
         if (!this.enabled || !this.ctx) return;
         const t = this.ctx.currentTime;
@@ -990,6 +1045,7 @@ let nextWaterEdgeX = 10500; // chemical pool appears well into the run — feels
 let isInCave = false;
 let caveZoneUsed = false;
 let caveSkippedByFlight = false;
+let playerFlewOverCave = false; // set true the moment player is flying when crossing nextCaveEdgeX
 let caveZone = null; // { startX, endX }
 let nextCaveEdgeX = 5500; // cave appears after the chemical pool
 let batBots = []; // bat-bot enemies
@@ -2458,19 +2514,23 @@ function drawMetallicTRex(x, y, width, height, legAngle, facingRight, health, ma
     ctx.save();
     ctx.translate(60*s, -55*s);
     
-    // Calculate aim angle toward target
+    // Use pre-smoothed angle stored on enemy object if available (prevents 180° snap on facing flip)
+    // Fall back to raw calculation only when drawing in non-game contexts
     let turretAngle = 0;
-    if (targetX !== undefined && targetY !== undefined) {
-        // Turret world position
+    // Check if a smoothed angle was passed via a special property on the arguments
+    // We receive targetX/targetY — if the enemy has smoothTurretAngle we prefer it
+    // Find the matching enemy to get smoothTurretAngle
+    const _matchEnemy = enemies ? enemies.find(e => Math.abs(e.x - x) < 2 && Math.abs(e.y - y) < 2) : null;
+    if (_matchEnemy && _matchEnemy.smoothTurretAngle !== undefined) {
+        turretAngle = _matchEnemy.smoothTurretAngle;
+    } else if (targetX !== undefined && targetY !== undefined) {
         const turretWorldX = facingRight ? x + 60*s : x - 60*s;
         const turretWorldY = y - 55*s;
         const aimDx = targetX - turretWorldX;
         const aimDy = targetY - turretWorldY;
-        // In local space, x is flipped if !facingRight
         const localDx = facingRight ? aimDx : -aimDx;
         const localDy = aimDy;
         turretAngle = Math.atan2(localDy, localDx);
-        // Clamp: can aim up a lot but not too far down or behind
         turretAngle = Math.max(-Math.PI * 0.45, Math.min(Math.PI * 0.25, turretAngle));
     }
     
@@ -3408,7 +3468,8 @@ function spawnTurret() {
 }
 
 function drawTurret(t) {
-    if (t.x < camX - 500 || t.x > camX + canvas.width + 500) return;
+    if (t.x < camX - 500) return; // off left is fine, cull it
+    if (t.x > camX + canvas.width + 50) return; // off right: don't draw body at all
     const now = Date.now();
     const groundY = canvas.height - 120;
     const flash = t.hitFlash > now;
@@ -3427,13 +3488,18 @@ function drawTurret(t) {
     ctx.save();
     // Hard-reset any shadow bleed from previous draw calls
     ctx.shadowBlur = 0; ctx.shadowColor = 'transparent'; ctx.globalAlpha = 1;
+    // Clip entire turret draw to screen bounds in world space — kills all shadow arcs
+    ctx.beginPath();
+    ctx.rect(camX - 10, -300, canvas.width + 20, canvas.height + 600);
+    ctx.clip();
 
     // =====================================================
     // DOUBLE LASER BEAMS (drawn first, behind cannon)
     // =====================================================
-    // DOUBLE LASER BEAMS (drawn first, behind cannon)
-    // =====================================================
-    if (t.beamFiring) {
+    // Only draw beams when the turret is actually on screen — off-screen thick
+    // strokes create circular cap artifacts at the canvas edge
+    if (t.beamFiring && t.x >= camX - 200 && t.x <= camX + canvas.width + 100) {
+        ctx.save();
         const age  = now - t.beamStartTime;
         const life = Math.max(0, 1 - age / t.beamDuration);
         const ang  = t.barrelAngle;
@@ -3445,8 +3511,23 @@ function drawTurret(t) {
         const barrelStartX = pivotX + Math.cos(ang) * (hW * 0.5);
         const barrelStartY = pivotY + Math.sin(ang) * (hW * 0.5);
 
-        // If shield up, find where beam hits the bubble and stop there
+        // Check if beam hits the player — stop beam there
         let effectiveBeamLen = beamLen;
+        if (!shieldActive) {
+            const beamDX2 = Math.cos(ang), beamDY2 = Math.sin(ang);
+            const mx0 = barrelStartX + Math.cos(ang) * barrelL;
+            const my0 = barrelStartY + Math.sin(ang) * barrelL;
+            for (let tt = 0; tt < beamLen; tt += 5) {
+                const bx = mx0 + beamDX2 * tt, by = my0 + beamDY2 * tt;
+                const pdx = bx - player.x, pdy = by - (player.y - player.height * 0.35);
+                if (Math.abs(pdx) < player.width * 0.55 && Math.abs(pdy) < player.height * 0.52) {
+                    effectiveBeamLen = tt;
+                    break;
+                }
+            }
+        }
+
+        // If shield up, find where beam hits the bubble and stop there
         let shieldHitX = null, shieldHitY = null;
         if (shieldActive) {
             const scx = player.x, scy = player.y - player.height * 0.3;
@@ -3468,43 +3549,35 @@ function drawTurret(t) {
         for (const sign of [-1, 1]) {
             const mx = barrelStartX + Math.cos(ang) * barrelL + perpX * sign;
             const my = barrelStartY + Math.sin(ang) * barrelL + perpY * sign;
+
+            // Skip this barrel entirely if its muzzle is off-screen
+            if (mx > camX + canvas.width + 10 || mx < camX - 10) continue;
+
             const ex = mx + Math.cos(ang) * effectiveBeamLen;
             const ey = my + Math.sin(ang) * effectiveBeamLen;
 
             ctx.save();
-            // Clip to canvas so shadow doesn't arc at screen edges
-            ctx.beginPath();
-            ctx.rect(0, 0, canvas.width, canvas.height);
-            ctx.clip();
-            ctx.lineCap = 'round';
+            ctx.lineCap = 'butt';
+            ctx.shadowBlur = 0;
 
-            // Wide outer glow
-            ctx.globalAlpha = life * 0.20;
-            ctx.strokeStyle = '#ff1100';
-            ctx.lineWidth = 26;
-            ctx.shadowColor = '#ff0000'; ctx.shadowBlur = 50;
-            ctx.beginPath(); ctx.moveTo(mx, my); ctx.lineTo(ex, ey); ctx.stroke();
-
-            // Mid glow
-            ctx.globalAlpha = life * 0.55;
-            ctx.strokeStyle = '#ff3300';
-            ctx.lineWidth = 7;
-            ctx.shadowColor = '#ff2200'; ctx.shadowBlur = 18;
+            // Inner bright core beam only — no thick outer glow strokes
+            ctx.globalAlpha = life * 0.45;
+            ctx.strokeStyle = '#ff4422';
+            ctx.lineWidth = 5;
             ctx.beginPath(); ctx.moveTo(mx, my); ctx.lineTo(ex, ey); ctx.stroke();
 
             // Hot white core
             ctx.globalAlpha = life * 0.95;
             ctx.strokeStyle = '#fffaf0';
-            ctx.lineWidth = 1.8;
-            ctx.shadowColor = '#ff8866'; ctx.shadowBlur = 5;
+            ctx.lineWidth = 1.5;
             ctx.beginPath(); ctx.moveTo(mx, my); ctx.lineTo(ex, ey); ctx.stroke();
 
             // Jagged electrical fringes
-            ctx.globalAlpha = life * 0.35;
-            ctx.strokeStyle = '#ff5533';
-            ctx.lineWidth = 1; ctx.shadowBlur = 4;
+            ctx.globalAlpha = life * 0.25;
+            ctx.strokeStyle = '#ff6644';
+            ctx.lineWidth = 1;
             for (let i = 0; i < 4; i++) {
-                const offset = (Math.random() - 0.5) * 10;
+                const offset = (Math.random() - 0.5) * 8;
                 const ox = -Math.sin(ang) * offset, oy = Math.cos(ang) * offset;
                 ctx.beginPath(); ctx.moveTo(mx + ox, my + oy); ctx.lineTo(ex + ox * 0.2, ey + oy * 0.2); ctx.stroke();
             }
@@ -3533,36 +3606,17 @@ function drawTurret(t) {
             ctx.restore();
         }
 
-        // Travelling spiral rings
-        ctx.save();
-        ctx.globalAlpha = life * 0.55;
-        ctx.strokeStyle = '#ff4422';
-        ctx.shadowColor = '#ff2200'; ctx.shadowBlur = 10;
-        ctx.lineWidth = 2;
-        const mxMid = barrelStartX;
-        const myMid = barrelStartY;
-        for (let i = 0; i < 9; i++) {
-            const along = ((i / 9) + (now * 0.0014 % 1)) % 1;
-            const dist = barrelL + effectiveBeamLen * along;
-            if (dist > barrelL + effectiveBeamLen - 10) continue;
-            const rx = mxMid + Math.cos(ang) * dist;
-            const ry = myMid + Math.sin(ang) * dist;
-            const ringR = 8 + Math.sin(along * Math.PI) * 4;
-            ctx.save();
-            ctx.translate(rx, ry);
-            ctx.rotate(ang + Math.PI / 2);
-            ctx.beginPath();
-            ctx.ellipse(0, 0, ringR * 0.38, ringR, 0, 0, Math.PI * 2);
-            ctx.stroke();
-            ctx.restore();
-        }
-        ctx.restore();
+        ctx.restore(); // end beam save
     }
 
     // =====================================================
     // BASE + Z-BRACKET MOUNT
     // =====================================================
     ctx.translate(t.x, 0);
+    // Re-clip in local turret space so body/barrel shadows don't arc off-screen
+    ctx.beginPath();
+    ctx.rect(camX - t.x - 10, -300, canvas.width + 20, canvas.height + 600);
+    ctx.clip();
 
     // Foot base plate — wide, armored
     const baseW = legSpread * 2 + 20;
@@ -5399,7 +5453,7 @@ function fireRocket(fromX, fromY, toX, toY) {
             player.blackWidowUntil = 0;
         }
         updateHUD();
-        AudioSystem.playRocketLaunch();
+        AudioSystem.playWebShot();
     } else if (boosted) {
         AudioSystem.playOverchargeLaunch();
     } else {
@@ -5584,6 +5638,8 @@ if (!isUnderwater && !isOverWaterSurface && !isInCave && player.x > nextEncounte
     if (!waterZoneUsed && !underwaterZone && player.x >= nextWaterEdgeX) {
         underwaterZone = createWaterZone(nextWaterEdgeX);
         waterZoneUsed = true;
+        // Push mines well past the pool exit so none spawn inside the water
+        nextMineFieldX = Math.max(nextMineFieldX, underwaterZone.endX + 800);
         // Clear surface enemies right at the shoreline
         enemies = [];
         drones = [];
@@ -5678,9 +5734,36 @@ if (!isUnderwater && !isOverWaterSurface && !isInCave && player.x > nextEncounte
         waterZonePassed = true;
         enemies = enemies.filter(e => e.x > player.x + 200);
         drones = drones.filter(d => d.x > player.x + 200);
-        // Brief breather — mines appear first, then ground bots resume around x~14500, sky bots ~16500
         nextEncounterX = player.x + 1800;
         showWaveAnnouncement('☀ FAR SHORE REACHED ☀', '#00ffaa');
+
+        // Pre-spawn ALL turrets at fixed world positions right now so they are
+        // always already standing in place — never pop into existence mid-flight
+        const groundY = canvas.height - 120;
+        const turretPositions = [];
+        let tx = underwaterZone.endX + 1200; // first turret ~1200 past the shore
+        for (let i = 0; i < 12; i++) {          // enough for a full run
+            turretPositions.push(tx);
+            tx += 3500 + Math.floor(Math.random() * 2000);
+        }
+        turretPositions.forEach(wx => {
+            turrets.push({
+                x: wx,
+                y: groundY,
+                health: 350 + difficulty * 50,
+                maxHealth: 350 + difficulty * 50,
+                beamFiring: false,
+                beamStartTime: 0,
+                beamDuration: 1400,
+                nextFireTime: Date.now() + 4000 + Math.random() * 3000,
+                cooldown: 4000 + Math.random() * 800,
+                barrelAngle: -Math.PI / 5,
+                hitFlash: 0,
+                chargeSoundPlayed: false,
+            });
+        });
+        // Push nextTurretX far out so the old on-demand spawn never fires
+        nextTurretX = 9999999;
     }
 
     // Underwater-specific updates
@@ -6211,37 +6294,44 @@ if (!isUnderwater && !isOverWaterSurface && !isInCave && player.x > nextEncounte
     }
     
     // === CAVE ZONE (ONE-OFF EVENT) ===
-    // Only trigger cave creation when the player reaches the X threshold on foot (not flying over)
-    // Also guard against triggering when player has flown well past the entrance
-    if (!caveZoneUsed && !caveZone && player.x >= nextCaveEdgeX) {
-        const caveRoofY = canvas.height - 120 - 100;
-        const onGround = !player.isFlying && player.y >= caveRoofY;
-        // If player is more than the full cave length past the entrance, they flew over and landed — skip it
-        const tooFarPast = player.x > nextCaveEdgeX + CAVE_LENGTH_MAX;
-
-        if (tooFarPast) {
-            // Flew over and landed way past — permanently mark cave as done, no entry
-            caveZoneUsed = true;
-            caveSkippedByFlight = true;
-        } else if (onGround) {
-            // Walked in — create cave and enter
-            caveZone = createCaveZone(nextCaveEdgeX);
-            caveZoneUsed = true;
-            isInCave = true;
-            showWaveAnnouncement('⚠ MOON CAVE — VISOR ON — BAT-BOTS DETECTED ⚠', '#ff6644');
-            // Spawn cave content
-            enemies = enemies.filter(e => e.x < caveZone.startX - 100);
-            drones = drones.filter(d => d.x < caveZone.startX - 100);
-            for (let i = 0; i < 2; i++) spawnBatBot();
-            const barrelX = caveZone.startX + caveZone.length * (0.4 + Math.random() * 0.2);
-            caveBarrel = { x: barrelX, y: canvas.height - 120 - 20, collected: false };
-            const cavePickup1X = caveZone.startX + caveZone.length * 0.25;
-            const cavePickup2X = caveZone.startX + caveZone.length * 0.65;
-            healthPickups.push({ x: cavePickup1X, y: canvas.height - 150, kind: 'health', collected: false, bobPhase: Math.random() * Math.PI * 2 });
-            healthPickups.push({ x: cavePickup2X, y: canvas.height - 150, kind: 'fuel', collected: false, bobPhase: Math.random() * Math.PI * 2 });
-            caveAllBatsCleared = false;
+    if (!caveZoneUsed && !caveZone) {
+        // As soon as player reaches the cave X — record whether they were flying
+        if (player.x >= nextCaveEdgeX && player.isFlying) {
+            playerFlewOverCave = true;
         }
-        // If flying over — do NOT create or lock the cave yet, let player land and walk in
+
+        if (player.x >= nextCaveEdgeX) {
+            const caveRoofY = canvas.height - 120 - 100;
+            const onGround = !player.isFlying && player.y >= caveRoofY;
+            // Way past the whole cave — skip unconditionally
+            const tooFarPast = player.x > nextCaveEdgeX + CAVE_LENGTH_MAX;
+
+            if (tooFarPast) {
+                caveZoneUsed = true;
+                caveSkippedByFlight = true;
+            } else if (playerFlewOverCave && onGround) {
+                // Flew over any part of it then landed — skip, cave is done
+                caveZoneUsed = true;
+                caveSkippedByFlight = true;
+            } else if (onGround && !playerFlewOverCave) {
+                // Walked in on foot — create cave and enter
+                caveZone = createCaveZone(nextCaveEdgeX);
+                caveZoneUsed = true;
+                isInCave = true;
+                showWaveAnnouncement('⚠ MOON CAVE — VISOR ON — BAT-BOTS DETECTED ⚠', '#ff6644');
+                enemies = enemies.filter(e => e.x < caveZone.startX - 100);
+                drones = drones.filter(d => d.x < caveZone.startX - 100);
+                for (let i = 0; i < 2; i++) spawnBatBot();
+                const barrelX = caveZone.startX + caveZone.length * (0.4 + Math.random() * 0.2);
+                caveBarrel = { x: barrelX, y: canvas.height - 120 - 20, collected: false };
+                const cavePickup1X = caveZone.startX + caveZone.length * 0.25;
+                const cavePickup2X = caveZone.startX + caveZone.length * 0.65;
+                healthPickups.push({ x: cavePickup1X, y: canvas.height - 150, kind: 'health', collected: false, bobPhase: Math.random() * Math.PI * 2 });
+                healthPickups.push({ x: cavePickup2X, y: canvas.height - 150, kind: 'fuel', collected: false, bobPhase: Math.random() * Math.PI * 2 });
+                caveAllBatsCleared = false;
+            }
+            // Still flying over — do nothing yet, wait for landing
+        }
     }
     
     // Cave zone active check
@@ -6283,11 +6373,7 @@ if (!isUnderwater && !isOverWaterSurface && !isInCave && player.x > nextEncounte
     }
     
     // === TURRET TOWER SPAWNING (post-pool, well after mine fields) ===
-    if (waterZonePassed && !isInCave && player.x > nextTurretX - 1500) {
-        spawnTurret();
-        // Push next encounter far past the cannon — let player focus on it
-        nextEncounterX = Math.max(nextEncounterX, nextTurretX + 1200);
-    }
+    // Turrets are pre-spawned all at once when waterZonePassed is set — no on-demand spawn here
 
     // === MINE FIELD SPAWNING (post-pool, appears first before cannon) ===
     if (waterZonePassed && !isInCave && player.x > nextMineFieldX - 300) {
@@ -6398,20 +6484,45 @@ if (!isUnderwater && !isOverWaterSurface && !isInCave && player.x > nextEncounte
                         player.invulnUntil = tNow + 80;
                         player.screenShake = Math.max(player.screenShake, 7);
                         updateHUD();
-                        // Beam impact sparks on player
-                        if (Math.random() < 0.4) {
-                            for (let s = 0; s < 5; s++) {
-                                sparks.push({
-                                    x: player.x + (Math.random()-0.5) * player.width,
-                                    y: player.y - player.height * (0.2 + Math.random() * 0.6),
-                                    vx: (Math.random()-0.5) * 6,
-                                    vy: -Math.random() * 5,
-                                    life: 0.3 + Math.random() * 0.3,
-                                    size: 2 + Math.random() * 3,
-                                    color: Math.random() < 0.5 ? '#ff3300' : '#ffaa44'
-                                });
-                            }
+
+                        // Beam impact — heavy smoke + fire every frame it's hitting
+                        const impactX = player.x + (Math.random()-0.5) * 20;
+                        const impactY = player.y - player.height * (0.3 + Math.random() * 0.5);
+
+                        // Fire sparks shooting outward
+                        for (let s = 0; s < 6; s++) {
+                            const a = -Math.PI * 0.5 + (Math.random()-0.5) * Math.PI;
+                            const spd = 3 + Math.random() * 5;
+                            sparks.push({
+                                x: impactX, y: impactY,
+                                vx: Math.cos(a) * spd + (Math.random()-0.5)*3,
+                                vy: Math.sin(a) * spd - 2,
+                                life: 0.4 + Math.random() * 0.4,
+                                size: 2 + Math.random() * 3,
+                                color: Math.random() < 0.6 ? '#ff4400' : '#ffaa00'
+                            });
                         }
+                        // White-hot core flash
+                        sparks.push({
+                            x: impactX, y: impactY,
+                            vx: (Math.random()-0.5)*2, vy: -1,
+                            life: 0.25 + Math.random() * 0.15,
+                            size: 5 + Math.random() * 4,
+                            color: '#ffffff'
+                        });
+                        // Rising smoke puffs
+                        for (let s = 0; s < 4; s++) {
+                            smokeTrails.push({
+                                x: impactX + (Math.random()-0.5)*16,
+                                y: impactY + (Math.random()-0.5)*10,
+                                vx: (Math.random()-0.5)*1.5,
+                                vy: -(1.5 + Math.random()*2),
+                                size: 10 + Math.random() * 14,
+                                life: 1,
+                                color: s < 2 ? `rgba(40,25,10,0.7)` : `rgba(80,50,20,0.5)`
+                            });
+                        }
+
                         if (player.health <= 0) {
                             createExplosion(player.x, player.y, '#00ffcc', 60, true);
                             AudioSystem.playExplosion(true); gameOver();
@@ -6880,8 +6991,28 @@ if (player.isFlying && Date.now() > player.flyEndTime) { player.isFlying = false
         
         enemy.facingRight = player.x > enemy.x;
 
+        // Smooth cannon tracking — store angle on enemy so draw code uses the same value
+        // and there's no 180° snap when facingRight changes
+        {
+            const s = enemy.width / 100;
+            const turretBaseX = enemy.x + (enemy.facingRight ? 60 * s : -60 * s);
+            const turretBaseY = enemy.y - 55 * s;
+            const aimDx = player.x - turretBaseX;
+            const aimDy = (player.y - player.height * 0.35) - turretBaseY;
+            const localDx = enemy.facingRight ? aimDx : -aimDx;
+            let targetAngle = Math.atan2(aimDy, localDx);
+            targetAngle = Math.max(-Math.PI * 0.45, Math.min(Math.PI * 0.25, targetAngle));
+            // Smoothly lerp toward target angle — max 4° per frame to prevent snapping
+            const MAX_TURN = 0.07;
+            if (enemy.smoothTurretAngle === undefined) enemy.smoothTurretAngle = targetAngle;
+            let diff = targetAngle - enemy.smoothTurretAngle;
+            if (diff > Math.PI) diff -= Math.PI * 2;
+            if (diff < -Math.PI) diff += Math.PI * 2;
+            enemy.smoothTurretAngle += Math.max(-MAX_TURN, Math.min(MAX_TURN, diff));
+        }
+
         // Ranged attack: some cyber‑rex units fire head lasers (with telegraph)
-        if (enemy.hasLaser && distToPlayer < 650) {
+        if (enemy.hasLaser && distToPlayer < 1100) {
             const now = Date.now();
 
             // Start telegraph if ready and not already telegraphing
@@ -6891,12 +7022,14 @@ if (player.isFlying && Date.now() > player.flyEndTime) { player.isFlying = false
                 const turretBaseX = enemy.x + (enemy.facingRight ? 60 * s : -60 * s);
                 const turretBaseY = enemy.y - 55 * s;
                 
-                // Calculate in LOCAL space (same as drawing code)
-                const aimDx = player.x - turretBaseX;
-                const aimDy = (player.y - player.height * 0.35) - turretBaseY;
-                const localDx = enemy.facingRight ? aimDx : -aimDx;
-                let turretAngle = Math.atan2(aimDy, localDx);
-                turretAngle = Math.max(-Math.PI * 0.45, Math.min(Math.PI * 0.25, turretAngle));
+                // Use smoothed angle so muzzle matches what player sees
+                const turretAngle = enemy.smoothTurretAngle !== undefined ? enemy.smoothTurretAngle : (() => {
+                    const aimDx = player.x - turretBaseX;
+                    const aimDy = (player.y - player.height * 0.35) - turretBaseY;
+                    const localDx = enemy.facingRight ? aimDx : -aimDx;
+                    let a = Math.atan2(aimDy, localDx);
+                    return Math.max(-Math.PI * 0.45, Math.min(Math.PI * 0.25, a));
+                })();
                 
                 // Barrel tip in local space, then convert to world
                 const localTipX = Math.cos(turretAngle) * 87 * s;
@@ -8404,7 +8537,7 @@ function actualStartGame() {
     document.getElementById('easterEggHint').classList.remove('show');
     enemies = []; rockets = []; enemyLasers = []; particles = []; sparks = []; smokeTrails = []; debris = []; drones = [];
     waterEnemies = []; waterBubbles = []; isUnderwater = false; waterZoneUsed = false; underwaterZone = null; nextWaterEdgeX = 10500; waterTransitionAlpha = 0; window.waterLightningBolts = []; waterEntryTime = 0; waterBarrel = null;
-    isInCave = false; caveZoneUsed = false; caveSkippedByFlight = false; caveZone = null; nextCaveEdgeX = 5500; batBots = []; sonicRings = []; caveBarrel = null; caveAllBatsCleared = false;
+    isInCave = false; caveZoneUsed = false; caveSkippedByFlight = false; playerFlewOverCave = false; caveZone = null; nextCaveEdgeX = 5500; batBots = []; sonicRings = []; caveBarrel = null; caveAllBatsCleared = false;
     waterEncounterSpawned = false; waterEncounterCleared = false; waterZonePassed = false; waterWaveIndex = 0; waterTotalSpawned = 0; waterTotalKills = 0;
     techPlatforms = []; healthPickups = []; nextPlatformX = 1600;
     turrets = []; mines = []; nextTurretX = 13800; nextMineFieldX = 12200;
@@ -9785,11 +9918,25 @@ document.addEventListener('keydown', (e) => {
         player.health = player.maxHealth;
         flyCharge = FLY_CHARGE_MAX;
         waterZonePassed = true;
-        nextTurretX = 13800;
+        nextTurretX = 9999999; // disabled — turrets pre-spawned below
         nextMineFieldX = 12600;
         turrets = []; mines = [];
         enemies = []; drones = [];
         nextEncounterX = player.x + 3000;
+        // Pre-spawn turrets at fixed positions starting near warp point
+        const _groundY = canvas.height - 120;
+        let _tx = 13500;
+        for (let i = 0; i < 8; i++) {
+            turrets.push({
+                x: _tx, y: _groundY,
+                health: 350, maxHealth: 350,
+                beamFiring: false, beamStartTime: 0, beamDuration: 1400,
+                nextFireTime: Date.now() + 3000 + i * 500,
+                cooldown: 4000 + Math.random() * 800,
+                barrelAngle: -Math.PI / 5, hitFlash: 0, chargeSoundPlayed: false,
+            });
+            _tx += 3500 + Math.floor(Math.random() * 2000);
+        }
         showWaveAnnouncement('⚡ WARPED TO TEST ZONE ⚡', '#00ffcc');
         return;
     }
