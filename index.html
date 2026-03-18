@@ -3483,15 +3483,13 @@ function drawTurret(t) {
     const pivotY  = groundY - legH - mountH;
     const pivotX  = t.x;
 
-    const chargeT = t.beamFiring ? 1.0 : Math.max(0, 1 - (t.nextFireTime - now) / 1200);
+    // Only show charge buildup if turret has been activated (player entered range)
+    // Prevents full-glow on first sight when spawn timer expired long ago
+    const chargeT = t.beamFiring ? 1.0 : Math.max(0, Math.min(1, 1 - (t.nextFireTime - now) / 1200));
 
     ctx.save();
     // Hard-reset any shadow bleed from previous draw calls
     ctx.shadowBlur = 0; ctx.shadowColor = 'transparent'; ctx.globalAlpha = 1;
-    // Clip entire turret draw to screen bounds in world space — kills all shadow arcs
-    ctx.beginPath();
-    ctx.rect(camX - 10, -300, canvas.width + 20, canvas.height + 600);
-    ctx.clip();
 
     // =====================================================
     // DOUBLE LASER BEAMS (drawn first, behind cannon)
@@ -3613,10 +3611,6 @@ function drawTurret(t) {
     // BASE + Z-BRACKET MOUNT
     // =====================================================
     ctx.translate(t.x, 0);
-    // Re-clip in local turret space so body/barrel shadows don't arc off-screen
-    ctx.beginPath();
-    ctx.rect(camX - t.x - 10, -300, canvas.width + 20, canvas.height + 600);
-    ctx.clip();
 
     // Foot base plate — wide, armored
     const baseW = legSpread * 2 + 20;
@@ -3825,26 +3819,28 @@ function drawTurret(t) {
         const muzzleX = hW/2 + barrelL;
         const lg = chargeT;
 
-        // Muzzle ring — pure red, no green channel bleed
-        ctx.shadowColor = `rgba(255,10,10,${0.35+lg*0.6})`; ctx.shadowBlur = 6 + lg*18;
-        ctx.strokeStyle = `rgba(255,10,10,${0.4+lg*0.55})`;
-        ctx.lineWidth = 1.8;
-        ctx.beginPath(); ctx.arc(muzzleX, bOffY, 5 + lg*2.5, 0, Math.PI*2); ctx.stroke();
-        ctx.lineWidth = 1.8;
-        ctx.beginPath(); ctx.arc(muzzleX, bOffY, 5 + lg*2.5, 0, Math.PI*2); ctx.stroke();
-        // Core nub
-        const mGrad = ctx.createRadialGradient(muzzleX-1, bOffY-1, 0, muzzleX, bOffY, 5);
-        mGrad.addColorStop(0, `rgba(${100+lg*155},${lg*18},${lg*8},1)`);
-        mGrad.addColorStop(1, '#050508');
-        ctx.fillStyle = mGrad;
-        ctx.beginPath(); ctx.arc(muzzleX, bOffY, 5, 0, Math.PI*2); ctx.fill();
-        // Hot pinpoint when firing
-        if (lg > 0.6) {
-            ctx.fillStyle = `rgba(255,220,200,${(lg-0.6)*2.5})`;
-            ctx.shadowColor = '#fff'; ctx.shadowBlur = 10;
-            ctx.beginPath(); ctx.arc(muzzleX, bOffY, 2, 0, Math.PI*2); ctx.fill();
+        // Skip muzzle draw if tip is off-screen (prevents red arc artifact)
+        const muzzleWorldX = pivotX + Math.cos(t.barrelAngle) * (hW * 0.5 + barrelL);
+        if (muzzleWorldX >= camX - 20 && muzzleWorldX <= camX + canvas.width + 20) {
+            // Muzzle ring — small fixed shadowBlur so it never arcs off-screen
+            ctx.shadowColor = `rgba(255,10,10,${0.35+lg*0.6})`; ctx.shadowBlur = Math.min(8, 6 + lg*6);
+            ctx.strokeStyle = `rgba(255,10,10,${0.4+lg*0.55})`;
+            ctx.lineWidth = 1.8;
+            ctx.beginPath(); ctx.arc(muzzleX, bOffY, 5 + lg*2.5, 0, Math.PI*2); ctx.stroke();
+            // Core nub
+            const mGrad = ctx.createRadialGradient(muzzleX-1, bOffY-1, 0, muzzleX, bOffY, 5);
+            mGrad.addColorStop(0, `rgba(${100+lg*155},${lg*18},${lg*8},1)`);
+            mGrad.addColorStop(1, '#050508');
+            ctx.fillStyle = mGrad;
+            ctx.beginPath(); ctx.arc(muzzleX, bOffY, 5, 0, Math.PI*2); ctx.fill();
+            // Hot pinpoint when firing
+            if (lg > 0.6) {
+                ctx.fillStyle = `rgba(255,220,200,${(lg-0.6)*2.5})`;
+                ctx.shadowColor = '#fff'; ctx.shadowBlur = 8;
+                ctx.beginPath(); ctx.arc(muzzleX, bOffY, 2, 0, Math.PI*2); ctx.fill();
+            }
+            ctx.shadowBlur = 0;
         }
-        ctx.shadowBlur = 0;
     }
 
     ctx.restore(); // end barrel rotate
@@ -6406,6 +6402,14 @@ if (!isUnderwater && !isOverWaterSurface && !isInCave && player.x > nextEncounte
 
         if (!turretWebbed) {
             t.barrelAngle = Math.atan2(dy, dx);
+
+            // First time player enters range — reset timer so chargeT starts at 0
+            // (prevents instant full-glow on first approach when spawn timer expired long ago)
+            if (!t._activated && distToPlayer < 900) {
+                t._activated = true;
+                t.nextFireTime = tNow + 2000 + Math.random() * 1500;
+                t.chargeSoundPlayed = false;
+            }
 
             if (!t.chargeSoundPlayed && !t.beamFiring && (t.nextFireTime - tNow) < 1200 && distToPlayer < 900) {
                 t.chargeSoundPlayed = true;
